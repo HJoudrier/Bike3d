@@ -228,7 +228,15 @@ html, body {
 }
 
 /* ---------- HUD ---------- */
-#hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; overflow: hidden; }
+#speedlines {
+  position: absolute;
+  inset: -15%;
+  background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(255,255,255,0) 0deg 2.4deg, rgba(255,255,255,0.6) 2.4deg 2.75deg, rgba(255,255,255,0) 2.75deg 7.3deg);
+  -webkit-mask-image: radial-gradient(ellipse at center, transparent 36%, #000 72%);
+  mask-image: radial-gradient(ellipse at center, transparent 36%, #000 72%);
+  opacity: 0;
+}
 .hud-tl { position: absolute; left: 16px; top: 16px; display: flex; flex-direction: column; gap: 8px; }
 .hud-tr { position: absolute; right: 16px; top: 16px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
 .hud-row { display: flex; gap: 8px; }

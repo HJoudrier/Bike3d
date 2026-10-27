@@ -78,7 +78,8 @@
         cam: document.getElementById('hud-cam'),
         climb: document.getElementById('hud-climb'),
         profile: document.getElementById('hud-profile'),
-        map: document.getElementById('hud-map')
+        map: document.getElementById('hud-map'),
+        speedlines: document.getElementById('speedlines')
       };
       this.lastDom = 0;
     }
@@ -152,6 +153,14 @@
       mctx.beginPath(); mctx.moveTo(0, -9); mctx.lineTo(7, 7); mctx.lineTo(0, 3); mctx.lineTo(-7, 7); mctx.closePath();
       mctx.fill(); mctx.stroke();
       mctx.restore();
+
+      // lignes de vitesse façon BD au-delà de ~50 km/h
+      const sl = clamp((st.speed - 13.5) / 9, 0, 0.75);
+      if (sl > 0 || this._sl > 0) {
+        this.el.speedlines.style.opacity = sl.toFixed(2);
+        this.el.speedlines.style.transform = 'rotate(' + (Math.random() * 7).toFixed(1) + 'deg)';
+      }
+      this._sl = sl;
 
       // DOM à ~12 Hz
       if (now - this.lastDom < 80) return;

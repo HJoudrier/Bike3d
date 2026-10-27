@@ -20,20 +20,21 @@
     return textTexture((ctx, w, h) => {
       ctx.fillStyle = j.base;
       ctx.fillRect(0, 0, w, h);
+      // texture plaquée sur un ellipsoïde : u = tour du buste, v = du bas (0) vers le haut (1)
       if (j.style === 'dots') {
         ctx.fillStyle = j.accent;
-        for (let y = 10; y < h; y += 26) for (let x = ((y / 26) % 2) * 13 + 6; x < w; x += 26) { ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill(); }
+        for (let y = 16; y < h; y += 30) for (let x = ((y / 30) % 2) * 16 + 8; x < w; x += 32) { ctx.beginPath(); ctx.ellipse(x, y, 9, 8, 0, 0, Math.PI * 2); ctx.fill(); }
       } else if (j.style === 'rainbow') {
         const cols = ['#3d7be0', '#e2463a', '#1d1a2b', '#f2c230', '#4cc35a'];
-        cols.forEach((c, k) => { ctx.fillStyle = c; ctx.fillRect(0, h * 0.5 + k * 9 - 22, w, 9); });
+        cols.forEach((c, k) => { ctx.fillStyle = c; ctx.fillRect(0, h * 0.42 + k * 10, w, 10); });
       } else if (j.style === 'stripe') {
         ctx.fillStyle = j.accent;
-        ctx.fillRect(0, h * 0.45, w, 16);
+        ctx.fillRect(0, h * 0.42, w, 22);
       } else {
         ctx.fillStyle = j.accent;
-        ctx.fillRect(0, h * 0.18, w, 6);
+        ctx.fillRect(0, h * 0.2, w, 10);
       }
-    }, 256, 128);
+    }, 256, 256);
   }
 
   class Cyclist {
@@ -178,7 +179,7 @@
       const white = mat('#ffffff');
       const shoe = mat('#ffffff');
       // torse
-      this.torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.36, 4, 12), jerseyMat);
+      this.torso = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 14), jerseyMat);
       this.body.add(this.torso);
       addOutline(this.torso, { width: 0.9, minW: 0.006, maxW: 0.04 });
       this.pelvis = this._ball(0.15, shorts);
@@ -194,10 +195,6 @@
       helmet.rotation.x = -0.25;
       this.head.add(helmet);
       addOutline(helmet, { width: 0.8, minW: 0.005, maxW: 0.035 });
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 0.36), white);
-      stripe.position.set(0, 0.165, -0.04);
-      stripe.rotation.x = -0.25;
-      this.head.add(stripe);
       const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.05, 0.05), mat('#1d1a2b'));
       glasses.position.set(0, 0.02, 0.12);
       this.head.add(glasses);
@@ -207,8 +204,8 @@
       const nose = this._ball(0.03, skin, this.head);
       nose.position.set(0, -0.025, 0.135);
       // sourire
-      const smile = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 4, 10, Math.PI), mat('#7a2b2b'));
-      smile.position.set(0, -0.06, 0.12);
+      const smile = new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.007, 4, 10, Math.PI), mat('#7a2b2b'));
+      smile.position.set(0, -0.058, 0.112);
       smile.rotation.z = Math.PI;
       this.head.add(smile);
       this.neck = this._limb(0.05, skin);
@@ -298,7 +295,7 @@
       const tlen = tdir.length();
       this.torso.position.copy(pelvis).addScaledVector(tdir, 0.5);
       this.torso.quaternion.setFromUnitVectors(UP, tdir.normalize());
-      this.torso.scale.set(1.2, tlen / 0.68, 0.95);
+      this.torso.scale.set(0.2, tlen * 0.5 + 0.1, 0.16);
       // tête
       const neckBase = shoulder.clone().add(new THREE.Vector3(0, 0.05, 0.03));
       const headPos = shoulder.clone().add(new THREE.Vector3(0, 0.17 - 0.03 * tuck, 0.14 + 0.03 * tuck));

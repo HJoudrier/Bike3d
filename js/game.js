@@ -116,7 +116,7 @@
         jc.appendChild(b);
       }
       document.querySelectorAll('#opt-quality .chip').forEach((b) => {
-        b.onclick = () => { this.settings.quality = b.dataset.q; this.saveSettings(); this.refreshChips(); };
+        b.onclick = () => { this.settings.quality = b.dataset.q; this.saveSettings(); this.refreshChips(); this.applyQuality(); };
       });
       this.refreshChips();
 
@@ -274,11 +274,22 @@
 
     disposeWorld() {
       const sc = this.scene;
+      // libère géométries, matériaux et textures (panneaux, banderoles…) d'un groupe
+      const free = (root) => {
+        sc.remove(root);
+        root.traverse((o) => {
+          if (o.geometry) o.geometry.dispose();
+          if (o.material && !o.userData.isOutline) {
+            if (o.material.map) o.material.map.dispose();
+            o.material.dispose();
+          }
+        });
+      };
       if (this.tiles) { this.tiles.dispose(); this.tiles = null; }
-      if (this.roadGroup) { sc.remove(this.roadGroup); this.roadGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); this.roadGroup = null; }
-      if (this.waterGroup) { sc.remove(this.waterGroup); this.waterGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); this.waterGroup = null; }
+      if (this.roadGroup) { free(this.roadGroup); this.roadGroup = null; }
+      if (this.waterGroup) { free(this.waterGroup); this.waterGroup = null; }
       if (this.sky) { this.sky.dispose(); this.sky = null; }
-      if (this.cyclist) { sc.remove(this.cyclist.root); this.cyclist.dispose(); this.cyclist = null; }
+      if (this.cyclist) { free(this.cyclist.root); this.cyclist = null; }
       this.L = null;
     },
 

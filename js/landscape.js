@@ -452,6 +452,12 @@
         }
         if (intervals.length) break;
       }
+      // pas de rivière le long des tronçons trop sinueux (elle croiserait la route sans cesse)
+      intervals = intervals.filter(([a, b]) => {
+        let turn = 0;
+        for (let i = a; i < b; i++) turn += Math.abs(R.curv[i]) * R.spacing;
+        return turn / ((b - a) * R.spacing / 1000) < 2.2;
+      });
       if (!intervals.length) return;
       intervals.sort((p, q) => (q[1] - q[0]) - (p[1] - p[0]));
       const chosen = intervals.slice(0, want);

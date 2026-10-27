@@ -76,8 +76,9 @@
             'diffuseColor.rgb *= 1.0 + (gN - 0.5) * 0.16 * fade;',
             // strates horizontales sur les parois raides (falaises)
             'float steep = smoothstep(0.78, 0.5, vUpN);',
-            'float band = fract(vWPos.y / 4.5 + vnoise(vWPos.xz * 0.05) * 1.5);',
-            'diffuseColor.rgb *= 1.0 - steep * (step(0.62, band) * 0.17 + step(0.93, band) * 0.12);'
+            'float band = fract(vWPos.y / 7.0 + vnoise(vWPos.xz * 0.04) * 1.2);',
+            'float sFade = clamp(1.0 - length(vWPos - cameraPosition) / 380.0, 0.0, 1.0);',
+            'diffuseColor.rgb *= 1.0 - steep * sFade * (step(0.6, band) * 0.16 + step(0.92, band) * 0.12);'
           ].join('\n'));
       };
       m.customProgramCacheKey = () => 'terrain-grain';
@@ -94,7 +95,9 @@
           else { idx[k++] = a; idx[k++] = c; idx[k++] = d; idx[k++] = a; idx[k++] = d; idx[k++] = b; }
         }
       }
-      this.index = new THREE.BufferAttribute(idx, 1);
+      // le tableau est partagé, mais chaque tuile a son propre attribut (et donc son propre buffer GPU) :
+      // libérer une tuile ne doit pas détruire l'index des autres.
+      this.indexArray = idx;
     }
 
     _createPools() {
@@ -253,7 +256,7 @@
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
       geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-      geo.setIndex(this.index);
+      geo.setIndex(new THREE.BufferAttribute(this.indexArray, 1));
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, this.material);
       mesh.position.set(x0, 0, z0);
