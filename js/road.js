@@ -2,8 +2,8 @@
 (function (root) {
   'use strict';
   const B3D = root.B3D = root.B3D || {};
-  const { mat, addOutline, outlineAll, textTexture, merge, tr } = B3D.toon;
-  const { mulberry32, clamp } = B3D.util;
+  const { mat, addOutline, outlineAll, textTexture } = B3D.toon;
+  const { mulberry32 } = B3D.util;
 
   const FONT = '"Fredoka", "Baloo 2", "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif';
   const TEX_LEN = 12; // longueur de route couverte par la texture (m)

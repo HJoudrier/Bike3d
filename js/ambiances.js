@@ -10,12 +10,12 @@
       sun: { color: '#fff4dc', intensity: 3.3, elev: 52, azim: 135 },
       hemi: { sky: '#cfe8ff', ground: '#86b860', intensity: 1.7 },
       grass: ['#86d45a', '#9fe06c', '#74c64e'], meadow: '#a6e273', forestFloor: '#4f9a40',
-      alpine: '#b9d572', rock: '#a29c97', rockDark: '#7f7a78', snow: '#f6fbff', sand: '#ecd9a0', dirt: '#cdb98e',
+      alpine: '#b9d572', rock: '#a3a3a8', rockDark: '#7b7c86', snow: '#f6fbff', sand: '#ecd9a0', dirt: '#cdb98e',
       conifer: ['#2f8150', '#357f4a', '#2c7457'], decid: ['#62bd48', '#78c94e', '#53ad45', '#8fd05a'],
       bush: ['#4fa443', '#62b34b'], poplar: ['#5aac43', '#6cbc4c'], grassTuft: ['#7fd25a', '#94de67'],
       flowers: ['#ffffff', '#ffd84a', '#ff7aa8', '#b88cff', '#ff5a5a'],
       crops: [['#93d65a', 3], ['#c3e86a', 2], ['#e9cf55', 2], ['#a5794b', 1], ['#b99be6', 0.4], ['#f5e16b', 1]],
-      water: { deep: '#2f8fd1', shallow: '#5fd0e8' }, rockTint: ['#b3ada8', '#9c9590', '#c2b8ad']
+      water: { deep: '#2f8fd1', shallow: '#5fd0e8' }, rockTint: ['#b1b1b6', '#9a9aa2', '#bdb8b2']
     },
     {
       id: 'ete', name: 'Plein été',
@@ -23,12 +23,12 @@
       sun: { color: '#fff1cf', intensity: 3.6, elev: 62, azim: 160 },
       hemi: { sky: '#c2e2ff', ground: '#9aa85a', intensity: 1.6 },
       grass: ['#8cc94e', '#a3d25a', '#7bbb47'], meadow: '#b4d866', forestFloor: '#4c8c38',
-      alpine: '#c4cf6e', rock: '#aaa29a', rockDark: '#857c75', snow: '#f8fbff', sand: '#f0dca0', dirt: '#d4bf8f',
+      alpine: '#c4cf6e', rock: '#a8a6a6', rockDark: '#7f7d82', snow: '#f8fbff', sand: '#f0dca0', dirt: '#d4bf8f',
       conifer: ['#2a7646', '#30744a', '#28684d'], decid: ['#4fa83e', '#62b445', '#479b3a', '#73bf4c'],
       bush: ['#4b9a3c', '#5aa844'], poplar: ['#4f9f3d', '#5fae45'], grassTuft: ['#8ccb52', '#a2d65e'],
       flowers: ['#ffffff', '#ffd23a', '#ff6b4a', '#9b7bff'],
       crops: [['#efcd4b', 3], ['#e3b93f', 2], ['#9fd35a', 2], ['#a87a48', 1], ['#a68ae0', 0.5], ['#f7d334', 1]],
-      water: { deep: '#2582c9', shallow: '#4cc6e3' }, rockTint: ['#b8aea3', '#a1978c', '#c9bcac']
+      water: { deep: '#2582c9', shallow: '#4cc6e3' }, rockTint: ['#b4b1ae', '#9e9b9a', '#c4bdb3']
     },
     {
       id: 'automne', name: 'Automne doré',
