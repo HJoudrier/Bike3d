@@ -46,6 +46,7 @@
       this.scene.fog = new THREE.Fog('#cfe9fb', 150, 650);
       this.applyQuality();
       this.hud = new B3D.Hud();
+      this.confetti = new B3D.Confetti(this.scene, 600);
       this.sound = new B3D.Sound();
       this.clock = new THREE.Clock();
 
@@ -373,7 +374,7 @@
 
     backToPreview(newOne) {
       this.hide('hud');
-      this.sound.update(0, 0, false, 0);
+      this.sound.silence();
       if (newOne) { this.state = 'preview'; this.newLandscape(); return; }
       this.state = 'preview';
       this.show('screen-preview');
@@ -381,6 +382,7 @@
 
     toMenu() {
       this.state = 'menu';
+      this.sound.silence();
       this.hide('screen-preview'); this.hide('hud'); this.hide('screen-pause'); this.hide('screen-finish');
       this.show('screen-menu');
       this.disposeWorld();
@@ -439,6 +441,7 @@
     // ------------------------------------------------------------------ course
     startRide() {
       if (this.building || !this.L) return;
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       this.hide('screen-preview');
       this.show('hud');
       this.sound.start();
@@ -465,7 +468,7 @@
         this.pausedFrom = this.state;
         this.state = 'paused';
         this.show('screen-pause');
-        this.sound.update(0, 0, false, 0);
+        this.sound.silence();
       } else if (!on && this.state === 'paused') {
         this.state = this.pausedFrom;
         this.hide('screen-pause');
@@ -645,7 +648,12 @@
     finish() {
       const R = this.ride, route = this.route;
       this.state = 'finished';
-      this.sound.update(0, 0, false, 0);
+      this.sound.silence();
+      // confettis tirés depuis les deux piliers de l'arche d'arrivée
+      const fp = route.sample(route.sEnd, {});
+      const span = this.L.roadHalf + 1.4;
+      for (const side of [-1, 1]) this.confetti.burst(fp.x + fp.rx * span * side, fp.y + 5.8, fp.z + fp.rz * span * side, 220);
+      setTimeout(() => { if (this.state === 'finished') this.confetti.burst(fp.x, fp.y + 6.5, fp.z, 150); }, 700);
       const avg = route.length / Math.max(1, R.time);
       const key = 'bike3d-best-' + hashString(route.name + '|' + Math.round(route.length) + '|' + route.n);
       let best = null;
@@ -706,6 +714,7 @@
         this.tiles.update(this.focusX, this.focusZ, 6);
       }
       if (this.sky) this.sky.update(this.camera, dt);
+      this.confetti.update(dt);
       this.render();
     },
 

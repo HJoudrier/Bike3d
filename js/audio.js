@@ -63,6 +63,13 @@
       src.start(t, Math.random(), 0.03);
     }
 
+    silence() {
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+      this.windGain.gain.setTargetAtTime(0, t, 0.1);
+      this.crowdGain.gain.setTargetAtTime(0, t, 0.1);
+    }
+
     // speed en m/s ; freewheel = roue libre ; crowd = 0..1
     update(dt, speed, freewheel, crowd) {
       if (!this.ctx || this.muted) return;

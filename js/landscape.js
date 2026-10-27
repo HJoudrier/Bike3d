@@ -739,7 +739,8 @@
     describe() {
       const P = this.P;
       const forest = P.forestThr < -0.05 ? 'denses' : P.forestThr < 0.15 ? 'moyennes' : 'clairsemées';
-      const fields = P.fieldThr < -0.1 ? 'nombreux' : P.fieldThr < 0.1 ? 'quelques-uns' : 'rares';
+      let fields = P.fieldThr < 0.0 ? 'nombreux' : P.fieldThr < 0.15 ? 'quelques-uns' : 'rares';
+      if (this.route.stats.minEle > P.fieldMaxAlt) fields = 'aucun (trop haut)';
       const relief = P.mountainAmp > 520 ? 'spectaculaire' : P.mountainAmp > 400 ? 'marqué' : 'doux';
       return [
         { icon: '🎨', label: 'Ambiance', value: this.amb.name },
