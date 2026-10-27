@@ -31,7 +31,14 @@
       if (!B3D.Cyclist.JERSEYS[this.settings.jersey]) this.settings.jersey = 'jaune';
 
       const canvas = $('scene');
-      const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+      let r;
+      try {
+        r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+      } catch (err) {
+        this.showError('Ton navigateur ne permet pas l\'affichage 3D (WebGL indisponible). Essaie avec un navigateur récent ou active l\'accélération matérielle.');
+        $('btn-model').disabled = true;
+        return;
+      }
       r.shadowMap.enabled = true;
       r.shadowMap.type = THREE.PCFShadowMap;
       this.scene = new THREE.Scene();
@@ -300,6 +307,19 @@
     },
 
     async buildWorld(seed, focusS) {
+      try {
+        await this._buildWorld(seed, focusS);
+      } catch (err) {
+        console.error(err);
+        this.building = false;
+        document.querySelectorAll('#btn-model, #btn-remodel, #btn-validate').forEach((b) => { b.disabled = false; });
+        this.hide('screen-loading');
+        this.toMenu();
+        this.showError('La génération du paysage a échoué (' + err.message + '). Réessaie ou change de qualité graphique.');
+      }
+    },
+
+    async _buildWorld(seed, focusS) {
       this.building = true;
       document.querySelectorAll('#btn-model, #btn-remodel, #btn-validate').forEach((b) => { b.disabled = true; });
       this.show('screen-loading');
@@ -481,6 +501,13 @@
       this.camState = null;
     },
 
+    // zones de spectateurs (mêmes bornes que dans road.placeRoadsideInstances)
+    inCrowd(d) {
+      const route = this.route;
+      for (const c of route.climbs) if (d > c.d1 - Math.min(900, c.length * 0.4) && d < c.d1 + 60) return true;
+      return d > route.length - 260 || (d > -20 && d < 50);
+    },
+
     currentClimb(d) {
       const route = this.route;
       for (let i = 0; i < route.climbs.length; i++) {
@@ -540,9 +567,14 @@
       const prevLatV = R.latV;
       R.latV = lerp(R.latV, targetLatV, 1 - Math.exp(-dtReal * 6));
       R.lat += R.latV * dt;
-      const maxLat = half + 1.5;
-      if (R.lat > maxLat) { R.lat = maxLat; R.latV = Math.min(0, R.latV); }
-      if (R.lat < -maxLat) { R.lat = -maxLat; R.latV = Math.max(0, R.latV); }
+      // bas-côté praticable, sauf glissière, parapet de pont ou foule
+      const dNow = R.s - route.sStart;
+      const crowded = this.inCrowd(dNow);
+      const ii = p.i;
+      const maxR = (L.railR[ii] || L.bridgeMask[ii] || crowded) ? half - 0.35 : half + 1.5;
+      const maxL = (L.railL[ii] || L.bridgeMask[ii] || crowded) ? half - 0.35 : half + 1.5;
+      if (R.lat > maxR) { R.lat = Math.max(maxR, R.lat - 4 * dt); R.latV = Math.min(0, R.latV); }
+      if (R.lat < -maxL) { R.lat = Math.min(-maxL, R.lat + 4 * dt); R.latV = Math.max(0, R.latV); }
 
       // --- avancement
       R.s += R.v * dt;
@@ -579,10 +611,7 @@
         this.toast('🚩 Flamme rouge !<small>Plus qu\'un kilomètre</small>', 2400);
       }
       // ambiance sonore : foule près des sommets et de l'arrivée
-      let crowd = 0;
-      for (const c of route.climbs) if (d > c.d1 - 900 && d < c.d1 + 60) crowd = 1;
-      if (d > route.length - 280) crowd = 1;
-      R.crowd = lerp(R.crowd, crowd, 1 - Math.exp(-dtReal * 2));
+      R.crowd = lerp(R.crowd, this.inCrowd(d) ? 1 : 0, 1 - Math.exp(-dtReal * 2));
       this.sound.update(dtReal, R.v, R.effort < 25 && R.v > 1, R.crowd);
 
       if (d >= route.length) this.finish();
