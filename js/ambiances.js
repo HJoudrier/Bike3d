@@ -14,7 +14,7 @@
       conifer: ['#2f8150', '#357f4a', '#2c7457'], decid: ['#62bd48', '#78c94e', '#53ad45', '#8fd05a'],
       bush: ['#4fa443', '#62b34b'], poplar: ['#5aac43', '#6cbc4c'], grassTuft: ['#7fd25a', '#94de67'],
       flowers: ['#ffffff', '#ffd84a', '#ff7aa8', '#b88cff', '#ff5a5a'],
-      crops: [['#93d65a', 3], ['#c3e86a', 2], ['#e9cf55', 2], ['#a5794b', 1], ['#b99be6', 0.4], ['#f5e16b', 1]],
+      crops: [['#93d65a', 3], ['#c3e86a', 2], ['#e9cf55', 2], ['#a5794b', 1], ['#a989df', 0.6, 'lavender'], ['#e0cf3e', 0.8, 'sunflower']],
       water: { deep: '#2f8fd1', shallow: '#5fd0e8' }, rockTint: ['#b1b1b6', '#9a9aa2', '#bdb8b2']
     },
     {
@@ -27,7 +27,7 @@
       conifer: ['#2a7646', '#30744a', '#28684d'], decid: ['#4fa83e', '#62b445', '#479b3a', '#73bf4c'],
       bush: ['#4b9a3c', '#5aa844'], poplar: ['#4f9f3d', '#5fae45'], grassTuft: ['#8ccb52', '#a2d65e'],
       flowers: ['#ffffff', '#ffd23a', '#ff6b4a', '#9b7bff'],
-      crops: [['#efcd4b', 3], ['#e3b93f', 2], ['#9fd35a', 2], ['#a87a48', 1], ['#a68ae0', 0.5], ['#f7d334', 1]],
+      crops: [['#efcd4b', 3], ['#e3b93f', 2], ['#9fd35a', 2], ['#a87a48', 1], ['#9d80d8', 0.7, 'lavender'], ['#e6cf38', 1.2, 'sunflower']],
       water: { deep: '#2582c9', shallow: '#4cc6e3' }, rockTint: ['#b4b1ae', '#9e9b9a', '#c4bdb3']
     },
     {
@@ -40,7 +40,7 @@
       conifer: ['#2f6d47', '#356a45', '#2b6250'], decid: ['#e8862e', '#d9532f', '#f2b33a', '#c9a43a', '#b6c049'],
       bush: ['#c97a34', '#a9a142'], poplar: ['#f0c03c', '#e5a632'], grassTuft: ['#a9c35c', '#c2c768'],
       flowers: ['#ffffff', '#ffc23a', '#d9534f'],
-      crops: [['#a5784a', 3], ['#c9a45a', 2], ['#e7c55a', 2], ['#9cbf55', 1], ['#d98c3a', 1]],
+      crops: [['#a5784a', 3], ['#c9a45a', 2], ['#e7c55a', 2], ['#9cbf55', 1], ['#7f9a3e', 1, 'pumpkin']],
       water: { deep: '#2a7fb8', shallow: '#58bcd6' }, rockTint: ['#b3a79c', '#9d9086', '#c4b6a6']
     },
     {
@@ -53,10 +53,35 @@
       conifer: ['#2d7149', '#346e46', '#2a654f'], decid: ['#58ac43', '#6dba4b', '#4ea040', '#89c656'],
       bush: ['#4f9c42', '#5fa94a'], poplar: ['#55a443', '#68b24b'], grassTuft: ['#90c958', '#a5d363'],
       flowers: ['#ffffff', '#ffd04a', '#ff7f9f', '#c28cff'],
-      crops: [['#eac35a', 3], ['#9fcf5a', 2], ['#b08250', 1], ['#b796e6', 0.4], ['#f3d24a', 1]],
+      crops: [['#eac35a', 3], ['#9fcf5a', 2], ['#b08250', 1], ['#ad8ee0', 0.6, 'lavender'], ['#e3c843', 1, 'sunflower']],
       water: { deep: '#3b78c4', shallow: '#7cc4e0' }, rockTint: ['#b9a79d', '#a18f86', '#cbb5a7']
     }
   ];
+
+  // Couleurs des biomes ajoutées à chaque ambiance (ajustées pour l'automne).
+  for (const amb of list) {
+    const autumn = amb.id === 'automne';
+    Object.assign(amb, {
+      vineGreen: autumn ? '#c9a23a' : '#4f8f2f',
+      soil: '#9a6f45',
+      vineSoil: '#b48d5e',
+      garrigue: autumn ? '#c2b072' : '#bdb66e',
+      heath: autumn ? '#9a6aa0' : '#a77bb5',
+      wetland: autumn ? '#7f9a4e' : '#5aa957',
+      mud: '#7d7a4f',
+      olive: ['#8fa06a', '#9aab72', '#879a63'],
+      cypress: ['#2d5e3a', '#2a5636', '#33653f'],
+      pine: ['#3f7a3f', '#467f44', '#3b7040'],
+      birch: autumn ? ['#f0c23c', '#e8b030', '#d9c040'] : ['#8fd05a', '#9fd866', '#7cc552'],
+      willow: autumn ? ['#d5b24a', '#c9a843'] : ['#8cc95a', '#9bd463'],
+      orchard: autumn ? ['#d98b34', '#c9a43a', '#7fa64a'] : ['#5fb548', '#6cbc4c', '#58a944'],
+      fruit: autumn ? '#e2463a' : (amb.id === 'printemps' ? '#ffd0e0' : '#e2463a'),
+      heather: ['#b07ac4', '#c48ad0', '#9c68b4'],
+      reeds: autumn ? ['#b5a35a', '#a39550'] : ['#7fae4f', '#8fbd58'],
+      shrub: ['#8f9a5a', '#9aa566', '#7f8f55'],
+      pond: { deep: '#3b8d7a', shallow: '#74c7a0' }
+    });
+  }
 
   B3D.ambiances = list;
 })(typeof window !== 'undefined' ? window : globalThis);

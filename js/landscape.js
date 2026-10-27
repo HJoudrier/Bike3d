@@ -11,7 +11,12 @@
   const RIVER_CELL = 64;
   const RIVER_MARGIN = 80;
 
-  const COVER = { SHOULDER: 0, MEADOW: 1, FOREST: 2, FIELD: 3, ROCK: 4, ALPINE: 5, SNOW: 6, SAND: 7, BED: 8, HEDGE: 9, VILLAGE: 10 };
+  const COVER = {
+    SHOULDER: 0, MEADOW: 1, FOREST: 2, FIELD: 3, ROCK: 4, ALPINE: 5, SNOW: 6, SAND: 7, BED: 8, HEDGE: 9, VILLAGE: 10,
+    VINEYARD: 11, ORCHARD: 12, GARRIGUE: 13, HEATH: 14, WETLAND: 15
+  };
+  // Rangs dessinés au sol (attribut "stripe" des tuiles) : type + 8 si les rangs sont tournés de 90°.
+  const STRIPE = { NONE: 0, FURROW: 1, VINE: 2, LAVENDER: 3, SUNFLOWER: 4, PUMPKIN: 5 };
 
   // Noms de villages… de cyclistes.
   const VIL_PREFIX = ['Saint-', 'Saint-', 'Sainte-', '', '', 'Le ', 'La ', 'Les '];
@@ -64,6 +69,23 @@
       const fa = P.fieldAngle;
       this._fc = Math.cos(fa); this._fs = Math.sin(fa);
 
+      // Biomes particuliers (générateur séparé pour ne pas changer le reste du paysage d'une graine donnée)
+      const rb = mulberry32(this.seed ^ 0xb10e5);
+      const south = route.lat0 < 45.6;
+      this.bio = {
+        south,
+        // seuils de bruit (plus bas = plus étendu) ; 9 = biome absent de ce paysage
+        vine: rb() < 0.55 ? rb.range(0.14, 0.4) : 9,
+        vineMaxAlt: south ? 950 : 700,
+        orchard: rb() < 0.55 ? rb.range(0.05, 0.35) : 9,
+        garrigue: rb() < 0.75 ? rb.range(-0.25, 0.2) : 9,
+        wet: rb() < 0.6 ? rb.range(0.15, 0.4) : 9,
+        heath: rb() < 0.55 ? rb.range(0.05, 0.35) : 9,
+        birch: rb() < 0.6 ? rb.range(0.1, 0.45) : 0,
+        rowAngle: rb.range(0, Math.PI)
+      };
+      this.bio.rowDir = [Math.cos(this.bio.rowAngle), Math.sin(this.bio.rowAngle)];
+
       // Couleurs de la palette converties (espace linéaire)
       const C = (h) => new THREE.Color(h);
       const a = this.amb;
@@ -72,15 +94,17 @@
         rock: C(a.rock), rockDark: C(a.rockDark), snow: C(a.snow), sand: C(a.sand), dirt: C(a.dirt),
         bed: C(a.sand).lerp(C('#3f7f74'), 0.55), hedge: C(a.forestFloor).lerp(C('#2f6a2c'), 0.4),
         gravel: C('#dccfb2'),
-        crops: a.crops.map((c) => C(c[0]))
+        crops: a.crops.map((c) => C(c[0])),
+        vineSoil: C(a.vineSoil), garrigue: C(a.garrigue), heath: C(a.heath), wetland: C(a.wetland), mud: C(a.mud)
       };
+      this.cropKind = a.crops.map((c) => c[2] || null);
       let tw = 0;
       this.cropCum = a.crops.map((c) => (tw += c[1]));
       this.cropTotal = tw;
       this.cropHay = a.crops.map((c) => {
         const hsl = {};
         C(c[0]).getHSL(hsl);
-        return hsl.h > 0.09 && hsl.h < 0.17 && hsl.s > 0.45;
+        return !c[2] && hsl.h > 0.09 && hsl.h < 0.17 && hsl.s > 0.45;
       });
 
       this.blocks = new Map();
@@ -93,6 +117,7 @@
       this._buildBridgeMask();
       this._planVillages();
       this._planLakes();
+      this._planPonds();
       this._planRoadside();
       this._nameClimbs();
     }
@@ -249,7 +274,7 @@
     // Échantillon complet : altitude finale + infos route / eau pour la couverture du sol.
     sample(x, z, o) {
       let h = this.natural(x, z, o);
-      o.dr = 1e9; o.wl = 0; o.rw = 0; o.lakeRn = 9; o.lakeLevel = 0; o.waterLevel = -1e9;
+      o.dr = 1e9; o.wl = 0; o.rw = 0; o.lakeRn = 9; o.lakeLevel = 0; o.waterLevel = -1e9; o.lakePond = false;
 
       // --- Rivières
       if (this.riverCells) {
@@ -300,9 +325,9 @@
         if (r2 > L.reach2) continue;
         const r = Math.sqrt(r2);
         const ang = Math.atan2(dz, dx);
-        const Rt = L.r * (1 + 0.24 * this.noiseC.noise(L.nx + Math.cos(ang) * 0.55, L.nz + Math.sin(ang) * 0.55));
+        const Rt = this.lakeRadius(L, ang);
         const rn = r / Rt;
-        if (rn < o.lakeRn) { o.lakeRn = rn; o.lakeLevel = L.level; }
+        if (rn < o.lakeRn) { o.lakeRn = rn; o.lakeLevel = L.level; o.lakePond = L.kind === 'pond'; }
         let hl;
         if (rn <= 1) hl = L.level - 0.3 - L.depth * (1 - rn * rn);
         else if (rn <= 1.12) hl = lerp(L.level - 0.3, L.level + 0.35, (rn - 1) / 0.12);
@@ -348,6 +373,11 @@
 
     heightAt(x, z) { return this.sample(x, z, this._tmp).h; }
 
+    // Rayon d'un lac ou d'une mare dans la direction ang (contour irrégulier).
+    lakeRadius(lk, ang) {
+      return lk.r * (1 + 0.24 * this.noiseC.noise(lk.nx + Math.cos(ang) * 0.55, lk.nz + Math.sin(ang) * 0.55));
+    }
+
     // ---------------------------------------------------------------- couverture du sol
     // Calcule o.cover, o.crop et la couleur (dans col) à partir d'un échantillon et de la pente.
     cover(x, z, o, slope, col) {
@@ -355,7 +385,9 @@
       const X = x + this.ox, Z = z + this.oz;
       const a = o.h;
       o.crop = 255;
+      o.stripe = 0;
       const half = this.roadHalf;
+      const B = this.bio;
 
       if (o.roadD < half + 1.6) {
         o.cover = COVER.SHOULDER;
@@ -364,6 +396,12 @@
       }
       if (o.under) {
         o.cover = COVER.BED; col.copy(C.bed); return;
+      }
+      // berges des mares : herbe grasse et vase plutôt que du sable
+      if (o.lakePond && o.lakeRn < 1.35) {
+        o.cover = COVER.WETLAND;
+        col.copy(C.wetland).lerp(C.mud, clamp((1.3 - o.lakeRn) * 3, 0, 0.8));
+        return;
       }
       const nearWater = (o.lakeRn < 1.2) || (o.dr < o.rw + 3.2 && a < o.wl + 1.3);
       if (nearWater) {
@@ -387,25 +425,43 @@
         col.copy(C.alpine).lerp(C.grass[2], clamp((treeL + 120 - a) / 120, 0, 1) * 0.5);
       } else {
         // Champs : décision par parcelle (cellule de Voronoï) pour garder des parcelles entières.
+        // Parcelles (cellules de Voronoï) : vignes sur les coteaux, champs, vergers.
         let isField = false;
-        if (a < P.fieldMaxAlt && slope < 0.35 && o.dr > o.rw + 14 && o.roadD > half + 3 && o.lakeRn > 1.3) {
+        const agriAlt = Math.max(P.fieldMaxAlt, B.vineMaxAlt, 1000);
+        if (a < agriAlt && slope < 0.6 && o.dr > o.rw + 14 && o.roadD > half + 3 && o.lakeRn > 1.3) {
           const u = x * this._fc + z * this._fs, v = (-x * this._fs + z * this._fc) * 1.6;
           const vr = voronoi(u, v, P.fieldCell, this.seed + 17, this._vor);
+          const hsh = (Math.imul(vr.id, 0x9E3779B1) >>> 0) / 4294967296;
+          const ori = (hsh * 7.31) % 1 < 0.5 ? 0 : 8; // rangs dans un sens ou l'autre selon la parcelle
+          const vine = this.noiseB.fbm(vr.cx / 1300 + 711, vr.cy / 1300 - 233, 2);
           const agri = this.noiseB.fbm(vr.cx / 900 + 33.3, vr.cy / 900 - 12.1, 2);
-          if (agri > P.fieldThr) {
+          if (vine > B.vine && a < B.vineMaxAlt && slope > 0.02 && slope < 0.55) {
+            isField = true;
+            if (vr.d2 - vr.d1 < 2.6) col.lerp(C.hedge, 0.4);
+            else {
+              cover = COVER.VINEYARD;
+              col.copy(C.vineSoil).lerp(C.grass[0], 0.2);
+              o.stripe = STRIPE.VINE + ori;
+            }
+          } else if (agri > P.fieldThr && slope < 0.35 && a < P.fieldMaxAlt) {
             isField = true;
             if (vr.d2 - vr.d1 < 3.2) {
               cover = COVER.HEDGE;
               col.copy(C.hedge);
             } else {
-              const hsh = (Math.imul(vr.id, 0x9E3779B1) >>> 0) / 4294967296;
               const target = hsh * this.cropTotal;
               let ci = 0;
               while (ci < this.cropCum.length - 1 && this.cropCum[ci] < target) ci++;
               cover = COVER.FIELD;
               o.crop = ci;
               col.copy(C.crops[ci]);
+              const kind = this.cropKind[ci];
+              o.stripe = (kind === 'lavender' ? STRIPE.LAVENDER : kind === 'sunflower' ? STRIPE.SUNFLOWER : kind === 'pumpkin' ? STRIPE.PUMPKIN : STRIPE.FURROW) + ori;
             }
+          } else if (hsh < 0.45 && a < 1000 && slope < 0.3 && this.noise.fbm(vr.cx / 800 + 99, vr.cy / 800 + 77, 2) > B.orchard) {
+            isField = true;
+            cover = COVER.ORCHARD;
+            col.lerp(C.meadow, 0.35);
           }
         }
         if (!isField) {
@@ -416,8 +472,24 @@
             cover = COVER.FOREST;
             col.lerp(C.forest, clamp((forest - P.forestThr - 0.22) * 6, 0.55, 1));
           } else {
-            const fl = this.noiseB.noise(X / 28, Z / 28);
-            if (fl > 0.35) col.lerp(C.meadow, 0.6);
+            // prés… ou biomes particuliers
+            const dry = B.south && a < 1000 ? this.noise.fbm(X / 1500 - 900, Z / 1500 + 400, 2) : -9;
+            const wet = slope < 0.15 && a < 1600 ? this.noiseC.fbm(X / 1100 - 517, Z / 1100 + 191, 2) : -9;
+            const heath = a > 750 && slope < 0.7 ? this.noiseB.fbm(X / 700 + 1500, Z / 700, 2) : -9;
+            const n2 = this.noiseC.noise(X / 23, Z / 23);
+            if (dry > B.garrigue) {
+              cover = COVER.GARRIGUE;
+              col.copy(C.garrigue).lerp(C.grass[2], 0.15 + 0.15 * n2);
+            } else if (wet > B.wet) {
+              cover = COVER.WETLAND;
+              col.copy(C.wetland).lerp(C.mud, clamp(n2, 0, 1) * 0.45);
+            } else if (heath > B.heath) {
+              cover = COVER.HEATH;
+              col.lerp(C.heath, 0.45 + 0.3 * clamp(n2 + 0.3, 0, 1));
+            } else {
+              const fl = this.noiseB.noise(X / 28, Z / 28);
+              if (fl > 0.35) col.lerp(C.meadow, 0.6);
+            }
           }
         }
       }
@@ -781,6 +853,77 @@
       }
     }
 
+    // ---------------------------------------------------------------- mares
+    // Petites mares dans les prés (surtout en zone humide), loin de la route et des villages.
+    _planPonds() {
+      const R = this.route, rb = mulberry32(this.seed ^ 0x90d5);
+      const want = Math.min(30, Math.round(R.length / 1000 * rb.range(0.4, 1.2) * (this.bio.wet < 9 ? 1 : 0.4)));
+      const tmp = {}, o = {};
+      let placed = 0;
+      for (let attempt = 0; attempt < want * 30 && placed < want; attempt++) {
+        const p = R.sample(R.sStart + rb() * R.length, {});
+        const side = rb() < 0.5 ? -1 : 1;
+        const r = rb.range(6, 15);
+        const L = rb.range(r * 1.6 + 32, 240);
+        const cx = p.x + p.rx * side * L, cz = p.z + p.rz * side * L;
+        const nr = R.nearest(cx, cz, r * 1.6 + 30, tmp);
+        if (nr.i >= 0 && nr.d < r * 1.6 + 30) continue;
+        if (this.lakes.some((l) => Math.hypot(l.x - cx, l.z - cz) < l.r * 1.7 + r * 1.7 + 12)) continue;
+        const rq = this._riverDist(cx, cz);
+        if (rq.d < rq.rw + r * 1.7 + 15) continue;
+        let bad = false;
+        for (const v of this.villages) {
+          for (let i = v.i0; i <= v.i1 && !bad; i += 4) if (Math.hypot(R.x[i] - cx, R.z[i] - cz) < r * 1.7 + 40) bad = true;
+        }
+        if (bad) continue;
+        const h0 = this.natural(cx, cz, o);
+        if (h0 > this.P.snowLine - 150) continue;
+        for (let k = 0; k < 6 && !bad; k++) {
+          const ang = k / 6 * Math.PI * 2;
+          if (Math.abs(this.natural(cx + Math.cos(ang) * r * 1.5, cz + Math.sin(ang) * r * 1.5, o) - h0) > 2.2) bad = true;
+        }
+        if (bad) continue;
+        const wet = this.noiseC.fbm((cx + this.ox) / 1100 - 517, (cz + this.oz) / 1100 + 191, 2);
+        if (wet < Math.min(this.bio.wet, 0.3) && rb() > 0.35) continue;
+        this.lakes.push({
+          x: cx, z: cz, r, level: h0 - 0.45, depth: rb.range(1.0, 1.8), kind: 'pond',
+          nx: rb.range(-500, 500), nz: rb.range(-500, 500), reach2: (r * 1.24 * 1.7) * (r * 1.24 * 1.7)
+        });
+        placed++;
+      }
+      this.ponds = this.lakes.filter((l) => l.kind === 'pond');
+    }
+
+    // Biomes réellement présents autour du parcours (échantillonnage), pour la description.
+    biomeSummary() {
+      if (this._biomes) return this._biomes;
+      const R = this.route, rb = mulberry32(this.seed ^ 0x5a5a);
+      const o = {}, col = new THREE.Color();
+      const count = {};
+      for (let k = 0; k < 260; k++) {
+        const p = R.sample(R.sStart + rb() * R.length, {});
+        const side = rb() < 0.5 ? -1 : 1, d = 15 + rb() * 300;
+        const x = p.x + p.rx * side * d, z = p.z + p.rz * side * d;
+        this.sample(x, z, o);
+        const h1 = this.sample(x + 2, z, {}).h, h2 = this.sample(x, z + 2, {}).h;
+        this.cover(x, z, o, Math.hypot(h1 - o.h, h2 - o.h) / 2, col);
+        const key = o.cover === COVER.FIELD ? 'field-' + (this.cropKind[o.crop] || 'x') : o.cover;
+        count[key] = (count[key] || 0) + 1;
+      }
+      const names = [];
+      if (count[COVER.VINEYARD] >= 2) names.push('vignes');
+      if (count[COVER.ORCHARD] >= 2) names.push('vergers');
+      if (count['field-lavender'] >= 1) names.push('lavande');
+      if (count['field-sunflower'] >= 1) names.push('tournesols');
+      if (count['field-pumpkin'] >= 1) names.push('citrouilles');
+      if (count[COVER.GARRIGUE] >= 3) names.push('garrigue');
+      if (count[COVER.WETLAND] >= 3 || this.ponds.length >= 3) names.push('zones humides');
+      if (count[COVER.HEATH] >= 3) names.push('landes');
+      if (count[COVER.ALPINE] >= 3) names.push('alpages');
+      this._biomes = names;
+      return names;
+    }
+
     // ---------------------------------------------------------------- bords de route
     _planRoadside() {
       const R = this.route, half = this.roadHalf;
@@ -845,7 +988,9 @@
         { icon: '⛰️', label: 'Relief', value: relief },
         { icon: '🌲', label: 'Forêts', value: forest },
         { icon: '🌾', label: 'Champs', value: fields },
-        { icon: '🏞️', label: 'Lacs', value: String(this.lakes.length) },
+        { icon: '🏞️', label: 'Lacs', value: String(this.lakes.length - this.ponds.length) },
+        { icon: '🦆', label: 'Mares', value: String(this.ponds.length) },
+        { icon: '🌿', label: 'Biomes', value: this.biomeSummary().join(', ') || 'prés et bois' },
         { icon: '🏘️', label: 'Villages', value: this.villages.length ? String(this.villages.length) : 'aucun' },
         { icon: '🌊', label: 'Rivières', value: String(this.rivers.length) + (this.bridges.length ? ' (' + this.bridges.length + ' pont' + (this.bridges.length > 1 ? 's' : '') + ')' : '') }
       ];
@@ -854,5 +999,6 @@
 
   Landscape.ROAD_REACH = 64;
   Landscape.COVER = COVER;
+  Landscape.STRIPE = STRIPE;
   B3D.Landscape = Landscape;
 })(typeof window !== 'undefined' ? window : globalThis);

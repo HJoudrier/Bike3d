@@ -4,13 +4,15 @@
   const B3D = root.B3D = root.B3D || {};
 
   function waterMaterial(amb, kind) {
+    const w = kind === 'pond' ? amb.pond : amb.water;
     return new THREE.ShaderMaterial({
       uniforms: {
-        uDeep: { value: new THREE.Color(amb.water.deep) },
-        uShallow: { value: new THREE.Color(amb.water.shallow) },
+        uDeep: { value: new THREE.Color(w.deep) },
+        uShallow: { value: new THREE.Color(w.shallow) },
         uFoam: { value: new THREE.Color('#ffffff') },
         uTime: B3D.toon.shared.uTime,
         uKind: { value: kind === 'river' ? 1 : 0 },
+        uFoamThr: { value: kind === 'pond' ? 0.95 : 0.86 },
         fogColor: { value: new THREE.Color() }, fogNear: { value: 1 }, fogFar: { value: 1000 }, fogDensity: { value: 0 }
       },
       vertexShader: [
@@ -31,7 +33,7 @@
       fragmentShader: [
         '#include <common>',
         '#include <fog_pars_fragment>',
-        'uniform vec3 uDeep, uShallow, uFoam; uniform float uTime, uKind;',
+        'uniform vec3 uDeep, uShallow, uFoam; uniform float uTime, uKind, uFoamThr;',
         'varying vec2 vUv; varying float vEdge; varying vec3 vW;',
         'float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }',
         'float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);',
@@ -47,7 +49,7 @@
         '    glint = step(0.82, vnoise(p) * 0.6 + vnoise(p * 3.1 - uTime * 0.1) * 0.4);',
         '  }',
         '  c = mix(c, uFoam, glint * 0.6);',
-        '  float foam = step(0.86, vEdge + 0.05 * sin(uTime * 2.2 + vW.x * 0.6 + vW.z * 0.45));',
+        '  float foam = step(uFoamThr, vEdge + 0.05 * sin(uTime * 2.2 + vW.x * 0.6 + vW.z * 0.45));',
         '  c = mix(c, uFoam, foam * 0.9);',
         '  gl_FragColor = vec4(c, 1.0);',
         '  #include <fog_fragment>',
@@ -107,8 +109,10 @@
     const group = new THREE.Group();
     if (!L.lakes.length) return group;
     const mat = waterMaterial(L.amb, 'lake');
-    const SEG = 72;
+    const pondMat = waterMaterial(L.amb, 'pond');
+    const pads = [];
     for (const lk of L.lakes) {
+      const SEG = lk.kind === 'pond' ? 28 : 72;
       const pos = new Float32Array((SEG * 2 + 1) * 3), edge = new Float32Array(SEG * 2 + 1), wuv = new Float32Array((SEG * 2 + 1) * 2);
       pos[0] = lk.x; pos[1] = lk.level; pos[2] = lk.z; edge[0] = 0;
       for (let k = 0; k < SEG; k++) {
@@ -137,7 +141,23 @@
       geo.setAttribute('edge', new THREE.BufferAttribute(edge, 1));
       geo.setIndex(idx);
       geo.computeBoundingSphere();
-      group.add(new THREE.Mesh(geo, mat));
+      group.add(new THREE.Mesh(geo, lk.kind === 'pond' ? pondMat : mat));
+      if (lk.kind === 'pond') {
+        // nénuphars : disques échancrés et quelques fleurs roses
+        let seed = Math.floor(Math.abs(lk.nx * 1000)) + 1;
+        const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+        const n = 4 + Math.floor(rnd() * 7);
+        for (let k = 0; k < n; k++) {
+          const a = rnd() * Math.PI * 2, d = lk.r * (0.35 + rnd() * 0.45), rr = 0.35 + rnd() * 0.35;
+          const x = lk.x + Math.cos(a) * d, z = lk.z + Math.sin(a) * d;
+          pads.push({ geo: new THREE.CylinderGeometry(rr, rr, 0.04, 9, 1, false, 0.4, Math.PI * 2 - 0.6), color: '#4f9a3a', matrix: B3D.toon.tr(x, lk.level + 0.03, z, 0, rnd() * 6.28, 0) });
+          if (rnd() < 0.35) pads.push({ geo: new THREE.ConeGeometry(0.16, 0.18, 6), color: '#ff9ec4', matrix: B3D.toon.tr(x, lk.level + 0.13, z, Math.PI, 0, 0) });
+        }
+      }
+    }
+    if (pads.length) {
+      const m = new THREE.Mesh(B3D.toon.merge(pads), new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: B3D.toon.gradientMap() }));
+      group.add(m);
     }
     return group;
   }

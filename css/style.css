@@ -271,6 +271,8 @@ html, body {
 .pill small { font-weight: 500; font-size: 13px; opacity: 0.75; }
 .pill.tiny { font-size: 13px; padding: 1px 9px; box-shadow: 0 3px 0 var(--ink); }
 .pill.tiny.dim { opacity: 0.55; }
+.pill.boost { align-self: flex-start; background: #ffe14d; animation: boostPulse 0.9s ease-in-out infinite alternate; }
+@keyframes boostPulse { to { transform: scale(1.08); } }
 .hud-climb {
   position: absolute;
   left: 50%;

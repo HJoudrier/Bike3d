@@ -86,6 +86,30 @@
     return m;
   }
 
+  // --- Battement d'ailes des oiseaux : les ailes (attribut wingSide = -1/+1) tournent autour de l'axe du corps.
+  // f : { freq (rad/s), amp (rad), glide (0..1 : part du temps en vol plané), pivot (x de l'épaule) }
+  function flapGLSL(f) {
+    const n = (v) => Number(v).toFixed(4);
+    return {
+      pars: [
+        'attribute float wingSide;',
+        'mat3 b3dFlapRotZ(float a){ float c = cos(a), s = sin(a); return mat3(c,s,0.0, -s,c,0.0, 0.0,0.0,1.0); }'
+      ].join('\n'),
+      setup: [
+        'mat3 wingM = mat3(1.0);',
+        'vec3 wingPiv = vec3(' + n(f.pivot) + ' * wingSide, 0.0, 0.0);',
+        '#ifdef USE_INSTANCING',
+        '{',
+        '  float ph = float(gl_InstanceID) * 2.39;', // phase propre à chaque oiseau (stable quand il se déplace)
+        '  float gl = ' + n(f.glide || 0) + ' * smoothstep(0.1, 0.6, sin(uTime * 0.5 + ph * 0.3));',
+        '  float a = mix(' + n(f.amp) + ' * sin(uTime * ' + n(f.freq) + ' + ph), 0.1, gl);',
+        '  if (wingSide != 0.0) wingM = b3dFlapRotZ(a * wingSide);',
+        '}',
+        '#endif'
+      ].join('\n')
+    };
+  }
+
   // Matériau toon pour instances : teinte par instance appliquée seulement là où tintMask = 1,
   // et léger balancement au vent (sway) proportionnel à la hauteur.
   function instancedMat(opts = {}) {
@@ -93,10 +117,17 @@
     const sway = opts.sway || 0;
     const bounce = opts.bounce || 0;
     const people = !!opts.people;
+    const flap = opts.flap ? flapGLSL(opts.flap) : null;
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = shared.uTime;
       shader.uniforms.uRider = shared.uRider;
       let vs = shader.vertexShader;
+      if (flap) {
+        vs = vs
+          .replace('#include <common>', '#include <common>\n' + flap.pars)
+          .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + flap.setup + '\nobjectNormal = wingM * objectNormal;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = wingPiv + wingM * (transformed - wingPiv);');
+      }
       if (people) {
         vs = vs
           .replace('#include <common>', '#include <common>\n' + PEOPLE_PARS)
@@ -118,7 +149,7 @@
         ].join('\n'))
         .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + swayGLSL(sway, bounce));
     };
-    m.customProgramCacheKey = () => 'inst-' + sway + '-' + bounce + '-' + people;
+    m.customProgramCacheKey = () => 'inst-' + sway + '-' + bounce + '-' + people + '-' + (opts.flap ? JSON.stringify(opts.flap) : '');
     return m;
   }
 
@@ -148,7 +179,8 @@
     const sway = opts.sway || 0;
     const bounce = opts.bounce || 0;
     const people = !!opts.people;
-    const key = [color, width, sway, bounce, opts.minW, opts.maxW, people].join('|');
+    const flap = opts.flap ? flapGLSL(opts.flap) : null;
+    const key = [color, width, sway, bounce, opts.minW, opts.maxW, people, opts.flap ? JSON.stringify(opts.flap) : ''].join('|');
     if (outlineCache.has(key)) return outlineCache.get(key);
     const m = new THREE.ShaderMaterial({
       uniforms: {
@@ -170,9 +202,11 @@
         'attribute vec3 outlineNormal;',
         'uniform float uWidth, uMinW, uMaxW, uOutlineScale, uTime;',
         people ? PEOPLE_PARS : '',
+        flap ? flap.pars : '',
         'void main() {',
         '  vec3 transformed = position;',
         '  vec3 n = outlineNormal;',
+        flap ? flap.setup + '\ntransformed = wingPiv + wingM * (transformed - wingPiv);\nn = wingM * n;' : '',
         people ? PEOPLE_SETUP + '\ntransformed = armPiv + armM * (transformed - armPiv);\ntransformed.y += jump;\nn = armM * n;' : '',
         swayGLSL(sway, bounce),
         '  vec4 p = vec4(transformed, 1.0);',
@@ -261,10 +295,12 @@
       const cnt = g.attributes.position.count;
       vCount += cnt;
       iCount += idx ? idx.length : cnt;
-      return { g, idx, cnt, color: new THREE.Color(p.color || '#ffffff'), tint: p.tint ? 1 : 0, arm: p.arm || 0 };
+      return { g, idx, cnt, color: new THREE.Color(p.color || '#ffffff'), tint: p.tint ? 1 : 0, arm: p.arm || 0, wing: p.wing || 0 };
     });
     const hasArm = prepared.some((p) => p.arm !== 0);
     const arm = hasArm ? new Float32Array(vCount) : null;
+    const hasWing = prepared.some((p) => p.wing !== 0);
+    const wing = hasWing ? new Float32Array(vCount) : null;
     const pos = new Float32Array(vCount * 3), nor = new Float32Array(vCount * 3), col = new Float32Array(vCount * 3);
     const tint = new Float32Array(vCount);
     const index = vCount > 65535 ? new Uint32Array(iCount) : new Uint16Array(iCount);
@@ -277,6 +313,7 @@
         col[(vo + i) * 3] = p.color.r; col[(vo + i) * 3 + 1] = p.color.g; col[(vo + i) * 3 + 2] = p.color.b;
         tint[vo + i] = p.tint;
         if (arm) arm[vo + i] = p.arm;
+        if (wing) wing[vo + i] = p.wing;
       }
       if (p.idx) { for (let k = 0; k < p.idx.length; k++) index[io + k] = p.idx[k] + vo; io += p.idx.length; }
       else { for (let k = 0; k < p.cnt; k++) index[io + k] = vo + k; io += p.cnt; }
@@ -288,6 +325,7 @@
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setAttribute('tintMask', new THREE.BufferAttribute(tint, 1));
     if (arm) geo.setAttribute('armSide', new THREE.BufferAttribute(arm, 1));
+    if (wing) geo.setAttribute('wingSide', new THREE.BufferAttribute(wing, 1));
     geo.setIndex(new THREE.BufferAttribute(index, 1));
     geo.computeBoundingSphere();
     return geo;

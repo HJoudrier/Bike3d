@@ -63,6 +63,34 @@
     return { X, Y };
   }
 
+  // Repères de course sur le profil : sprints (vert), sommets du GPM (pois rouges), ravitaillement (orange).
+  function drawRaceMarkers(ctx, route, L, proj) {
+    const r = L.race;
+    if (!r) return;
+    const tmp = {};
+    const mark = (s, fill, text, dots) => {
+      const d = s - route.sStart;
+      const x = proj.X(d), y = proj.Y(route.sample(s, tmp).y);
+      const top = Math.max(12, y - 20);
+      ctx.strokeStyle = '#1d1a2b'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, top); ctx.stroke();
+      ctx.fillStyle = fill;
+      ctx.beginPath(); ctx.arc(x, top, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      if (dots) {
+        ctx.fillStyle = '#e2463a';
+        for (const [dx, dy] of [[-3.5, -3], [3.5, -3], [0, 3.5]]) { ctx.beginPath(); ctx.arc(x + dx, top + dy, 2.2, 0, Math.PI * 2); ctx.fill(); }
+      }
+      if (text) {
+        ctx.fillStyle = '#ffffff'; ctx.font = '700 11px Fredoka, Arial, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, x, top + 1);
+      }
+    };
+    for (const k of r.koms) mark(k.s1, '#ffffff', '', true);
+    for (const sp of r.sprints) mark(sp.s, '#2fa84f', 'S');
+    for (const f of r.feeds) mark(f.s0, '#ff9a2b', 'R');
+  }
+
   class Hud {
     constructor() {
       this.el = {
@@ -77,6 +105,9 @@
         timeScale: document.getElementById('hud-timescale'),
         cam: document.getElementById('hud-cam'),
         climb: document.getElementById('hud-climb'),
+        next: document.getElementById('hud-next'),
+        boost: document.getElementById('hud-boost'),
+        points: document.getElementById('hud-points'),
         profile: document.getElementById('hud-profile'),
         map: document.getElementById('hud-map'),
         speedlines: document.getElementById('speedlines')
@@ -92,6 +123,7 @@
       this.profileBg = document.createElement('canvas');
       this.profileBg.width = pc.width; this.profileBg.height = pc.height;
       this.profileProj = drawProfile(this.profileBg, route, { padL: 6, padB: 6, axes: false, lineWidth: 2 });
+      drawRaceMarkers(this.profileBg.getContext('2d'), route, L, this.profileProj);
       // mini-carte
       const mc = this.el.map;
       this.mapBg = document.createElement('canvas');
@@ -187,6 +219,22 @@
       e.timeScale.textContent = '⏩ x' + st.timeScale;
       e.timeScale.classList.toggle('dim', st.timeScale === 1);
       e.cam.textContent = st.camName;
+      // prochain évènement de course, boost, points
+      if (st.next) {
+        e.next.classList.remove('hidden');
+        const html = st.next.icon + ' ' + st.next.label + ' <small>dans ' + st.next.dist + '</small>';
+        if (e.next.innerHTML !== html) e.next.innerHTML = html;
+      } else e.next.classList.add('hidden');
+      e.boost.classList.toggle('hidden', !(st.boost > 0));
+      if (st.boost > 0) e.boost.lastChild.textContent = Math.ceil(st.boost) + ' s';
+      const r = this.L.race;
+      if (r && (r.sprints.length || r.koms.length)) {
+        e.points.classList.remove('hidden');
+        const bits = [];
+        if (r.sprints.length) bits.push('🟢 ' + B3D.race.ptsLabel(st.points.sprint));
+        if (r.koms.length) bits.push('🔴 ' + B3D.race.ptsLabel(st.points.kom));
+        e.points.textContent = bits.join(' · ');
+      } else e.points.classList.add('hidden');
       // montée en cours
       const c = st.climb;
       if (c) {

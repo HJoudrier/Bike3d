@@ -410,11 +410,6 @@
       const sp = placeOnRoad(route, g, summitS + 15, -(half + 2.2), 0);
       g.position.y = Math.min(L.heightAt(g.position.x, g.position.z), sp.y + 0.5) - 0.1;
       group.add(g);
-      if (c.cat <= 2 || c.gain > 200) {
-        const arch = makeArch(L, name.toUpperCase(), { pillar: '#ffffff', beam: '#ffffff', banner: { bg: '#ffffff', fg: '#e2463a', dots: '#e2463a', stroke: '#ffffff', size: name.length > 18 ? 66 : 80 } });
-        placeOnRoad(route, arch, summitS, 0);
-        group.add(arch);
-      }
       // encouragements peints sur la route
       const words = ['ALLEZ !', 'VAS-Y !', 'COURAGE', 'ALLEZ ALLEZ', 'BRAVO !', 'GO GO GO', 'ON LÂCHE RIEN', 'PLUS QUE ' + Math.max(1, Math.round(c.length / 2000)) + ' KM'];
       for (let s = summitS - Math.min(c.length, 3000); s < summitS - 40; s += 90 + rnd() * 120) {
@@ -430,14 +425,15 @@
     const rnd = mulberry32(L.seed ^ 0xfa5);
     const half = L.roadHalf;
     const groups = [];
-    L.keepOut = [];
+    L.keepOut = L.keepOut || [];
+    const noFans = (L.race && L.race.noFans) || [];
     const o = {};
     let s = route.sStart + 250 + rnd() * 200;
     while (s < route.sEnd - 320) {
       const r = route.sample(s, {});
       const climbing = r.grade > 0.035;
       const i = r.i;
-      if (L.villageW[i] < 0.02 && !L.bridgeMask[i] && !route.dup[i]) {
+      if (L.villageW[i] < 0.02 && !L.bridgeMask[i] && !route.dup[i] && !noFans.some(([a, b]) => s > a && s < b)) {
         const side = rnd() < 0.5 ? -1 : 1;
         const rail = side < 0 ? L.railL[i] : L.railR[i];
         const drop = side < 0 ? L.dropL[i] : L.dropR[i];
@@ -556,6 +552,8 @@
       crowd(summit - Math.min(900, c.length * 0.4), summit + 60, c.cat <= 2 ? 0.45 : 0.25);
     });
     crowd(route.sEnd - 260, route.sEnd + 30, 0.7);
+    // public massé derrière les barrières des sprints
+    if (L.race) for (const sp of L.race.sprints) crowd(sp.s - 130, sp.s + 25, 0.6);
     crowd(route.sStart - 20, route.sStart + 50, 0.5);
 
     // Alignements de platanes en plaine
@@ -571,8 +569,15 @@
           const x = r.x + r.rx * off * side, z = r.z + r.rz * off * side;
           L.sample(x, z, o);
           if (o.under || o.lakeRn < 1.3 || o.dr < o.rw + 6 || Math.abs(o.h - r.y) > 1.2) continue;
-          col.set(L.amb.decid[Math.floor(rnd() * L.amb.decid.length)]);
-          put('deciduous', x, o.h - 0.2, z, rnd() * 6.28, 1.15 + rnd() * 0.2, 1.25, col);
+          if (L.keepOut.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + 2.5)) continue;
+          // platanes au nord, cyprès dans le Sud
+          if (L.bio.south) {
+            col.set(L.amb.cypress[Math.floor(rnd() * L.amb.cypress.length)]);
+            put('cypress', x, o.h - 0.2, z, rnd() * 6.28, 1.0 + rnd() * 0.2, 1.1, col);
+          } else {
+            col.set(L.amb.decid[Math.floor(rnd() * L.amb.decid.length)]);
+            put('deciduous', x, o.h - 0.2, z, rnd() * 6.28, 1.15 + rnd() * 0.2, 1.25, col);
+          }
         }
       }
     }
@@ -586,12 +591,17 @@
       group.name = 'road';
       buildSurface(route, L, group);
       buildRails(route, L, group);
+      if (B3D.race) group.add(B3D.race.build(route, L));
       buildFeatures(route, L, group);
       buildVans(route, L, group);
       return group;
     },
     placeRoadsideInstances,
     makeSign,
-    placeOnRoad
+    placeOnRoad,
+    makeArch,
+    signTexture,
+    roadDecal,
+    FONT
   };
 })(typeof window !== 'undefined' ? window : globalThis);

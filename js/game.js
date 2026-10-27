@@ -207,13 +207,35 @@
     show(id) { $(id).classList.remove('hidden'); },
     hide(id) { $(id).classList.add('hidden'); },
 
+    // Messages : un message arrivé pendant qu'un autre vient de s'afficher attend son tour.
     toast(html, ms) {
+      const t = $('toast');
+      this._toastQ = this._toastQ || [];
+      if (!t.classList.contains('hidden') && performance.now() - this._toastShownAt < 1400) {
+        this._toastQ.push([html, ms]);
+        this._armToast();
+        return;
+      }
+      this._showToast(html, ms);
+    },
+
+    _showToast(html, ms) {
       const t = $('toast');
       t.innerHTML = html;
       t.classList.remove('hidden');
       t.style.animation = 'none'; void t.offsetWidth; t.style.animation = '';
+      this._toastShownAt = performance.now();
+      this._toastMs = ms || 2600;
+      this._armToast();
+    },
+
+    _armToast() {
       clearTimeout(this._toastT);
-      this._toastT = setTimeout(() => t.classList.add('hidden'), ms || 2600);
+      const q = this._toastQ || [];
+      const left = Math.max(0, this._toastShownAt + (q.length ? 1400 : this._toastMs) - performance.now());
+      this._toastT = setTimeout(() => {
+        if (q.length) { const [h, m] = q.shift(); this._showToast(h, m); } else $('toast').classList.add('hidden');
+      }, left);
     },
 
     showError(msg) {
@@ -299,6 +321,7 @@
       if (this.roadGroup) { free(this.roadGroup); this.roadGroup = null; }
       if (this.waterGroup) { free(this.waterGroup); this.waterGroup = null; }
       if (this.villageGroup) { free(this.villageGroup); this.villageGroup = null; }
+      if (this.fauna) { this.fauna.dispose(); this.fauna = null; }
       if (this.mooBubble) this.mooBubble.visible = false;
       if (this.sky) { this.sky.dispose(); this.sky = null; }
       if (this.cyclist) { free(this.cyclist.root); this.cyclist = null; }
@@ -361,6 +384,7 @@
       this.setLoading(0.32, 'Construction des villages…');
       this.villageGroup = B3D.villages.build(route, L, this.tiles);
       this.scene.add(this.villageGroup);
+      this.fauna = new B3D.Fauna(this.scene, L, route);
       this.cyclist = new B3D.Cyclist({ jersey: this.settings.jersey, bikeColor: ['#e2463a', '#3d7be0', '#1d1a2b', '#4cc35a', '#ff7aa8'][seed % 5] });
       this.scene.add(this.cyclist.root);
       this.placeCyclistAtStart();
@@ -380,13 +404,19 @@
         if (remaining === 0) break;
       }
       this.tiles.update(p.x, p.z, 60);
+      // compile d'avance les shaders des objets encore cachés (oiseaux, canards…) pour éviter un à-coup en course
+      this.setLoading(0.99, 'Derniers coups de pinceau…');
+      await nextFrame();
+      try { await this.renderer.compileAsync(this.scene, this.camera); } catch (e) { this.renderer.compile(this.scene, this.camera); }
       this.setLoading(1, 'Prêt !');
       console.info('[Bike3D] paysage', seed, 'généré en', Math.round(performance.now() - t0), 'ms');
 
       // interface d'aperçu
       $('seed-label').textContent = seed;
       $('preview-title').textContent = L.amb.name;
-      $('landscape-desc').innerHTML = L.describe().map((d) => '<li><span>' + d.icon + ' ' + d.label + '</span><b>' + d.value + '</b></li>').join('');
+      const desc = L.describe();
+      if (L.race) desc.push({ icon: '🏁', label: 'Course', value: B3D.race.summary(L) });
+      $('landscape-desc').innerHTML = desc.map((d) => '<li><span>' + d.icon + ' ' + d.label + '</span><b>' + d.value + '</b></li>').join('');
       this.hide('screen-loading');
       this.hide('hud');
       this.show('screen-preview');
@@ -477,10 +507,12 @@
       const route = this.route;
       this.ride = {
         s: route.sStart - 4, lat: 0, latV: 0, v: 0, effort: 0, cruise: 0, braking: false,
-        time: 0, maxV: 0, climbsDone: new Set(), flamme: false, crowd: 0, standing: false, tuck: false,
+        time: 0, maxV: 0, flamme: false, crowd: 0, standing: false, tuck: false,
         villagesSeen: new Set(), lastStrokes: 0, mooT: 1.5, bellT: 0, cowCheck: 0, cow: null, finishT: 0
       };
       this._rs = route.sample(this.ride.s, {});
+      this.raceT = new B3D.race.Tracker(route, this.L, PHYS);
+      this._toastQ = [];
       this.timeScaleIndex = 0;
       this.hud.setup(route, this.L);
       this.camState = null;
@@ -580,6 +612,68 @@
       }
     },
 
+    // panoramique stéréo d'un point vu de la caméra (-1 gauche, 1 droite)
+    panOf(x, z) {
+      const cam = this.camera;
+      const dx = x - cam.position.x, dz = z - cam.position.z;
+      const l = Math.hypot(dx, dz) || 1;
+      const e = cam.matrixWorld.elements;
+      return ((dx / l) * e[0] + (dz / l) * e[2]) * 0.8;
+    },
+
+    // Cris des animaux proches, chants d'oiseaux selon le milieu, grenouilles près des mares, cigales dans le Sud.
+    updateWildlife(dtReal) {
+      const S = this.sound;
+      if (!S.ctx || S.muted) return;
+      const W = this._wild || (this._wild = { t: {}, scanT: 0, mix: null, near: {} });
+      const P = this.cyclist.root.position, L = this.L, R = Math.random;
+      W.scanT -= dtReal;
+      if (W.scanT <= 0) {
+        W.scanT = 0.5;
+        W.mix = this.tiles.coverMix(P.x, P.z);
+        for (const [type, r] of [['horse', 90], ['sheep', 90], ['marmot', 110], ['ibex', 60]]) W.near[type] = this.tiles.nearestAnimal(type, P.x, P.z, r);
+        let pd = 1e9;
+        for (const lk of L.lakes) if (lk.kind === 'pond') pd = Math.min(pd, Math.hypot(lk.x - P.x, lk.z - P.z) - lk.r);
+        W.pondD = pd;
+      }
+      const mix = W.mix;
+      // minuteur : quand il expire, joue le son et repart pour base + aléa secondes
+      const due = (key, base, rand) => {
+        if (W.t[key] === undefined) W.t[key] = base * 0.3 + R() * rand;
+        W.t[key] -= dtReal;
+        if (W.t[key] > 0) return false;
+        W.t[key] = base + R() * rand;
+        return true;
+      };
+      const fall = (d, maxD) => { const k = Math.max(0, 1 - d / maxD); return k * k; };
+      const near = W.near;
+      if (near.horse && due('horse', 7, 14)) S.animal('horse', 0.03 + 0.2 * fall(near.horse.d, 90), this.panOf(near.horse.x, near.horse.z));
+      if (near.sheep && due('sheep', 2.5, 6)) S.animal('sheep', 0.03 + 0.17 * fall(near.sheep.d, 90), this.panOf(near.sheep.x, near.sheep.z));
+      if (near.marmot && near.marmot.d < 70 && due('marmot', 4, 9)) S.animal('marmot', 0.03 + 0.12 * fall(near.marmot.d, 110), this.panOf(near.marmot.x, near.marmot.z));
+      // oiseaux animés (distances calculées par la faune)
+      const A = this.fauna ? this.fauna.audio : null;
+      if (A) {
+        if (A.eagle < 260 && due('eagle', 9, 14)) S.animal('eagle', 0.03 + 0.1 * fall(A.eagle, 260), (R() - 0.5) * 1.2);
+        if (A.crow < 220 && due('crow', 4, 8)) S.animal('crow', 0.02 + 0.09 * fall(A.crow, 220), (R() - 0.5) * 1.2);
+        if (A.goose < 380 && due('goose', 1.5, 3)) S.animal('goose', 0.02 + 0.08 * fall(A.goose, 380), (R() - 0.5) * 0.8);
+        if (A.gull < 260 && due('gull', 3, 7)) S.animal('gull', 0.02 + 0.08 * fall(A.gull, 260), (R() - 0.5) * 1.2);
+        if (A.duck < 120 && due('duck', 2.5, 6)) S.animal('duck', 0.03 + 0.14 * fall(A.duck, 120), (R() - 0.5) * 1.2);
+        if (A.swallow < 30 && due('swallow', 2, 5)) S.animal('swallow', 0.03, (R() - 0.5) * 1.4);
+        if (A.takeoff > 0) S.animal('flutter', 0.12 + 0.04 * Math.min(4, A.takeoff), (R() - 0.5));
+      }
+      if (mix) {
+        // passereaux dans les prés et les haies, merles en forêt, plus discrets en altitude
+        const song = mix.meadow * 0.8 + mix.forest + mix.garrigue * 0.5 + mix.wet * 0.5;
+        if (song > 0.15 && due('song', 1.4 / song, 4 / song)) S.animal(mix.forest > mix.meadow && R() < 0.6 ? 'blackbird' : 'songbird', 0.012 + 0.025 * R(), (R() - 0.5) * 1.6);
+        // grenouilles près des mares et des zones humides (surtout le soir)
+        const frogs = Math.max(W.pondD < 90 ? 1 - W.pondD / 90 : 0, mix.wet * 2) * (L.amb.id === 'soir' ? 1.4 : 1);
+        if (frogs > 0.1 && due('frog', 0.8 / frogs, 2.5 / frogs)) S.animal('frog', 0.02 + 0.06 * Math.min(1, frogs), (R() - 0.5) * 1.6);
+        // cigales : garrigue et campagne du Sud, l'été ou en fin de journée
+        const warm = (L.amb.id === 'ete' || L.amb.id === 'soir' ? 1 : L.amb.id === 'printemps' ? 0.3 : 0) * clamp((1000 - P.y) / 300, 0, 1);
+        S.setCicadas(Math.min(1, (mix.garrigue * 2.5 + (L.bio.south ? mix.meadow * 0.6 + mix.forest * 0.4 : 0)) * warm));
+      }
+    },
+
     villageWelcome(name) {
       if (name.startsWith('Le ')) return 'au ' + name.slice(3);
       if (name.startsWith('Les ')) return 'aux ' + name.slice(4);
@@ -618,14 +712,16 @@
       const crr = PHYS.crr * (offRoad ? 3.5 : 1);
       const cda = R.tuck ? PHYS.cdaTuck : R.standing ? PHYS.cdaStand : PHYS.cda;
       const flatPower = (vv) => vv * (crr * PHYS.mass * PHYS.g + 0.5 * PHYS.rho * PHYS.cda * vv * vv);
+      const pMax = PHYS.pMax * this.raceT.powerFactor; // musette du ravitaillement : coup de boost
       if (inp.up) {
-        R.effort = Math.min(PHYS.pMax, R.effort + 1300 * dt);
+        R.effort = Math.min(pMax, R.effort + 1300 * dt);
         R.cruise = -1;
       } else if (inp.down) {
         R.effort = Math.max(0, R.effort - 2500 * dt);
         R.cruise = -1;
       } else {
         if (R.cruise < 0) R.cruise = v > 0.5 ? Math.min(PHYS.pMax * 0.8, flatPower(v)) : 0;
+        else if (R.cruise > pMax) R.cruise = pMax;
         R.effort += (R.cruise - R.effort) * (1 - Math.exp(-dt * 3));
       }
       R.braking = inp.down && v > 0.05;
@@ -645,12 +741,12 @@
       const prevLatV = R.latV;
       R.latV = lerp(R.latV, targetLatV, 1 - Math.exp(-dtReal * 6));
       R.lat += R.latV * dt;
-      // bas-côté praticable, sauf glissière, parapet de pont ou foule
+      // bas-côté praticable, sauf glissière, parapet de pont, foule, barrières ou soigneurs
       const dNow = R.s - route.sStart;
       const ii = p.i;
       const crowded = this.crowdNear(ii) || L.villageW[ii] > 0.3;
-      const maxR = (L.railR[ii] || L.bridgeMask[ii] || crowded) ? half - 0.35 : half + 1.5;
-      const maxL = (L.railL[ii] || L.bridgeMask[ii] || crowded) ? half - 0.35 : half + 1.5;
+      const maxR = (L.railR[ii] || L.bridgeMask[ii] || crowded || L.fenceR[ii]) ? half - 0.35 : half + 1.5;
+      const maxL = (L.railL[ii] || L.bridgeMask[ii] || crowded || L.fenceL[ii]) ? half - 0.35 : half + 1.5;
       if (R.lat > maxR) { R.lat = Math.max(maxR, R.lat - 4 * dt); R.latV = Math.min(0, R.latV); }
       if (R.lat < -maxL) { R.lat = Math.min(-maxL, R.lat + 4 * dt); R.latV = Math.max(0, R.latV); }
 
@@ -682,14 +778,12 @@
       }
       B3D.toon.shared.uRider.value.copy(cyc.root.position);
 
-      // --- évènements de parcours
+      // --- évènements de parcours : sprints, GPM, ravitaillement
       const d = R.s - route.sStart;
-      route.climbs.forEach((c, i) => {
-        if (!R.climbsDone.has(i) && d >= c.d1) {
-          R.climbsDone.add(i);
-          this.toast('⛰️ ' + L.climbNames[i] + '<small>Sommet atteint · ' + Math.round(c.summitEle) + ' m</small>', 3200);
-        }
-      });
+      for (const ev of this.raceT.update(R, dt, dtReal, cyc.root.position)) {
+        this.toast(ev.toast, ev.dur);
+        if (ev.sound) this.sound.raceCue(ev.sound);
+      }
       if (!R.flamme && route.length > 2500 && d >= route.length - 1000) {
         R.flamme = true;
         this.toast('🚩 Flamme rouge !<small>Plus qu\'un kilomètre</small>', 2400);
@@ -705,6 +799,7 @@
       R.crowd = lerp(R.crowd, this.crowdDensity(q.i), 1 - Math.exp(-dtReal * 2));
       this.sound.update(dtReal, R.v, R.effort < 25 && R.v > 1, R.crowd);
       this.updateCows(dtReal);
+      this.updateWildlife(dtReal);
 
       if (d >= route.length) this.finish();
     },
@@ -785,11 +880,22 @@
         ['Moyenne', (avg * 3.6).toFixed(1).replace('.', ',') + ' km/h'],
         ['Vitesse max', (R.maxV * 3.6).toFixed(1).replace('.', ',') + ' km/h'],
         ['Dénivelé +', Math.round(route.stats.gain) + ' m']
-      ].map((s) => '<div>' + s[0] + '<b>' + s[1] + '</b></div>').join('');
+      ].concat(this.raceStats()).map((s) => '<div>' + s[0] + '<b>' + s[1] + '</b></div>').join('');
       const fb = $('finish-best');
       fb.className = 'finish-best' + (record ? ' record' : '');
       fb.textContent = record ? (best > 0 ? '🎉 Nouveau record ! (ancien : ' + formatTime(best) + ')' : '🎉 Premier temps enregistré !') : 'Record à battre : ' + formatTime(best);
       setTimeout(() => { if (this.state === 'finished') this.show('screen-finish'); }, 900);
+    },
+
+    // classements annexes de l'écran d'arrivée
+    raceStats() {
+      const T = this.raceT, r = this.L.race;
+      if (!T || !r) return [];
+      const out = [];
+      if (r.sprints.length) out.push(['🟢 Points sprint', B3D.race.ptsLabel(T.points.sprint)]);
+      if (r.koms.length) out.push(['🔴 Points montagne', B3D.race.ptsLabel(T.points.kom)]);
+      if (r.feeds.length) out.push(['🥤 Musettes', String(T.musettes)]);
+      return out;
     },
 
     // ------------------------------------------------------------------ boucle
@@ -837,6 +943,7 @@
         R.finishT += dt;
         this.sound.update(dt, R.v, R.v > 1, Math.max(0, 1 - R.finishT / 7));
       }
+      if (this.fauna) this.updateFauna(dt);
       if (this.sky) this.sky.update(this.camera, dt);
       if (this.villageGroup) B3D.villages.cull(this.villageGroup, this.camera.position, this.Q.radius + 150);
       this.confetti.update(dt);
@@ -853,6 +960,21 @@
       this.render();
     },
 
+    // oiseaux et canards : autour du point visé en aperçu, autour du coureur en course
+    updateFauna(dt) {
+      let P, fwd;
+      if (this.state === 'preview') {
+        P = this._pvTarget;
+        if (!P) return;
+        const q = this.route.sample(this.preview.s, this._faunaTmp || (this._faunaTmp = {}));
+        fwd = { x: q.tx, z: q.tz };
+      } else {
+        P = this.cyclist.root.position;
+        fwd = { x: this._rs.tx, z: this._rs.tz };
+      }
+      this.fauna.update(dt, P, fwd, this.tiles);
+    },
+
     updateHud() {
       const R = this.ride;
       const d = R.s - this.route.sStart;
@@ -860,7 +982,8 @@
       this.hud.update({
         speed: R.v, grade: q.grade, alt: q.y, d, time: R.time, x: q.x, z: q.z, hx: q.tx, hz: q.tz,
         effort: R.effort / PHYS.pMax, braking: R.braking, timeScale: TIME_SCALES[this.timeScaleIndex],
-        camName: '🎥 ' + CAMS[this.camIndex].name, climb: this.currentClimb(d)
+        camName: '🎥 ' + CAMS[this.camIndex].name, climb: this.currentClimb(d),
+        next: this.raceT.next(R.s), boost: this.raceT.boost, points: this.raceT.points
       }, performance.now());
     },
 

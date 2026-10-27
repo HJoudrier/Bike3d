@@ -422,17 +422,20 @@
           const g = e[maxI] - e[start];
           if (e[maxI] - e[j] > Math.max(25, g * 0.2)) break;
         }
-        const gain = e[maxI] - e[start];
-        const len = (maxI - start) * step;
+        // le pied de la montée est là où la pente devient réelle (plus de 2 % sur 200 m), pas au bout du faux plat
+        let foot = start;
+        while (foot < maxI - 4 && (e[foot + 4] - e[foot]) / (4 * step) < 0.02) foot++;
+        const gain = e[maxI] - e[foot];
+        const len = (maxI - foot) * step;
         if (gain >= 50 && len >= 500 && gain / len >= 0.03) {
           const avg = gain / len;
           const score = len * avg * 100;
           let cat = 4;
           if (score >= 80000) cat = 0; else if (score >= 64000) cat = 1; else if (score >= 32000) cat = 2; else if (score >= 16000) cat = 3;
           let maxG = 0;
-          for (let q = start; q < maxI; q++) maxG = Math.max(maxG, (e[q + 1] - e[q]) / step);
+          for (let q = foot; q < maxI; q++) maxG = Math.max(maxG, (e[q + 1] - e[q]) / step);
           climbs.push({
-            d0: start * step, d1: maxI * step, gain, length: len, avg, maxGrade: maxG, cat,
+            d0: foot * step, d1: maxI * step, gain, length: len, avg, maxGrade: maxG, cat,
             summitEle: e[maxI]
           });
         }

@@ -4,6 +4,7 @@
   const B3D = root.B3D = root.B3D || {};
   const { clamp, mulberry32, hash2 } = B3D.util;
   const COVER = B3D.Landscape.COVER;
+  const STRIPE = B3D.Landscape.STRIPE;
 
   const QUALITY = {
     low: { tile: 120, seg: 24, radius: 480, veg: 300, vegNear: 150, detail: 90, treeStep: 8.5, pixelRatio: 1, shadow: 1024, treeShadows: false, caps: 0.45 },
@@ -21,8 +22,43 @@
     { name: 'cow', cap: 600, outline: true },
     { name: 'spectator', cap: 2600, outline: true, people: true, outlineWidth: 0.8 },
     { name: 'grass', cap: 16000, outline: false, sway: 0.08 },
-    { name: 'flowers', cap: 9000, outline: false, sway: 0.15 }
+    { name: 'flowers', cap: 9000, outline: false, sway: 0.15 },
+    // biomes
+    { name: 'vine', cap: 7000, outline: false },
+    { name: 'fruittree', cap: 2500, outline: true, sway: 0.0012, shadow: true },
+    { name: 'cypress', cap: 2500, outline: true, sway: 0.0008, shadow: true },
+    { name: 'olive', cap: 3000, outline: true, sway: 0.001, shadow: true },
+    { name: 'pine', cap: 3000, outline: true, sway: 0.0008, shadow: true },
+    { name: 'birch', cap: 6000, outline: true, sway: 0.0015, shadow: true },
+    { name: 'willow', cap: 600, outline: true, sway: 0.002, shadow: true },
+    { name: 'reeds', cap: 6000, outline: false, sway: 0.06 },
+    { name: 'heather', cap: 5000, outline: false },
+    { name: 'lavender', cap: 7000, outline: false, sway: 0.03 },
+    { name: 'sunflower', cap: 6000, outline: false },
+    { name: 'pumpkin', cap: 3000, outline: true, maxW: 0.05 },
+    // faune
+    { name: 'horse', cap: 800, outline: true },
+    { name: 'sheep', cap: 2000, outline: true },
+    { name: 'ibex', cap: 600, outline: true },
+    { name: 'marmot', cap: 600, outline: true },
+    { name: 'deer', cap: 400, outline: true },
+    { name: 'heron', cap: 300, outline: true }
   ];
+
+  // Éléments plantés en rangs réguliers, alignés sur les rangs dessinés au sol par le shader du terrain.
+  const ROWS = {
+    vine: { stripe: STRIPE.VINE, spacing: 3.2, step: 4.6, pool: 'vine', dy: -0.05 },
+    orchard: { cover: COVER.ORCHARD, spacing: 8, step: 8, pool: 'fruittree', dy: -0.2, oneWay: true },
+    lavender: { stripe: STRIPE.LAVENDER, spacing: 2.6, step: 3.1, pool: 'lavender', dy: -0.08 },
+    sunflower: { stripe: STRIPE.SUNFLOWER, spacing: 2.6, step: 2.7, pool: 'sunflower', dy: -0.05 }
+  };
+  const COATS = {
+    horse: ['#8a5a3a', '#5a3a28', '#2d2622', '#e9e4dc', '#b07a45', '#d8c39a', '#9a9aa0'],
+    sheep: ['#f4f0e8', '#ece6da', '#f8f6f0', '#efe7d8', '#3a3440'],
+    ibex: ['#8f7a62', '#7d6a55', '#9a8670'],
+    marmot: ['#9a7350', '#8a6545', '#a07c58'],
+    deer: ['#a0603a', '#8f5533', '#9a6a42']
+  };
 
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
   const _c = new THREE.Color();
@@ -56,15 +92,24 @@
 
     // Petite texture de "grain" procédural dans le shader du terrain pour éviter l'aspect trop lisse.
     _patchTerrainMaterial(m) {
+      const L = this.L;
+      const rowDir = new THREE.Vector2(L.bio.rowDir[0], L.bio.rowDir[1]);
+      const vineGreen = new THREE.Color(L.amb.vineGreen), soil = new THREE.Color(L.amb.soil);
       m.onBeforeCompile = (shader) => {
+        shader.uniforms.uRowDir = { value: rowDir };
+        shader.uniforms.uVineGreen = { value: vineGreen };
+        shader.uniforms.uSoil = { value: soil };
         shader.vertexShader = shader.vertexShader
-          .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying float vUpN;')
-          .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvUpN = normal.y;');
+          .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying float vUpN;\nattribute float stripe;\nflat varying float vStripe;')
+          .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvUpN = normal.y;\nvStripe = stripe;');
         shader.fragmentShader = shader.fragmentShader
           .replace('#include <common>', [
             '#include <common>',
             'varying vec3 vWPos;',
             'varying float vUpN;',
+            'flat varying float vStripe;',
+            'uniform vec2 uRowDir;',
+            'uniform vec3 uVineGreen, uSoil;',
             'float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }',
             'float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);',
             '  return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }'
@@ -78,10 +123,22 @@
             'float steep = smoothstep(0.78, 0.5, vUpN);',
             'float band = fract(vWPos.y / 7.0 + vnoise(vWPos.xz * 0.04) * 1.2);',
             'float sFade = clamp(1.0 - length(vWPos - cameraPosition) / 380.0, 0.0, 1.0);',
-            'diffuseColor.rgb *= 1.0 - steep * sFade * (step(0.6, band) * 0.16 + step(0.92, band) * 0.12);'
+            'diffuseColor.rgb *= 1.0 - steep * sFade * (step(0.6, band) * 0.16 + step(0.92, band) * 0.12);',
+            // rangs : sillons des champs, vignes, lavande, tournesols (atténués au loin pour éviter le moiré)
+            'if (vStripe > 0.5) {',
+            '  float ori = vStripe > 7.5 ? 1.0 : 0.0;',
+            '  float kind = vStripe - ori * 8.0;',
+            '  vec2 rdir = ori > 0.5 ? vec2(-uRowDir.y, uRowDir.x) : uRowDir;',
+            '  float spacing = (kind < 1.5 || kind > 4.5) ? 2.2 : (kind < 2.5 ? 3.2 : 2.6);',
+            '  float row = 0.5 + 0.5 * sin(dot(vWPos.xz, rdir) / spacing * 6.2831853);',
+            '  float rf = clamp(1.0 - length(vWPos - cameraPosition) / 420.0, 0.0, 1.0);',
+            '  if (kind < 1.5 || kind > 4.5) diffuseColor.rgb *= 1.0 - 0.13 * smoothstep(0.5, 0.85, row) * rf;',
+            '  else if (kind < 2.5) diffuseColor.rgb = mix(diffuseColor.rgb, uVineGreen, mix(0.35, smoothstep(0.55, 0.85, row) * 0.8, rf));',
+            '  else diffuseColor.rgb = mix(diffuseColor.rgb, uSoil, mix(0.15, smoothstep(0.6, 0.9, 1.0 - row) * 0.6, rf));',
+            '}'
           ].join('\n'));
       };
-      m.customProgramCacheKey = () => 'terrain-grain';
+      m.customProgramCacheKey = () => 'terrain-grain-rows';
     }
 
     _buildIndex() {
@@ -105,8 +162,9 @@
       this.pools = {};
       for (const p of POOLS) {
         const cap = Math.round(p.cap * this.Q.caps);
-        this.pools[p.name] = new B3D.props.InstancePool(this.scene, geos[p.name], {
-          capacity: cap, outline: p.outline, sway: p.sway, bounce: p.bounce, people: p.people, outlineWidth: p.outlineWidth,
+        const geo = p.name === 'fruittree' ? B3D.props.fruitTree(this.L.amb.fruit) : geos[p.name];
+        this.pools[p.name] = new B3D.props.InstancePool(this.scene, geo, {
+          capacity: cap, outline: p.outline, sway: p.sway, bounce: p.bounce, people: p.people, outlineWidth: p.outlineWidth, maxW: p.maxW,
           castShadow: p.shadow && this.Q.treeShadows || p.name === 'spectator'
         });
       }
@@ -182,13 +240,13 @@
         // végétation en 2 niveaux de détail : forêts éclaircies au loin
         const lvl = t.d < Q.vegNear ? 0 : 1;
         if (!t.veg && t.d < Q.veg) { t.veg = this._buildVeg(t, lvl); t.vegLevel = lvl; }
-        else if (t.veg && t.d > Q.veg + 80) { this._releaseList(t.veg); t.veg = null; t.cows = null; }
+        else if (t.veg && t.d > Q.veg + 80) { this._releaseList(t.veg); t.veg = null; t.fauna = null; }
         else if (t.veg && lvl !== t.vegLevel && Math.abs(t.d - Q.vegNear) > 25) {
           this._releaseList(t.veg);
           t.veg = this._buildVeg(t, lvl);
           t.vegLevel = lvl;
         }
-        if (!t.details && t.d < Q.detail && t.nearRoad) { t.details = this._buildDetails(t); }
+        if (!t.details && t.d < Q.detail && (t.nearRoad || t.rowCrop || t.pumpkins)) { t.details = this._buildDetails(t); }
         else if (t.details && t.d > Q.detail + 50) { this._releaseList(t.details); t.details = null; }
       }
       for (const p of Object.values(this.pools)) p.flush();
@@ -216,7 +274,8 @@
       const H = new Float32Array(NB * NB);
       const cnt = V * V;
       const roadD = new Float32Array(cnt), dr = new Float32Array(cnt), rw = new Float32Array(cnt), wl = new Float32Array(cnt);
-      const lakeRn = new Float32Array(cnt), under = new Uint8Array(cnt), vill = new Float32Array(cnt);
+      const lakeRn = new Float32Array(cnt), under = new Uint8Array(cnt), vill = new Float32Array(cnt), pond = new Uint8Array(cnt);
+      let hasPond = false;
       const o = this._o;
       let nearRoad = false;
       for (let j = 0; j < NB; j++) {
@@ -227,12 +286,15 @@
           if (i >= 1 && j >= 1 && i <= V && j <= V) {
             const k = (j - 1) * V + (i - 1);
             roadD[k] = o.roadD; dr[k] = o.dr; rw[k] = o.rw; wl[k] = o.wl; lakeRn[k] = o.lakeRn; under[k] = o.under ? 1 : 0; vill[k] = o.vill;
+            pond[k] = o.lakePond ? 1 : 0;
+            if (o.lakePond && o.lakeRn < 1.6) hasPond = true;
             if (o.roadD < 40) nearRoad = true;
           }
         }
       }
       const pos = new Float32Array(cnt * 3), nor = new Float32Array(cnt * 3), col = new Float32Array(cnt * 3);
-      const cover = new Uint8Array(cnt), crop = new Uint8Array(cnt), slopeA = new Float32Array(cnt);
+      const cover = new Uint8Array(cnt), crop = new Uint8Array(cnt), slopeA = new Float32Array(cnt), stripe = new Float32Array(cnt);
+      let rowCrop = false, pumpkins = false;
       const oc = this._oc;
       for (let j = 0; j < V; j++) {
         for (let i = 0; i < V; i++) {
@@ -246,9 +308,12 @@
           nor[k * 3] = -dx * inv; nor[k * 3 + 1] = inv; nor[k * 3 + 2] = -dz * inv;
           const slope = Math.sqrt(dx * dx + dz * dz);
           slopeA[k] = slope;
-          oc.h = h; oc.roadD = roadD[k]; oc.dr = dr[k]; oc.rw = rw[k]; oc.wl = wl[k]; oc.lakeRn = lakeRn[k]; oc.under = !!under[k]; oc.vill = vill[k];
+          oc.h = h; oc.roadD = roadD[k]; oc.dr = dr[k]; oc.rw = rw[k]; oc.wl = wl[k]; oc.lakeRn = lakeRn[k]; oc.under = !!under[k]; oc.vill = vill[k]; oc.lakePond = !!pond[k];
           L.cover(x0 + i * step, z0 + j * step, oc, slope, _c);
-          cover[k] = oc.cover; crop[k] = oc.crop;
+          cover[k] = oc.cover; crop[k] = oc.crop; stripe[k] = oc.stripe;
+          const sk = oc.stripe % 8;
+          if (sk === STRIPE.LAVENDER || sk === STRIPE.SUNFLOWER) rowCrop = true;
+          if (sk === STRIPE.PUMPKIN) pumpkins = true;
           col[k * 3] = _c.r; col[k * 3 + 1] = _c.g; col[k * 3 + 2] = _c.b;
         }
       }
@@ -256,6 +321,7 @@
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
       geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('stripe', new THREE.BufferAttribute(stripe, 1));
       geo.setIndex(new THREE.BufferAttribute(this.indexArray, 1));
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, this.material);
@@ -264,19 +330,23 @@
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();
       this.group.add(mesh);
-      return { tx, tz, x0, z0, mesh, H, NB, V, cover, crop, slope: slopeA, roadD, dr, rw, under, lakeRn, vill, nearRoad, veg: null, details: null, cows: null, d: 0 };
+      return {
+        tx, tz, x0, z0, mesh, H, NB, V, cover, crop, stripe, slope: slopeA, roadD, dr, rw, under, lakeRn, vill, pond,
+        nearRoad, rowCrop, pumpkins, hasPond, veg: null, details: null, fauna: null, d: 0
+      };
     }
 
-    // Vache la plus proche d'un point (dans les tuiles voisines) : { x, y, z, d } ou null.
-    nearestCow(x, z, maxD) {
+    // Animal le plus proche d'un point (dans les tuiles voisines) : { x, y, z, d } ou null.
+    // type : 'cow', 'horse', 'sheep', 'marmot', 'ibex'
+    nearestAnimal(type, x, z, maxD) {
       const S = this.S;
       const tx0 = Math.floor(x / S), tz0 = Math.floor(z / S);
       let best = null, bd = maxD;
       for (let tz = tz0 - 1; tz <= tz0 + 1; tz++) {
         for (let tx = tx0 - 1; tx <= tx0 + 1; tx++) {
           const t = this.tiles.get(tx + ',' + tz);
-          if (!t || !t.cows) continue;
-          const c = t.cows;
+          if (!t || !t.fauna) continue;
+          const c = t.fauna[type];
           for (let k = 0; k < c.length; k += 3) {
             const d = Math.hypot(c[k] - x, c[k + 2] - z);
             if (d < bd) { bd = d; best = { x: c[k], y: c[k + 1], z: c[k + 2], d }; }
@@ -284,6 +354,27 @@
         }
       }
       return best;
+    }
+
+    nearestCow(x, z, maxD) { return this.nearestAnimal('cow', x, z, maxD); }
+
+    // Proportion de couvertures du sol autour d'un point (pour l'ambiance sonore).
+    coverMix(x, z) {
+      const t = this.tiles.get(Math.floor(x / this.S) + ',' + Math.floor(z / this.S));
+      const out = { forest: 0, meadow: 0, garrigue: 0, wet: 0, alpine: 0, n: 0 };
+      if (!t) return out;
+      for (let k = 0; k < t.cover.length; k += 7) {
+        const c = t.cover[k];
+        out.n++;
+        if (c === COVER.FOREST) out.forest++;
+        else if (c === COVER.MEADOW || c === COVER.ORCHARD || c === COVER.HEDGE || c === COVER.FIELD || c === COVER.VINEYARD) out.meadow++;
+        else if (c === COVER.GARRIGUE) out.garrigue++;
+        else if (c === COVER.WETLAND || t.pond[k]) out.wet++;
+        else if (c === COVER.ALPINE || c === COVER.HEATH || c === COVER.ROCK) out.alpine++;
+      }
+      for (const key of ['forest', 'meadow', 'garrigue', 'wet', 'alpine']) out[key] /= Math.max(1, out.n);
+      out.ponds = t.hasPond;
+      return out;
     }
 
     // Interpolations sur la grille de la tuile
@@ -330,11 +421,19 @@
     }
 
     _buildVeg(t, lvl) {
-      const L = this.L, P = L.P, amb = L.amb, half = L.roadHalf;
+      const L = this.L, P = L.P, B = L.bio, amb = L.amb, half = L.roadHalf;
       const list = [];
-      t.cows = []; // positions des vaches (pour les meuglements)
+      // positions des animaux (pour leurs cris)
+      const F = t.fauna = { cow: [], horse: [], sheep: [], marmot: [], ibex: [] };
       const st = this.Q.treeStep;
       const n = Math.floor(this.S / st);
+      const V = t.V;
+      // troupeaux : chaque espèce a ses prés
+      const herd = (x, z, ox, oz, thr) => L.noiseB.noise(x / 330 + ox, z / 330 + oz) > thr;
+      const animal = (type, x, y, z, rot, rnd, sc) => {
+        this._place(list, type, x, y, z, rot, sc || 1, COATS[type] ? this._tint(rnd, COATS[type], 0.08) : null);
+        if (F[type]) F[type].push(x, y, z);
+      };
       for (let gj = 0; gj < n; gj++) {
         for (let gi = 0; gi < n; gi++) {
           // générateur propre à chaque emplacement : le résultat ne dépend pas des emplacements voisins
@@ -343,6 +442,15 @@
           const z = t.z0 + (gj + 0.15 + rnd() * 0.7) * st;
           const r = rnd();
           const k = this._vIndex(t, x, z);
+          if (t.pond[k] && t.lakeRn[k] < 1.6) {
+            // abords des mares : saules, hérons
+            if (!t.under[k] && t.lakeRn[k] > 1.15) {
+              const y = this._hAt(t, x, z);
+              if (r < 0.06) this._place(list, 'willow', x, y - 0.2, z, rnd() * 6.28, 0.8 + rnd() * 0.4, this._tint(rnd, amb.willow));
+              else if (r < 0.09) animal('heron', x, y, z, rnd() * 6.28, rnd);
+            }
+            continue;
+          }
           if (t.under[k] || t.lakeRn[k] < 1.2) continue;
           const rd = this._roadDAt(t, x, z);
           if (rd < half + 3.2) continue;
@@ -363,35 +471,51 @@
             this._place(list, 'poplar', x, y - 0.2, z, rot, sc, this._tint(rnd, amb.poplar));
             continue;
           }
+          if (nearRiver && r > 0.985) { animal('heron', x, y, z, rot, rnd); continue; }
+          let acc;
           switch (cov) {
             case COVER.FOREST: {
               // au loin, un arbre sur deux (choix stable, indépendant de la séquence aléatoire)
-              const far = lvl === 1;
-              if (far && hash2(t.tx * 64 + gi, t.tz * 64 + gj, L.seed + 5) < 0.45) break;
+              if (lvl === 1 && hash2(t.tx * 64 + gi, t.tz * 64 + gj, L.seed + 5) < 0.45) break;
               if (r < 0.88) {
-                const conif = y > 1050 + 250 * L.noiseC.noise(x / 300, z / 300) || rnd() < 0.18;
-                if (conif) this._place(list, 'conifer', x, y - 0.3, z, rot, sc * 1.1, this._tint(rnd, amb.conifer), 1, 1 + rnd() * 0.25, (rnd() - 0.5) * 0.06, (rnd() - 0.5) * 0.06);
-                else this._place(list, 'deciduous', x, y - 0.3, z, rot, sc, this._tint(rnd, amb.decid));
+                const south = B.south && y < 800;
+                if (south && rnd() < 0.6) this._place(list, 'pine', x, y - 0.3, z, rot, sc * 0.9, this._tint(rnd, amb.pine));
+                else if (!south && y < 1300 && rnd() < B.birch) this._place(list, 'birch', x, y - 0.3, z, rot, sc, this._tint(rnd, amb.birch));
+                else {
+                  const conif = y > 1050 + 250 * L.noiseC.noise(x / 300, z / 300) || rnd() < 0.18;
+                  if (conif) this._place(list, 'conifer', x, y - 0.3, z, rot, sc * 1.1, this._tint(rnd, amb.conifer), 1, 1 + rnd() * 0.25, (rnd() - 0.5) * 0.06, (rnd() - 0.5) * 0.06);
+                  else this._place(list, 'deciduous', x, y - 0.3, z, rot, sc, this._tint(rnd, amb.decid));
+                }
               } else if (r < 0.93) {
                 this._place(list, 'bush', x, y - 0.1, z, rot, sc, this._tint(rnd, amb.bush));
+              } else if (r < 0.945) {
+                // chevreuil en lisière
+                const edge = [k - 1, k + 1, k - V, k + V].some((q) => q >= 0 && q < t.cover.length && t.cover[q] !== COVER.FOREST);
+                if (edge) animal('deer', x, y, z, rot, rnd, 0.9 + rnd() * 0.2);
               }
               break;
             }
             case COVER.MEADOW: {
-              // les vaches vivent en troupeaux, dans certains prés
-              const herd = L.noiseB.noise(x / 330 + 50.5, z / 330 - 20.5) > 0.3 ? 9 : 0.25;
-              let acc = P.meadowTrees;
+              acc = P.meadowTrees;
               if (r < acc) {
                 if (y > 1200) this._place(list, 'conifer', x, y - 0.3, z, rot, sc, this._tint(rnd, amb.conifer));
                 else this._place(list, 'deciduous', x, y - 0.3, z, rot, sc * 1.1, this._tint(rnd, amb.decid));
               } else if (r < (acc += 0.02)) {
                 this._place(list, 'bush', x, y - 0.1, z, rot, sc, this._tint(rnd, amb.bush));
-              } else if (r < (acc += P.cows * herd) && slope < 0.35) {
-                this._place(list, 'cow', x, y, z, rot, 1.0, null);
-                t.cows.push(x, y, z);
+              } else if (r < (acc += P.cows * (herd(x, z, 50.5, -20.5, 0.3) ? 9 : 0.25)) && slope < 0.35) {
+                animal('cow', x, y, z, rot, rnd);
+              } else if (r < (acc += herd(x, z, -130.2, 77.7, 0.38) ? 0.03 : 0) && slope < 0.3 && y < 1700) {
+                animal('horse', x, y, z, rot, rnd, 0.95 + rnd() * 0.15);
+              } else if (r < (acc += herd(x, z, 210.1, -310.4, 0.36) ? 0.07 : 0) && slope < 0.55) {
+                animal('sheep', x, y, z, rot, rnd, 0.85 + rnd() * 0.3);
               } else if (r < (acc += 0.006 * P.rockiness)) {
                 this._place(list, 'rock', x, y - 0.2, z, rot, 0.5 + rnd() * 1.2, this._tint(rnd, amb.rockTint), 1, 0.7 + rnd() * 0.5);
               }
+              break;
+            }
+            case COVER.ORCHARD: {
+              // les arbres sont plantés en rangs (voir _buildRows) ; quelques moutons tondent l'herbe
+              if (r < 0.025 && herd(x, z, 210.1, -310.4, 0.1)) animal('sheep', x, y, z, rot, rnd, 0.9);
               break;
             }
             case COVER.HEDGE: {
@@ -405,58 +529,160 @@
               }
               break;
             }
+            case COVER.GARRIGUE: {
+              if (r < 0.045) this._place(list, 'olive', x, y - 0.2, z, rot, sc, this._tint(rnd, amb.olive));
+              else if (r < 0.06) this._place(list, 'cypress', x, y - 0.2, z, rot, sc, this._tint(rnd, amb.cypress));
+              else if (r < 0.075) this._place(list, 'pine', x, y - 0.3, z, rot, sc * 0.9, this._tint(rnd, amb.pine));
+              else if (r < 0.2) this._place(list, 'bush', x, y - 0.15, z, rot, sc * 0.65, this._tint(rnd, amb.shrub));
+              else if (r < 0.22) this._place(list, 'rock', x, y - 0.2, z, rot, 0.4 + rnd() * 0.9, this._tint(rnd, amb.rockTint), 1, 0.7);
+              else if (r < 0.27) this._place(list, 'heather', x, y - 0.05, z, rot, 1 + rnd() * 0.5, this._tint(rnd, ['#9d80d8', '#a989df'], 0.06));
+              else if (r < 0.29 && herd(x, z, 210.1, -310.4, 0.2)) animal('sheep', x, y, z, rot, rnd, 0.85);
+              break;
+            }
+            case COVER.HEATH: {
+              if (r < 0.2) this._place(list, 'heather', x, y - 0.05, z, rot, 0.9 + rnd() * 0.7, this._tint(rnd, amb.heather));
+              else if (r < 0.22) this._place(list, 'rock', x, y - 0.2, z, rot, 0.4 + rnd() * 1.0, this._tint(rnd, amb.rockTint), 1, 0.7);
+              else if (r < 0.235) this._place(list, 'conifer', x, y - 0.2, z, rot, sc * 0.5, this._tint(rnd, amb.conifer));
+              else if (r < 0.245 && y < 1500) this._place(list, 'birch', x, y - 0.3, z, rot, sc * 0.8, this._tint(rnd, amb.birch));
+              else if (r < 0.31 && herd(x, z, 210.1, -310.4, 0.3)) animal('sheep', x, y, z, rot, rnd, 0.85 + rnd() * 0.3);
+              else if (r < 0.325 && y > 1250) animal('marmot', x, y, z, rot, rnd, 0.9 + rnd() * 0.3);
+              break;
+            }
+            case COVER.WETLAND: {
+              if (r < 0.1) this._place(list, 'reeds', x, y - 0.05, z, rot, 0.9 + rnd() * 0.5, this._tint(rnd, amb.reeds));
+              else if (r < 0.115) this._place(list, 'willow', x, y - 0.2, z, rot, sc * 0.9, this._tint(rnd, amb.willow));
+              else if (r < 0.13) this._place(list, 'poplar', x, y - 0.2, z, rot, sc, this._tint(rnd, amb.poplar));
+              else if (r < 0.136) animal('heron', x, y, z, rot, rnd);
+              else if (r < 0.15 && herd(x, z, 50.5, -20.5, 0.2)) animal('cow', x, y, z, rot, rnd);
+              break;
+            }
             case COVER.ALPINE: {
               if (r < 0.05 * P.rockiness) this._place(list, 'rock', x, y - 0.3, z, rot, 0.6 + rnd() * 1.6, this._tint(rnd, amb.rockTint), 1, 0.6 + rnd() * 0.6);
               else if (r < 0.07) this._place(list, 'conifer', x, y - 0.3, z, rot, sc * 0.7, this._tint(rnd, amb.conifer));
-              else if (r < 0.07 + P.cows * (L.noiseB.noise(x / 330 + 50.5, z / 330 - 20.5) > 0.2 ? 10 : 0.5) && slope < 0.4) { this._place(list, 'cow', x, y, z, rot, 1.0, null); t.cows.push(x, y, z); }
+              else if (r < 0.07 + P.cows * (herd(x, z, 50.5, -20.5, 0.2) ? 10 : 0.5) && slope < 0.4) animal('cow', x, y, z, rot, rnd);
+              else if (r > 0.9 && r < 0.93 && herd(x, z, 77.3, 91.1, 0.15)) animal('marmot', x, y, z, rot, rnd, 0.9 + rnd() * 0.3);
+              else if (r > 0.93 && r < 0.99 && herd(x, z, 210.1, -310.4, 0.35) && slope < 0.6) animal('sheep', x, y, z, rot, rnd, 0.85 + rnd() * 0.3);
+              else if (r > 0.995 && y > 1500) animal('ibex', x, y, z, rot, rnd, 0.9 + rnd() * 0.2);
               break;
             }
             case COVER.ROCK: {
-              // blocs rocheux à flanc de falaise
+              // blocs rocheux à flanc de falaise, et parfois un bouquetin perché
               if (r < 0.16) this._place(list, 'rock', x, y - 0.8, z, rot, 1.2 + rnd() * 2.6, this._tint(rnd, amb.rockTint), 1, 0.7 + rnd() * 0.6, (rnd() - 0.5) * 0.5, (rnd() - 0.5) * 0.5);
               else if (r < 0.19 && slope < 1.2) this._place(list, 'conifer', x, y - 0.3, z, rot, sc * 0.8, this._tint(rnd, amb.conifer));
+              else if (r < 0.205 && y > 1150) animal('ibex', x, y, z, rot, rnd, 0.9 + rnd() * 0.2);
               break;
             }
             default: break;
           }
         }
       }
+      // roseaux serrés sur le pourtour des mares
+      if (t.hasPond) {
+        const rnd = mulberry32((hash2(t.tx, t.tz, L.seed + 4242) * 4294967296) >>> 0);
+        for (const lk of L.ponds) {
+          if (lk.x < t.x0 - lk.r * 1.5 || lk.x > t.x0 + this.S + lk.r * 1.5 || lk.z < t.z0 - lk.r * 1.5 || lk.z > t.z0 + this.S + lk.r * 1.5) continue;
+          const nb = Math.ceil(lk.r * 2 * Math.PI / 1.3);
+          for (let q = 0; q < nb; q++) {
+            const a = (q + rnd() * 0.6) / nb * Math.PI * 2;
+            const rr = L.lakeRadius(lk, a) * (1.0 + rnd() * 0.14);
+            const x = lk.x + Math.cos(a) * rr, z = lk.z + Math.sin(a) * rr;
+            if (x < t.x0 || x >= t.x0 + this.S || z < t.z0 || z >= t.z0 + this.S || rnd() > 0.7) continue;
+            this._place(list, 'reeds', x, lk.level - 0.15, z, rnd() * 6.28, 0.8 + rnd() * 0.6, this._tint(rnd, amb.reeds));
+          }
+        }
+      }
+      // vignes (seulement de près : au loin, les rangs peints au sol suffisent) et vergers
+      this._buildRows(t, list, lvl === 0 ? ['vine', 'orchard'] : ['orchard']);
       return list;
     }
 
-    // Petits détails près de la route : touffes d'herbe, fleurs, cailloux.
+    // Plantations en rangs réguliers, sur un réseau aligné avec les rangs du shader du terrain.
+    _buildRows(t, list, kinds) {
+      const L = this.L, amb = L.amb, dir = L.bio.rowDir, S = this.S;
+      const lavColor = L.amb.crops.find((c) => c[2] === 'lavender');
+      for (const kind of kinds) {
+        const spec = ROWS[kind];
+        for (const ori of [0, 1]) {
+          if (spec.oneWay && ori === 1) continue;
+          const nx = ori ? -dir[1] : dir[0], nz = ori ? dir[0] : dir[1]; // normale aux rangs
+          const tx = -nz, tz = nx; // direction des rangs
+          const rotY = Math.atan2(-tz, tx); // axe x des modèles le long du rang
+          let u0 = Infinity, u1 = -Infinity, w0 = Infinity, w1 = -Infinity;
+          for (const [cx, cz] of [[t.x0, t.z0], [t.x0 + S, t.z0], [t.x0, t.z0 + S], [t.x0 + S, t.z0 + S]]) {
+            const u = cx * nx + cz * nz, w = cx * tx + cz * tz;
+            u0 = Math.min(u0, u); u1 = Math.max(u1, u); w0 = Math.min(w0, w); w1 = Math.max(w1, w);
+          }
+          const rnd = mulberry32((hash2(t.tx * 7 + ori, t.tz * 7, L.seed + kind.length) * 4294967296) >>> 0);
+          for (let kk = Math.ceil(u0 / spec.spacing - 0.25); kk <= Math.floor(u1 / spec.spacing - 0.25); kk++) {
+            const u = (kk + 0.25) * spec.spacing;
+            const off = (kk & 1) * spec.step * 0.5;
+            for (let mm = Math.ceil((w0 - off) / spec.step); mm <= Math.floor((w1 - off) / spec.step); mm++) {
+              const w = mm * spec.step + off;
+              const x = u * nx + w * tx, z = u * nz + w * tz;
+              if (x < t.x0 || x >= t.x0 + S || z < t.z0 || z >= t.z0 + S) continue;
+              const k = this._vIndex(t, x, z);
+              if (spec.cover !== undefined && t.cover[k] !== spec.cover) continue;
+              if (spec.stripe !== undefined && (t.stripe[k] % 8 !== spec.stripe || (t.stripe[k] >= 8 ? 1 : 0) !== ori)) continue;
+              if (t.under[k] || t.vill[k] > 0.15 || this._roadDAt(t, x, z) < L.roadHalf + 3) continue;
+              const y = this._hAt(t, x, z) + spec.dy;
+              if (kind === 'vine') this._place(list, 'vine', x, y, z, rotY, 1, this._tint(rnd, [amb.vineGreen], 0.15));
+              else if (kind === 'orchard') this._place(list, 'fruittree', x, y, z, rnd() * 6.28, 0.85 + rnd() * 0.3, this._tint(rnd, amb.orchard));
+              else if (kind === 'lavender') this._place(list, 'lavender', x, y, z, rotY, 1, this._tint(rnd, [lavColor ? lavColor[0] : '#a989df'], 0.1));
+              else this._place(list, 'sunflower', x, y, z, rotY, 0.9 + rnd() * 0.2, null);
+            }
+          }
+        }
+      }
+    }
+
+    // Petits détails : touffes d'herbe, fleurs et cailloux près de la route ; rangs de lavande et
+    // de tournesols ; citrouilles.
     _buildDetails(t) {
       const L = this.L, P = L.P, amb = L.amb, half = L.roadHalf;
       const rnd = mulberry32((hash2(t.tx, t.tz, L.seed + 999) * 4294967296) >>> 0);
       const list = [];
-      const st = 2.4;
-      const n = Math.floor(this.S / st);
-      for (let gj = 0; gj < n; gj++) {
-        for (let gi = 0; gi < n; gi++) {
-          const x = t.x0 + (gi + rnd()) * st;
-          const z = t.z0 + (gj + rnd()) * st;
-          const rd = this._roadDAt(t, x, z);
-          if (rd > 34 || rd < half + 0.9) { rnd(); rnd(); continue; }
-          const k = this._vIndex(t, x, z);
-          if (t.under[k] || t.lakeRn[k] < 1.15) continue;
-          if (t.vill[k] > 0.15 && rd < half + 2.3) continue; // trottoirs
-          const cov = t.cover[k];
-          if (cov === COVER.SNOW || cov === COVER.SAND || cov === COVER.BED || t.slope[k] > 0.9) continue;
-          const r = rnd();
-          const y = this._hAt(t, x, z);
-          const rot = rnd() * Math.PI * 2;
-          if (cov === COVER.ROCK || cov === COVER.ALPINE) {
-            if (r < 0.05) this._place(list, 'rock', x, y - 0.1, z, rot, 0.15 + rnd() * 0.3, this._tint(rnd, amb.rockTint));
-            else if (r < 0.3 && cov === COVER.ALPINE) this._place(list, 'grass', x, y, z, rot, 0.8 + rnd() * 0.5, this._tint(rnd, amb.grassTuft));
-            continue;
+      if (t.nearRoad) {
+        const st = 2.4;
+        const n = Math.floor(this.S / st);
+        for (let gj = 0; gj < n; gj++) {
+          for (let gi = 0; gi < n; gi++) {
+            const x = t.x0 + (gi + rnd()) * st;
+            const z = t.z0 + (gj + rnd()) * st;
+            const rd = this._roadDAt(t, x, z);
+            if (rd > 34 || rd < half + 0.9) { rnd(); rnd(); continue; }
+            const k = this._vIndex(t, x, z);
+            if (t.under[k] || t.lakeRn[k] < 1.15) continue;
+            if (t.vill[k] > 0.15 && rd < half + 2.3) continue; // trottoirs
+            const cov = t.cover[k];
+            if (cov === COVER.SNOW || cov === COVER.SAND || cov === COVER.BED || t.slope[k] > 0.9) continue;
+            const r = rnd();
+            const y = this._hAt(t, x, z);
+            const rot = rnd() * Math.PI * 2;
+            if (cov === COVER.ROCK || cov === COVER.ALPINE) {
+              if (r < 0.05) this._place(list, 'rock', x, y - 0.1, z, rot, 0.15 + rnd() * 0.3, this._tint(rnd, amb.rockTint));
+              else if (r < 0.3 && cov === COVER.ALPINE) this._place(list, 'grass', x, y, z, rot, 0.8 + rnd() * 0.5, this._tint(rnd, amb.grassTuft));
+              continue;
+            }
+            if (cov === COVER.VINEYARD || (cov === COVER.FIELD && t.stripe[k] % 8 > 2)) continue;
+            const dens = rd < half + 2.4 ? 0.25 : 0.5;
+            if (r < dens) {
+              this._place(list, 'grass', x, y - 0.05, z, rot, 0.8 + rnd() * 0.7, this._tint(rnd, amb.grassTuft));
+            } else if (r < dens + P.flowers * (cov === COVER.MEADOW ? 0.45 : 0.12)) {
+              this._place(list, 'flowers', x, y - 0.02, z, rot, 0.9 + rnd() * 0.5, this._tint(rnd, amb.flowers, 0.05));
+            } else if (r < dens + 0.5 && rd > half + 2.4 && rnd() < 0.03) {
+              this._place(list, 'rock', x, y - 0.1, z, rot, 0.15 + rnd() * 0.35, this._tint(rnd, amb.rockTint));
+            }
           }
-          const dens = rd < half + 2.4 ? 0.25 : 0.5;
-          if (r < dens) {
-            this._place(list, 'grass', x, y - 0.05, z, rot, 0.8 + rnd() * 0.7, this._tint(rnd, amb.grassTuft));
-          } else if (r < dens + P.flowers * (cov === COVER.MEADOW ? 0.45 : 0.12)) {
-            this._place(list, 'flowers', x, y - 0.02, z, rot, 0.9 + rnd() * 0.5, this._tint(rnd, amb.flowers, 0.05));
-          } else if (r < dens + 0.5 && rd > half + 2.4 && rnd() < 0.03) {
-            this._place(list, 'rock', x, y - 0.1, z, rot, 0.15 + rnd() * 0.35, this._tint(rnd, amb.rockTint));
+        }
+      }
+      if (t.rowCrop) this._buildRows(t, list, ['lavender', 'sunflower']);
+      if (t.pumpkins) {
+        for (let z = t.z0 + 1; z < t.z0 + this.S; z += 3.2) {
+          for (let x = t.x0 + 1; x < t.x0 + this.S; x += 3.2) {
+            const jx = (rnd() - 0.5) * 2.5, jz = (rnd() - 0.5) * 2.5, r = rnd();
+            const k = this._vIndex(t, x + jx, z + jz);
+            if (t.stripe[k] % 8 !== STRIPE.PUMPKIN || r > 0.4) continue;
+            this._place(list, 'pumpkin', x + jx, this._hAt(t, x + jx, z + jz) - 0.05, z + jz, rnd() * 6.28, 0.8 + rnd() * 0.6, this._tint(rnd, ['#f28a1e', '#e8781a', '#f5a02a'], 0.08));
           }
         }
       }
