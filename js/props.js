@@ -109,23 +109,27 @@
     ]);
   }
 
+  // Spectateur : bras modélisés tendus vers l'avant, animés dans le shader (applaudir, bras en l'air, coucou).
   function spectator() {
     const SK = '#f1c7a0';
-    return merge([
+    const parts = [
       { geo: new THREE.CylinderGeometry(0.07, 0.07, 0.8, 5), color: '#2d3346', matrix: tr(0.1, 0.4, 0) },
       { geo: new THREE.CylinderGeometry(0.07, 0.07, 0.8, 5), color: '#2d3346', matrix: tr(-0.1, 0.4, 0) },
       { geo: new THREE.CapsuleGeometry(0.23, 0.42, 3, 8), color: WHITE, tint: 1, matrix: tr(0, 1.08, 0) },
       { geo: sphere(0.19, 8, 6), color: SK, matrix: tr(0, 1.63, 0) },
-      { geo: new THREE.CylinderGeometry(0.055, 0.055, 0.6, 5), color: WHITE, tint: 1, matrix: tr(0.33, 1.55, 0, 0, 0, -0.45) },
-      { geo: new THREE.CylinderGeometry(0.055, 0.055, 0.6, 5), color: WHITE, tint: 1, matrix: tr(-0.33, 1.55, 0, 0, 0, 0.45) },
-      { geo: sphere(0.08, 6, 4), color: SK, matrix: tr(0.46, 1.83, 0) },
-      { geo: sphere(0.08, 6, 4), color: SK, matrix: tr(-0.46, 1.83, 0) },
       { geo: sphere(0.035, 6, 4), color: '#1d1a2b', matrix: tr(0.07, 1.67, 0.165) },
       { geo: sphere(0.035, 6, 4), color: '#1d1a2b', matrix: tr(-0.07, 1.67, 0.165) },
       { geo: new THREE.TorusGeometry(0.06, 0.012, 4, 8, Math.PI), color: '#8a2b2b', matrix: tr(0, 1.585, 0.16, 0, 0, Math.PI) },
       { geo: new THREE.SphereGeometry(0.2, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), color: WHITE, tint: 1, matrix: tr(0, 1.68, -0.01) },
       { geo: new THREE.BoxGeometry(0.22, 0.03, 0.14), color: WHITE, tint: 1, matrix: tr(0, 1.69, 0.2) }
-    ]);
+    ];
+    for (const side of [-1, 1]) {
+      const x = 0.27 * side;
+      parts.push({ geo: sphere(0.075, 6, 5), color: WHITE, tint: 1, matrix: tr(x, 1.42, 0) });
+      parts.push({ geo: new THREE.CylinderGeometry(0.055, 0.05, 0.52, 5), color: WHITE, tint: 1, arm: side, matrix: tr(x, 1.42, 0.27, Math.PI / 2, 0, 0) });
+      parts.push({ geo: sphere(0.075, 6, 4), color: SK, arm: side, matrix: tr(x, 1.42, 0.56) });
+    }
+    return merge(parts);
   }
 
   // Pool d'instances avec allocation / libération de cases (pour le streaming par tuiles).
@@ -137,7 +141,7 @@
       this.matrixAttr.setUsage(THREE.DynamicDrawUsage);
       this.colorAttr = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3);
       this.colorAttr.setUsage(THREE.DynamicDrawUsage);
-      const material = instancedMat({ sway: opts.sway || 0, bounce: opts.bounce || 0 });
+      const material = instancedMat({ sway: opts.sway || 0, bounce: opts.bounce || 0, people: opts.people });
       this.mesh = new THREE.InstancedMesh(geo, material, cap);
       this.mesh.instanceMatrix = this.matrixAttr;
       this.mesh.instanceColor = this.colorAttr;
@@ -148,7 +152,7 @@
       scene.add(this.mesh);
       if (opts.outline) {
         computeOutlineNormals(geo);
-        this.outline = new THREE.InstancedMesh(geo, outlineMat({ width: opts.outlineWidth || 1, sway: opts.sway || 0, bounce: opts.bounce || 0, maxW: opts.maxW || 0.5 }), cap);
+        this.outline = new THREE.InstancedMesh(geo, outlineMat({ width: opts.outlineWidth || 1, sway: opts.sway || 0, bounce: opts.bounce || 0, people: opts.people, maxW: opts.maxW || 0.5 }), cap);
         this.outline.instanceMatrix = this.matrixAttr;
         this.outline.frustumCulled = false;
         this.outline.count = 0;

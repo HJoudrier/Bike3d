@@ -124,6 +124,13 @@
         }
         ctx.stroke();
       }
+      // villages
+      for (const v of L.villages || []) {
+        const [vx, vz] = this.mapProj(route.x[v.ic], route.z[v.ic]);
+        ctx.fillStyle = '#f39a2b'; ctx.strokeStyle = '#1d1a2b'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(vx, vz - 8); ctx.lineTo(vx + 6, vz - 2); ctx.lineTo(vx + 6, vz + 5); ctx.lineTo(vx - 6, vz + 5); ctx.lineTo(vx - 6, vz - 2); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      }
       const [sx, sz] = this.mapProj(route.x[route.iStart], route.z[route.iStart]);
       const [ex, ez] = this.mapProj(route.x[route.iEnd], route.z[route.iEnd]);
       ctx.fillStyle = '#3d7be0'; ctx.beginPath(); ctx.arc(sx, sz, 5, 0, Math.PI * 2); ctx.fill();

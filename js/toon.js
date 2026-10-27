@@ -7,7 +7,44 @@
   const shared = {
     uTime: { value: 0 },
     uOutlineScale: { value: 0.0022 }, // épaisseur (m) par mètre de distance à la caméra
+    uRider: { value: new THREE.Vector3(0, -1e5, 0) } // position du coureur (le public s'excite à son passage)
   };
+
+  // --- Animation du public : chaque spectateur applaudit, lève les bras ou fait coucou.
+  // Les bras sont modélisés tendus vers l'avant (+z) depuis l'épaule ; l'attribut armSide vaut -1/+1 sur les bras.
+  const PEOPLE_PARS = [
+    'attribute float armSide;',
+    'uniform vec3 uRider;',
+    'mat3 b3dRotX(float a){ float c = cos(a), s = sin(a); return mat3(1.0,0.0,0.0, 0.0,c,s, 0.0,-s,c); }',
+    'mat3 b3dRotY(float a){ float c = cos(a), s = sin(a); return mat3(c,0.0,-s, 0.0,1.0,0.0, s,0.0,c); }',
+    'mat3 b3dRotZ(float a){ float c = cos(a), s = sin(a); return mat3(c,s,0.0, -s,c,0.0, 0.0,0.0,1.0); }'
+  ].join('\n');
+  const PEOPLE_SETUP = [
+    'mat3 armM = mat3(1.0);',
+    'vec3 armPiv = vec3(0.27 * armSide, 1.42, 0.0);',
+    'float jump = 0.0;',
+    '#ifdef USE_INSTANCING',
+    '{',
+    '  vec3 ip = instanceMatrix[3].xyz;',
+    '  float ph = ip.x * 0.37 + ip.z * 0.23;',
+    '  float kind = floor(fract(ph * 0.618) * 3.0);',
+    '  float ex = 1.0 - smoothstep(10.0, 45.0, distance(ip, uRider));',
+    '  float t = uTime * (1.0 + 0.6 * ex) + ph;',
+    '  if (armSide != 0.0) {',
+    '    if (kind < 0.5) {',
+    '      float a = 0.27 + (0.12 + 0.05 * ex) * sin(t * (13.0 + 5.0 * ex));',
+    '      armM = b3dRotY(-armSide * a) * b3dRotX(-0.3 - 0.6 * ex);',
+    '    } else if (kind < 1.5) {',
+    '      armM = b3dRotZ(-armSide * (0.35 + 0.25 * sin(t * 7.0))) * b3dRotX(-1.75);',
+    '    } else {',
+    '      if (armSide > 0.0) armM = b3dRotZ(-0.55 * sin(t * 8.0) - 0.3) * b3dRotX(-1.85);',
+    '      else armM = b3dRotX(1.15 - 2.9 * ex);',
+    '    }',
+    '  }',
+    '  jump = abs(sin(t * 5.0)) * (kind > 0.5 ? 0.05 + 0.26 * ex : 0.04 * ex);',
+    '}',
+    '#endif'
+  ].join('\n');
 
   let gradientTex = null;
   function gradientMap() {
@@ -55,9 +92,18 @@
     const m = new THREE.MeshToonMaterial(Object.assign({ vertexColors: true, gradientMap: gradientMap() }, opts.material || {}));
     const sway = opts.sway || 0;
     const bounce = opts.bounce || 0;
+    const people = !!opts.people;
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = shared.uTime;
-      shader.vertexShader = shader.vertexShader
+      shader.uniforms.uRider = shared.uRider;
+      let vs = shader.vertexShader;
+      if (people) {
+        vs = vs
+          .replace('#include <common>', '#include <common>\n' + PEOPLE_PARS)
+          .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + PEOPLE_SETUP + '\nobjectNormal = armM * objectNormal;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = armPiv + armM * (transformed - armPiv);\ntransformed.y += jump;');
+      }
+      shader.vertexShader = vs
         .replace('#include <common>', '#include <common>\nattribute float tintMask;\nuniform float uTime;')
         .replace('#include <color_vertex>', [
           '#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )',
@@ -72,7 +118,7 @@
         ].join('\n'))
         .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + swayGLSL(sway, bounce));
     };
-    m.customProgramCacheKey = () => 'inst-' + sway + '-' + bounce;
+    m.customProgramCacheKey = () => 'inst-' + sway + '-' + bounce + '-' + people;
     return m;
   }
 
@@ -101,7 +147,8 @@
     const width = opts.width || 1;
     const sway = opts.sway || 0;
     const bounce = opts.bounce || 0;
-    const key = [color, width, sway, bounce, opts.minW, opts.maxW].join('|');
+    const people = !!opts.people;
+    const key = [color, width, sway, bounce, opts.minW, opts.maxW, people].join('|');
     if (outlineCache.has(key)) return outlineCache.get(key);
     const m = new THREE.ShaderMaterial({
       uniforms: {
@@ -111,6 +158,7 @@
         uMaxW: { value: opts.maxW !== undefined ? opts.maxW : 0.5 },
         uOutlineScale: shared.uOutlineScale,
         uTime: shared.uTime,
+        uRider: shared.uRider,
         fogColor: { value: new THREE.Color() },
         fogNear: { value: 1 },
         fogFar: { value: 1000 },
@@ -121,11 +169,13 @@
         '#include <fog_pars_vertex>',
         'attribute vec3 outlineNormal;',
         'uniform float uWidth, uMinW, uMaxW, uOutlineScale, uTime;',
+        people ? PEOPLE_PARS : '',
         'void main() {',
         '  vec3 transformed = position;',
+        '  vec3 n = outlineNormal;',
+        people ? PEOPLE_SETUP + '\ntransformed = armPiv + armM * (transformed - armPiv);\ntransformed.y += jump;\nn = armM * n;' : '',
         swayGLSL(sway, bounce),
         '  vec4 p = vec4(transformed, 1.0);',
-        '  vec3 n = outlineNormal;',
         '  #ifdef USE_INSTANCING',
         '    p = instanceMatrix * p;',
         '    n = mat3(instanceMatrix) * n;',
@@ -199,8 +249,8 @@
     for (const m of meshes) addOutline(m, opts);
   }
 
-  // Fusion de géométries (position, normal, color, tintMask) avec couleurs par partie.
-  // parts : [{ geo, color, matrix?, tint? (0/1) }]
+  // Fusion de géométries (position, normal, color, tintMask[, armSide]) avec couleurs par partie.
+  // parts : [{ geo, color, matrix?, tint? (0/1), arm? (-1/+1 pour les bras animés) }]
   function merge(parts) {
     let vCount = 0, iCount = 0;
     const prepared = parts.map((p) => {
@@ -211,8 +261,10 @@
       const cnt = g.attributes.position.count;
       vCount += cnt;
       iCount += idx ? idx.length : cnt;
-      return { g, idx, cnt, color: new THREE.Color(p.color || '#ffffff'), tint: p.tint ? 1 : 0 };
+      return { g, idx, cnt, color: new THREE.Color(p.color || '#ffffff'), tint: p.tint ? 1 : 0, arm: p.arm || 0 };
     });
+    const hasArm = prepared.some((p) => p.arm !== 0);
+    const arm = hasArm ? new Float32Array(vCount) : null;
     const pos = new Float32Array(vCount * 3), nor = new Float32Array(vCount * 3), col = new Float32Array(vCount * 3);
     const tint = new Float32Array(vCount);
     const index = vCount > 65535 ? new Uint32Array(iCount) : new Uint16Array(iCount);
@@ -224,6 +276,7 @@
         nor[(vo + i) * 3] = na.getX(i); nor[(vo + i) * 3 + 1] = na.getY(i); nor[(vo + i) * 3 + 2] = na.getZ(i);
         col[(vo + i) * 3] = p.color.r; col[(vo + i) * 3 + 1] = p.color.g; col[(vo + i) * 3 + 2] = p.color.b;
         tint[vo + i] = p.tint;
+        if (arm) arm[vo + i] = p.arm;
       }
       if (p.idx) { for (let k = 0; k < p.idx.length; k++) index[io + k] = p.idx[k] + vo; io += p.idx.length; }
       else { for (let k = 0; k < p.cnt; k++) index[io + k] = vo + k; io += p.cnt; }
@@ -234,6 +287,7 @@
     geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setAttribute('tintMask', new THREE.BufferAttribute(tint, 1));
+    if (arm) geo.setAttribute('armSide', new THREE.BufferAttribute(arm, 1));
     geo.setIndex(new THREE.BufferAttribute(index, 1));
     geo.computeBoundingSphere();
     return geo;

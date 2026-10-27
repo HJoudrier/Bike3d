@@ -54,6 +54,8 @@
       this.applyQuality();
       this.hud = new B3D.Hud();
       this.confetti = new B3D.Confetti(this.scene, 600);
+      this.mooBubble = this.makeBubble('MEUH !');
+      this.scene.add(this.mooBubble);
       this.sound = new B3D.Sound();
       this.clock = new THREE.Clock();
 
@@ -296,6 +298,8 @@
       if (this.tiles) { this.tiles.dispose(); this.tiles = null; }
       if (this.roadGroup) { free(this.roadGroup); this.roadGroup = null; }
       if (this.waterGroup) { free(this.waterGroup); this.waterGroup = null; }
+      if (this.villageGroup) { free(this.villageGroup); this.villageGroup = null; }
+      if (this.mooBubble) this.mooBubble.visible = false;
       if (this.sky) { this.sky.dispose(); this.sky = null; }
       if (this.cyclist) { free(this.cyclist.root); this.cyclist = null; }
       this.L = null;
@@ -354,6 +358,9 @@
 
       this.tiles = new B3D.TileManager(this.scene, L, this.settings.quality);
       B3D.road.placeRoadsideInstances(route, L, this.tiles);
+      this.setLoading(0.32, 'Construction des villages…');
+      this.villageGroup = B3D.villages.build(route, L, this.tiles);
+      this.scene.add(this.villageGroup);
       this.cyclist = new B3D.Cyclist({ jersey: this.settings.jersey, bikeColor: ['#e2463a', '#3d7be0', '#1d1a2b', '#4cc35a', '#ff7aa8'][seed % 5] });
       this.scene.add(this.cyclist.root);
       this.placeCyclistAtStart();
@@ -443,6 +450,7 @@
       $('preview-km').textContent = (Math.max(0, pv.s - route.sStart) / 1000).toFixed(1).replace('.', ',') + ' km';
       this.focusX = tgt.x; this.focusZ = tgt.z;
       this.shadowFollow(tgt, 70);
+      B3D.toon.shared.uRider.value.copy(tgt);
     },
 
     shadowFollow(target, size) {
@@ -465,10 +473,12 @@
       this.hide('screen-preview');
       this.show('hud');
       this.sound.start();
+      this.sound.silence();
       const route = this.route;
       this.ride = {
         s: route.sStart - 4, lat: 0, latV: 0, v: 0, effort: 0, cruise: 0, braking: false,
-        time: 0, maxV: 0, climbsDone: new Set(), flamme: false, crowd: 0, standing: false, tuck: false
+        time: 0, maxV: 0, climbsDone: new Set(), flamme: false, crowd: 0, standing: false, tuck: false,
+        villagesSeen: new Set(), lastStrokes: 0, mooT: 1.5, bellT: 0, cowCheck: 0, cow: null, finishT: 0
       };
       this._rs = route.sample(this.ride.s, {});
       this.timeScaleIndex = 0;
@@ -501,11 +511,79 @@
       this.camState = null;
     },
 
-    // zones de spectateurs (mêmes bornes que dans road.placeRoadsideInstances)
-    inCrowd(d) {
-      const route = this.route;
-      for (const c of route.climbs) if (d > c.d1 - Math.min(900, c.length * 0.4) && d < c.d1 + 60) return true;
-      return d > route.length - 260 || (d > -20 && d < 50);
+    // densité de spectateurs autour de l'échantillon i de la route (0..1), pour le son de la foule
+    crowdDensity(i) {
+      const c = this.L.crowd;
+      if (!c) return 0;
+      let sum = 0;
+      for (let k = Math.max(0, i - 24); k <= Math.min(c.length - 1, i + 24); k++) sum += c[k] * (1 - Math.abs(k - i) / 25);
+      return Math.min(1, sum / 14);
+    },
+
+    // spectateurs juste à côté : on ne peut pas rouler sur le bas-côté
+    crowdNear(i) {
+      const c = this.L.crowd;
+      if (!c) return false;
+      for (let k = Math.max(0, i - 3); k <= Math.min(c.length - 1, i + 3); k++) if (c[k]) return true;
+      return false;
+    },
+
+    // Bulle de bande dessinée (sprite) au-dessus d'une vache qui meugle.
+    makeBubble(text) {
+      const tex = B3D.toon.textTexture((ctx, W, H) => {
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#1d1a2b'; ctx.lineWidth = 8;
+        const r = 40, x0 = 10, y0 = 10, w = W - 20, h = H - 50;
+        ctx.beginPath();
+        ctx.moveTo(x0 + r, y0); ctx.lineTo(x0 + w - r, y0); ctx.quadraticCurveTo(x0 + w, y0, x0 + w, y0 + r);
+        ctx.lineTo(x0 + w, y0 + h - r); ctx.quadraticCurveTo(x0 + w, y0 + h, x0 + w - r, y0 + h);
+        ctx.lineTo(W * 0.42, y0 + h); ctx.lineTo(W * 0.3, H - 6); ctx.lineTo(W * 0.3, y0 + h);
+        ctx.lineTo(x0 + r, y0 + h); ctx.quadraticCurveTo(x0, y0 + h, x0, y0 + h - r);
+        ctx.lineTo(x0, y0 + r); ctx.quadraticCurveTo(x0, y0, x0 + r, y0);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#1d1a2b'; ctx.font = '700 64px Fredoka, Arial, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, W / 2, y0 + h / 2 + 4);
+      }, 320, 170);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+      sp.scale.set(3.4, 1.8, 1);
+      sp.visible = false;
+      sp.renderOrder = 5;
+      return sp;
+    },
+
+    // Vaches proches : meuglements (spatialisés), clarines et bulle "MEUH !".
+    updateCows(dtReal) {
+      const R = this.ride;
+      const P = this.cyclist.root.position;
+      R.mooT -= dtReal; R.bellT -= dtReal; R.cowCheck -= dtReal;
+      if (R.cowCheck <= 0) { R.cowCheck = 0.3; R.cow = this.tiles.nearestCow(P.x, P.z, 100); }
+      const cow = R.cow;
+      if (!cow) return;
+      const cam = this.camera;
+      const dx = cow.x - cam.position.x, dz = cow.z - cam.position.z;
+      const l = Math.hypot(dx, dz) || 1;
+      const e = cam.matrixWorld.elements;
+      const pan = (dx / l) * e[0] + (dz / l) * e[2];
+      if (R.mooT <= 0) {
+        const k = 1 - cow.d / 100;
+        this.sound.moo(0.06 + 0.32 * k * k, pan * 0.8);
+        R.mooT = 3 + Math.random() * 6;
+        const b = this.mooBubble;
+        b.position.set(cow.x, cow.y + 3.2, cow.z);
+        b.visible = true;
+        this.bubbleT = 1.9;
+      }
+      if (cow.d < 60 && R.bellT <= 0) {
+        this.sound.bell(0.02 + 0.07 * (1 - cow.d / 60), pan * 0.8);
+        R.bellT = 0.6 + Math.random() * 1.8;
+      }
+    },
+
+    villageWelcome(name) {
+      if (name.startsWith('Le ')) return 'au ' + name.slice(3);
+      if (name.startsWith('Les ')) return 'aux ' + name.slice(4);
+      return 'à ' + name;
     },
 
     currentClimb(d) {
@@ -569,8 +647,8 @@
       R.lat += R.latV * dt;
       // bas-côté praticable, sauf glissière, parapet de pont ou foule
       const dNow = R.s - route.sStart;
-      const crowded = this.inCrowd(dNow);
       const ii = p.i;
+      const crowded = this.crowdNear(ii) || L.villageW[ii] > 0.3;
       const maxR = (L.railR[ii] || L.bridgeMask[ii] || crowded) ? half - 0.35 : half + 1.5;
       const maxL = (L.railL[ii] || L.bridgeMask[ii] || crowded) ? half - 0.35 : half + 1.5;
       if (R.lat > maxR) { R.lat = Math.max(maxR, R.lat - 4 * dt); R.latV = Math.min(0, R.latV); }
@@ -597,6 +675,12 @@
       cyc.update(dt, {
         speed: R.v, pedaling: R.effort > 25 && R.v > 0.3 && !R.tuck, standing: R.standing, tuck: R.tuck, steer: -steer
       });
+      // « woum » des roues carbone à chaque coup de pédale
+      if (cyc.strokes !== R.lastStrokes) {
+        if (cyc.strokes > R.lastStrokes) this.sound.pedalStroke(R.v, R.effort / PHYS.pMax);
+        R.lastStrokes = cyc.strokes;
+      }
+      B3D.toon.shared.uRider.value.copy(cyc.root.position);
 
       // --- évènements de parcours
       const d = R.s - route.sStart;
@@ -610,9 +694,17 @@
         R.flamme = true;
         this.toast('🚩 Flamme rouge !<small>Plus qu\'un kilomètre</small>', 2400);
       }
-      // ambiance sonore : foule près des sommets et de l'arrivée
-      R.crowd = lerp(R.crowd, this.inCrowd(d) ? 1 : 0, 1 - Math.exp(-dtReal * 2));
+      // traversée de village
+      L.villages.forEach((v, i) => {
+        if (!R.villagesSeen.has(i) && R.s >= v.i0 * route.spacing - 15 && R.s <= v.i1 * route.spacing) {
+          R.villagesSeen.add(i);
+          this.toast('🏘️ Bienvenue ' + this.villageWelcome(v.name) + '<small>Les habitants sont sortis t\'encourager !</small>', 3000);
+        }
+      });
+      // ambiance sonore : foule (selon la densité de spectateurs), vaches
+      R.crowd = lerp(R.crowd, this.crowdDensity(q.i), 1 - Math.exp(-dtReal * 2));
       this.sound.update(dtReal, R.v, R.effort < 25 && R.v > 1, R.crowd);
+      this.updateCows(dtReal);
 
       if (d >= route.length) this.finish();
     },
@@ -677,7 +769,6 @@
     finish() {
       const R = this.ride, route = this.route;
       this.state = 'finished';
-      this.sound.silence();
       // confettis tirés depuis les deux piliers de l'arche d'arrivée
       const fp = route.sample(route.sEnd, {});
       const span = this.L.roadHalf + 1.4;
@@ -739,11 +830,26 @@
         this.cyclist.root.position.set(q.x + q.rx * R.lat, q.y, q.z + q.rz * R.lat);
         this.cyclist.root.rotation.set(-Math.atan(q.grade), Math.atan2(q.tx, q.tz), 0, 'YXZ');
         this.cyclist.update(dt, { speed: R.v, pedaling: false, standing: false, tuck: false, steer: 0 });
+        B3D.toon.shared.uRider.value.copy(this.cyclist.root.position);
         this.updateRideCamera(dt);
         this.tiles.update(this.focusX, this.focusZ, 6);
+        // ovation de l'arrivée qui s'éteint doucement
+        R.finishT += dt;
+        this.sound.update(dt, R.v, R.v > 1, Math.max(0, 1 - R.finishT / 7));
       }
       if (this.sky) this.sky.update(this.camera, dt);
+      if (this.villageGroup) B3D.villages.cull(this.villageGroup, this.camera.position, this.Q.radius + 150);
       this.confetti.update(dt);
+      // bulle "MEUH !" : petit rebond puis disparition
+      if (this.bubbleT > 0) {
+        this.bubbleT -= dt;
+        const b = this.mooBubble, age = 1.9 - this.bubbleT;
+        const pop = Math.min(1, age / 0.18);
+        const k = (1 + 0.25 * Math.sin(Math.min(1, age / 0.35) * Math.PI)) * pop;
+        b.scale.set(3.4 * k, 1.8 * k, 1);
+        b.material.opacity = Math.min(1, this.bubbleT / 0.4);
+        if (this.bubbleT <= 0 || this.state === 'menu') b.visible = false;
+      }
       this.render();
     },
 

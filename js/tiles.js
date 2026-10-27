@@ -19,7 +19,7 @@
     { name: 'rock', cap: 5000, outline: true },
     { name: 'hay', cap: 1500, outline: true },
     { name: 'cow', cap: 600, outline: true },
-    { name: 'spectator', cap: 1500, outline: true, bounce: 0.28, outlineWidth: 0.8 },
+    { name: 'spectator', cap: 2600, outline: true, people: true, outlineWidth: 0.8 },
     { name: 'grass', cap: 16000, outline: false, sway: 0.08 },
     { name: 'flowers', cap: 9000, outline: false, sway: 0.15 }
   ];
@@ -106,7 +106,7 @@
       for (const p of POOLS) {
         const cap = Math.round(p.cap * this.Q.caps);
         this.pools[p.name] = new B3D.props.InstancePool(this.scene, geos[p.name], {
-          capacity: cap, outline: p.outline, sway: p.sway, bounce: p.bounce, outlineWidth: p.outlineWidth,
+          capacity: cap, outline: p.outline, sway: p.sway, bounce: p.bounce, people: p.people, outlineWidth: p.outlineWidth,
           castShadow: p.shadow && this.Q.treeShadows || p.name === 'spectator'
         });
       }
@@ -182,7 +182,7 @@
         // végétation en 2 niveaux de détail : forêts éclaircies au loin
         const lvl = t.d < Q.vegNear ? 0 : 1;
         if (!t.veg && t.d < Q.veg) { t.veg = this._buildVeg(t, lvl); t.vegLevel = lvl; }
-        else if (t.veg && t.d > Q.veg + 80) { this._releaseList(t.veg); t.veg = null; }
+        else if (t.veg && t.d > Q.veg + 80) { this._releaseList(t.veg); t.veg = null; t.cows = null; }
         else if (t.veg && lvl !== t.vegLevel && Math.abs(t.d - Q.vegNear) > 25) {
           this._releaseList(t.veg);
           t.veg = this._buildVeg(t, lvl);
@@ -216,7 +216,7 @@
       const H = new Float32Array(NB * NB);
       const cnt = V * V;
       const roadD = new Float32Array(cnt), dr = new Float32Array(cnt), rw = new Float32Array(cnt), wl = new Float32Array(cnt);
-      const lakeRn = new Float32Array(cnt), under = new Uint8Array(cnt);
+      const lakeRn = new Float32Array(cnt), under = new Uint8Array(cnt), vill = new Float32Array(cnt);
       const o = this._o;
       let nearRoad = false;
       for (let j = 0; j < NB; j++) {
@@ -226,7 +226,7 @@
           H[j * NB + i] = o.h;
           if (i >= 1 && j >= 1 && i <= V && j <= V) {
             const k = (j - 1) * V + (i - 1);
-            roadD[k] = o.roadD; dr[k] = o.dr; rw[k] = o.rw; wl[k] = o.wl; lakeRn[k] = o.lakeRn; under[k] = o.under ? 1 : 0;
+            roadD[k] = o.roadD; dr[k] = o.dr; rw[k] = o.rw; wl[k] = o.wl; lakeRn[k] = o.lakeRn; under[k] = o.under ? 1 : 0; vill[k] = o.vill;
             if (o.roadD < 40) nearRoad = true;
           }
         }
@@ -246,7 +246,7 @@
           nor[k * 3] = -dx * inv; nor[k * 3 + 1] = inv; nor[k * 3 + 2] = -dz * inv;
           const slope = Math.sqrt(dx * dx + dz * dz);
           slopeA[k] = slope;
-          oc.h = h; oc.roadD = roadD[k]; oc.dr = dr[k]; oc.rw = rw[k]; oc.wl = wl[k]; oc.lakeRn = lakeRn[k]; oc.under = !!under[k];
+          oc.h = h; oc.roadD = roadD[k]; oc.dr = dr[k]; oc.rw = rw[k]; oc.wl = wl[k]; oc.lakeRn = lakeRn[k]; oc.under = !!under[k]; oc.vill = vill[k];
           L.cover(x0 + i * step, z0 + j * step, oc, slope, _c);
           cover[k] = oc.cover; crop[k] = oc.crop;
           col[k * 3] = _c.r; col[k * 3 + 1] = _c.g; col[k * 3 + 2] = _c.b;
@@ -264,7 +264,26 @@
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();
       this.group.add(mesh);
-      return { tx, tz, x0, z0, mesh, H, NB, V, cover, crop, slope: slopeA, roadD, dr, rw, under, lakeRn, nearRoad, veg: null, details: null, d: 0 };
+      return { tx, tz, x0, z0, mesh, H, NB, V, cover, crop, slope: slopeA, roadD, dr, rw, under, lakeRn, vill, nearRoad, veg: null, details: null, cows: null, d: 0 };
+    }
+
+    // Vache la plus proche d'un point (dans les tuiles voisines) : { x, y, z, d } ou null.
+    nearestCow(x, z, maxD) {
+      const S = this.S;
+      const tx0 = Math.floor(x / S), tz0 = Math.floor(z / S);
+      let best = null, bd = maxD;
+      for (let tz = tz0 - 1; tz <= tz0 + 1; tz++) {
+        for (let tx = tx0 - 1; tx <= tx0 + 1; tx++) {
+          const t = this.tiles.get(tx + ',' + tz);
+          if (!t || !t.cows) continue;
+          const c = t.cows;
+          for (let k = 0; k < c.length; k += 3) {
+            const d = Math.hypot(c[k] - x, c[k + 2] - z);
+            if (d < bd) { bd = d; best = { x: c[k], y: c[k + 1], z: c[k + 2], d }; }
+          }
+        }
+      }
+      return best;
     }
 
     // Interpolations sur la grille de la tuile
@@ -313,6 +332,7 @@
     _buildVeg(t, lvl) {
       const L = this.L, P = L.P, amb = L.amb, half = L.roadHalf;
       const list = [];
+      t.cows = []; // positions des vaches (pour les meuglements)
       const st = this.Q.treeStep;
       const n = Math.floor(this.S / st);
       for (let gj = 0; gj < n; gj++) {
@@ -331,6 +351,13 @@
           const y = this._hAt(t, x, z);
           const rot = rnd() * Math.PI * 2;
           const sc = 0.8 + rnd() * 0.6;
+          // pas d'arbre sur les camping-cars des supporters
+          if (L.keepOut && L.keepOut.length && L.keepOut.some((c) => Math.abs(c.x - x) < c.r && Math.abs(c.z - z) < c.r)) continue;
+          // village : les maisons occupent le terrain, seulement quelques haies de jardin au fond
+          if (t.vill[k] > 0.15 && rd < 36) {
+            if (r < 0.06 && rd > half + 14) this._place(list, 'bush', x, y - 0.1, z, rot, sc, this._tint(rnd, amb.bush));
+            continue;
+          }
           const nearRiver = t.dr[k] < t.rw[k] + 16 && t.dr[k] > t.rw[k] + 3;
           if (nearRiver && r < 0.14) {
             this._place(list, 'poplar', x, y - 0.2, z, rot, sc, this._tint(rnd, amb.poplar));
@@ -351,14 +378,17 @@
               break;
             }
             case COVER.MEADOW: {
+              // les vaches vivent en troupeaux, dans certains prés
+              const herd = L.noiseB.noise(x / 330 + 50.5, z / 330 - 20.5) > 0.3 ? 9 : 0.25;
               let acc = P.meadowTrees;
               if (r < acc) {
                 if (y > 1200) this._place(list, 'conifer', x, y - 0.3, z, rot, sc, this._tint(rnd, amb.conifer));
                 else this._place(list, 'deciduous', x, y - 0.3, z, rot, sc * 1.1, this._tint(rnd, amb.decid));
               } else if (r < (acc += 0.02)) {
                 this._place(list, 'bush', x, y - 0.1, z, rot, sc, this._tint(rnd, amb.bush));
-              } else if (r < (acc += P.cows) && slope < 0.35) {
+              } else if (r < (acc += P.cows * herd) && slope < 0.35) {
                 this._place(list, 'cow', x, y, z, rot, 1.0, null);
+                t.cows.push(x, y, z);
               } else if (r < (acc += 0.006 * P.rockiness)) {
                 this._place(list, 'rock', x, y - 0.2, z, rot, 0.5 + rnd() * 1.2, this._tint(rnd, amb.rockTint), 1, 0.7 + rnd() * 0.5);
               }
@@ -378,7 +408,7 @@
             case COVER.ALPINE: {
               if (r < 0.05 * P.rockiness) this._place(list, 'rock', x, y - 0.3, z, rot, 0.6 + rnd() * 1.6, this._tint(rnd, amb.rockTint), 1, 0.6 + rnd() * 0.6);
               else if (r < 0.07) this._place(list, 'conifer', x, y - 0.3, z, rot, sc * 0.7, this._tint(rnd, amb.conifer));
-              else if (r < 0.07 + P.cows * 1.5 && slope < 0.4) this._place(list, 'cow', x, y, z, rot, 1.0, null);
+              else if (r < 0.07 + P.cows * (L.noiseB.noise(x / 330 + 50.5, z / 330 - 20.5) > 0.2 ? 10 : 0.5) && slope < 0.4) { this._place(list, 'cow', x, y, z, rot, 1.0, null); t.cows.push(x, y, z); }
               break;
             }
             case COVER.ROCK: {
@@ -409,6 +439,7 @@
           if (rd > 34 || rd < half + 0.9) { rnd(); rnd(); continue; }
           const k = this._vIndex(t, x, z);
           if (t.under[k] || t.lakeRn[k] < 1.15) continue;
+          if (t.vill[k] > 0.15 && rd < half + 2.3) continue; // trottoirs
           const cov = t.cover[k];
           if (cov === COVER.SNOW || cov === COVER.SAND || cov === COVER.BED || t.slope[k] > 0.9) continue;
           const r = rnd();

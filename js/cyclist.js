@@ -45,6 +45,7 @@
       this.body = new THREE.Group(); // inclinaison (danseuse)
       this.root.add(this.body);
       this.crank = 0;
+      this.strokes = 0; // nombre de coups de pédale (un par demi-tour de pédalier)
       this.wheelAngle = 0;
       this.rock = 0;
       this.standT = 0;
@@ -121,9 +122,18 @@
         tire.rotation.y = Math.PI / 2;
         w.add(tire);
         addOutline(tire, { width: 0.7, minW: 0.005, maxW: 0.03 });
-        const rim = new THREE.Mesh(new THREE.TorusGeometry(R - 0.045, 0.014, 6, 30), mat('#f2f2f2'));
+        // jante carbone haute : bande noire épaisse avec un liseré de couleur
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(R - 0.06, 0.03, 6, 30), mat('#2a2a32'));
         rim.rotation.y = Math.PI / 2;
+        rim.scale.set(1, 1, 0.55);
         w.add(rim);
+        const deco = new THREE.Mesh(new THREE.TorusGeometry(R - 0.06, 0.008, 4, 30), mat(this.bikeColor === '#1d1a2b' ? '#ffd23a' : '#ffffff'));
+        deco.rotation.y = Math.PI / 2;
+        deco.position.x = 0.018;
+        w.add(deco);
+        const deco2 = deco.clone();
+        deco2.position.x = -0.018;
+        w.add(deco2);
         for (let k = 0; k < 3; k++) {
           const a = k / 3 * Math.PI * 2;
           const sp = new THREE.Mesh(new THREE.BoxGeometry(0.014, R - 0.05, 0.045), mat(this.bikeColor));
@@ -264,7 +274,9 @@
         const wheelRpm = v / (2 * Math.PI * R) * 60;
         const ratio = clamp(wheelRpm / 88, 1.3, 4.4);
         const cadence = wheelRpm / ratio; // tr/min
+        const before = Math.floor(this.crank / Math.PI);
         this.crank += cadence / 60 * Math.PI * 2 * dt;
+        this.strokes += Math.floor(this.crank / Math.PI) - before;
       } else {
         // pédales à l'horizontale en roue libre
         const target = Math.round((this.crank - Math.PI / 2) / Math.PI) * Math.PI + Math.PI / 2;

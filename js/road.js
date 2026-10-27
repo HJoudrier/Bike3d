@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
   const B3D = root.B3D = root.B3D || {};
-  const { mat, addOutline, outlineAll, textTexture } = B3D.toon;
+  const { mat, addOutline, outlineAll, textTexture, merge, tr } = B3D.toon;
   const { mulberry32 } = B3D.util;
 
   const FONT = '"Fredoka", "Baloo 2", "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif';
@@ -424,7 +424,90 @@
     });
   }
 
-  // Spectateurs (sommets, arrivée) et alignements de platanes, placés dans les pools d'instances.
+  // Groupes de supporters répartis sur le parcours (plus nombreux en montée), parfois avec un camping-car.
+  function planFans(route, L) {
+    if (L.fanGroups) return L.fanGroups;
+    const rnd = mulberry32(L.seed ^ 0xfa5);
+    const half = L.roadHalf;
+    const groups = [];
+    L.keepOut = [];
+    const o = {};
+    let s = route.sStart + 250 + rnd() * 200;
+    while (s < route.sEnd - 320) {
+      const r = route.sample(s, {});
+      const climbing = r.grade > 0.035;
+      const i = r.i;
+      if (L.villageW[i] < 0.02 && !L.bridgeMask[i] && !route.dup[i]) {
+        const side = rnd() < 0.5 ? -1 : 1;
+        const rail = side < 0 ? L.railL[i] : L.railR[i];
+        const drop = side < 0 ? L.dropL[i] : L.dropR[i];
+        if (!rail && drop < 1.5) {
+          const g = { s, side, n: 3 + Math.floor(rnd() * (climbing ? 8 : 5)), len: 5 + rnd() * 9, van: null };
+          if (climbing && rnd() < 0.5) {
+            // camping-car garé derrière le groupe, si le terrain est assez plat
+            const off = half + 7.5;
+            const x = r.x + r.rx * off * side, z = r.z + r.rz * off * side;
+            let flat = true;
+            for (const [a, b] of [[-3, -1.2], [3, -1.2], [-3, 1.2], [3, 1.2], [0, 0]]) {
+              L.sample(x + r.tx * a + r.rx * b * side, z + r.tz * a + r.rz * b * side, o);
+              if (Math.abs(o.h - r.y) > 1.0 || o.under || o.roadD < half + 4.5) flat = false;
+            }
+            if (flat) {
+              g.van = { x, z, y: L.heightAt(x, z), rot: Math.atan2(-r.rx * side, -r.rz * side), color: rnd.pick(['#3d7be0', '#e2463a', '#4cc35a', '#f2c230', '#9b6bff']) };
+              L.keepOut.push({ x, z, r: 5.5 });
+            }
+          }
+          groups.push(g);
+        }
+      }
+      s += (climbing ? 150 : 330) + rnd() * (climbing ? 220 : 520);
+    }
+    L.fanGroups = groups;
+    return groups;
+  }
+
+  // Camping-cars de supporters (fusionnés en un seul maillage).
+  function buildVans(route, L, group) {
+    const parts = [];
+    const W = '#f4f2ec', DK = '#34405a', BK = '#26232f';
+    for (const g of planFans(route, L)) {
+      const v = g.van;
+      if (!v) continue;
+      const M = new THREE.Matrix4().compose(new THREE.Vector3(v.x, v.y, v.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, v.rot, 0)), new THREE.Vector3(1, 1, 1));
+      const P = (geo, color, x, y, z, sx, sy, sz, rx, ry, rz) => {
+        const lm = tr(x, y, z, rx || 0, ry || 0, rz || 0, sx, sy, sz);
+        parts.push({ geo, color, matrix: new THREE.Matrix4().multiplyMatrices(M, lm) });
+      };
+      const box = new THREE.BoxGeometry(1, 1, 1), cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
+      P(box, W, 0, 1.5, 0, 5.6, 2.1, 2.2);
+      P(box, v.color, 0, 0.82, 0, 5.62, 0.26, 2.22);
+      P(box, W, 3.2, 1.0, 0, 1.0, 1.2, 2.1);
+      P(box, W, 2.95, 2.35, 0, 1.4, 0.75, 2.12);
+      P(box, DK, 3.72, 1.35, 0, 0.08, 0.6, 1.9);
+      P(box, DK, 0.9, 1.75, 1.11, 1.3, 0.62, 0.05);
+      P(box, DK, -1.6, 1.75, 1.11, 1.0, 0.62, 0.05);
+      P(box, '#dedad0', 2.0, 1.25, 1.11, 0.8, 1.8, 0.05);
+      for (const [x, z] of [[-1.9, 1.05], [1.9, 1.05], [-1.9, -1.05], [1.9, -1.05]]) P(cyl, BK, x, 0.42, z, 0.84, 0.3, 0.84, Math.PI / 2, 0, 0);
+      // store déroulé, table et chaises de camping
+      P(box, v.color, -0.8, 2.45, 1.95, 3.2, 0.06, 1.7, 0.18, 0, 0);
+      P(box, '#bfc5cf', -1.6, 2.15, 2.75, 0.06, 0.7, 0.06);
+      P(box, '#bfc5cf', 0.0, 2.15, 2.75, 0.06, 0.7, 0.06);
+      P(cyl, '#f2f2f2', -0.8, 0.7, 2.4, 0.9, 0.05, 0.9);
+      P(cyl, '#8a8f99', -0.8, 0.35, 2.4, 0.06, 0.7, 0.06);
+      for (const x of [-1.6, 0.0]) {
+        P(box, v.color, x, 0.45, 2.6, 0.5, 0.06, 0.5);
+        P(box, v.color, x, 0.72, 2.37, 0.5, 0.55, 0.06);
+      }
+    }
+    if (!parts.length) return;
+    const geo = merge(parts);
+    const m = new THREE.Mesh(geo, new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: B3D.toon.gradientMap() }));
+    m.castShadow = true; m.receiveShadow = true;
+    addOutline(m, { width: 0.9, maxW: 0.2 });
+    group.add(m);
+  }
+
+  // Spectateurs (sommets, arrivée, groupes le long du parcours) et alignements de platanes, placés dans les pools d'instances.
   function placeRoadsideInstances(route, L, tiles) {
     const rnd = mulberry32(L.seed ^ 0xabcde);
     const half = L.roadHalf;
@@ -441,23 +524,33 @@
       P.set(i, m, color);
       list.push(pool, i);
     };
+    L.crowd = L.crowd || new Float32Array(route.n);
+    // un supporter au bord de la route (ignoré s'il tomberait dans un ravin, sur un pont ou dans un village)
+    const fan = (s, side, off) => {
+      const r = route.sample(s, {});
+      const i = r.i;
+      if ((side < 0 ? L.railL[i] : L.railR[i]) || L.bridgeMask[i] || L.villageW[i] > 0.05) return;
+      if ((side < 0 ? L.dropL[i] : L.dropR[i]) > 1.5) return;
+      const x = r.x + r.rx * off * side, z = r.z + r.rz * off * side;
+      const y = L.heightAt(x, z);
+      if (Math.abs(y - r.y) > 1.3) return;
+      col.set(shirts[Math.floor(rnd() * shirts.length)]);
+      const sc = rnd() < 0.15 ? 0.7 + rnd() * 0.1 : 0.88 + rnd() * 0.22; // quelques enfants
+      put('spectator', x, y, z, Math.atan2(r.tx, r.tz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2) + (rnd() - 0.5) * 0.8, sc, 1, col);
+      L.crowd[i] += 1;
+    };
     const crowd = (s0, s1, density) => {
       for (let s = s0; s < s1; s += 1.6) {
         for (const side of [-1, 1]) {
           if (rnd() > density) continue;
-          const r = route.sample(s, {});
-          const i = r.i;
-          if ((side < 0 ? L.railL[i] : L.railR[i]) || L.bridgeMask[i]) continue;
-          if ((side < 0 ? L.dropL[i] : L.dropR[i]) > 1.5) continue;
-          const off = half + 1.3 + rnd() * 2.2;
-          const x = r.x + r.rx * off * side, z = r.z + r.rz * off * side;
-          const y = L.heightAt(x, z);
-          if (Math.abs(y - r.y) > 1.3) continue;
-          col.set(shirts[Math.floor(rnd() * shirts.length)]);
-          put('spectator', x, y, z, Math.atan2(r.tx, r.tz) + (side > 0 ? Math.PI / 2 : -Math.PI / 2) + (rnd() - 0.5) * 0.8, 0.9 + rnd() * 0.2, 1, col);
+          fan(s, side, half + 1.3 + rnd() * 2.2);
         }
       }
     };
+    // petits groupes de supporters tout au long du parcours
+    for (const g of planFans(route, L)) {
+      for (let k = 0; k < g.n; k++) fan(g.s + (rnd() - 0.5) * g.len, g.side, half + 1.3 + rnd() * 2.6);
+    }
     route.climbs.forEach((c) => {
       const summit = route.sStart + c.d1;
       crowd(summit - Math.min(900, c.length * 0.4), summit + 60, c.cat <= 2 ? 0.45 : 0.25);
@@ -471,7 +564,7 @@
       const o = {};
       for (let s = route.sStart + 150; s < route.sEnd - 150; s += 12) {
         const r = route.sample(s, {});
-        if (r.y > 650 || Math.abs(r.grade) > 0.035 || L.bridgeMask[r.i]) continue;
+        if (r.y > 650 || Math.abs(r.grade) > 0.035 || L.bridgeMask[r.i] || L.villageW[r.i] > 0.02) continue;
         if (L.noiseB.noise(s / 1600 + 77.7, 3.3) < 1.0 - P.planeTrees * 1.2) continue;
         for (const side of [-1, 1]) {
           const off = half + 3.4;
@@ -494,8 +587,11 @@
       buildSurface(route, L, group);
       buildRails(route, L, group);
       buildFeatures(route, L, group);
+      buildVans(route, L, group);
       return group;
     },
-    placeRoadsideInstances
+    placeRoadsideInstances,
+    makeSign,
+    placeOnRoad
   };
 })(typeof window !== 'undefined' ? window : globalThis);

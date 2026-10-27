@@ -11,7 +11,16 @@
   const RIVER_CELL = 64;
   const RIVER_MARGIN = 80;
 
-  const COVER = { SHOULDER: 0, MEADOW: 1, FOREST: 2, FIELD: 3, ROCK: 4, ALPINE: 5, SNOW: 6, SAND: 7, BED: 8, HEDGE: 9 };
+  const COVER = { SHOULDER: 0, MEADOW: 1, FOREST: 2, FIELD: 3, ROCK: 4, ALPINE: 5, SNOW: 6, SAND: 7, BED: 8, HEDGE: 9, VILLAGE: 10 };
+
+  // Noms de villages… de cyclistes.
+  const VIL_PREFIX = ['Saint-', 'Saint-', 'Sainte-', '', '', 'Le ', 'La ', 'Les '];
+  const VIL_BASE = {
+    m: ['Pédalin', 'Guidon', 'Braquet', 'Mollet', 'Dérailleur', 'Rayon', 'Moyeu', 'Pignon', 'Boyau', 'Cadre', 'Bidon', 'Plateau'],
+    f: ['Selle', 'Manivelle', 'Chambre-à-Air', 'Roue-Libre', 'Pédale', 'Chaîne', 'Sonnette', 'Valve', 'Fourche', 'Jante'],
+    p: ['Rayons', 'Freins', 'Mollets', 'Pignons', 'Bidons', 'Cale-Pieds']
+  };
+  const VIL_SUFFIX = ['-les-Bains', '-sur-Selle', '-en-Côte', '-la-Montée', '-le-Vieux', '-des-Champs', '-du-Lac', '-sur-Roue', '-d\'en-Haut', '-la-Descente', '', '', ''];
 
   const COL_NAMES = ['des Marmottes', 'de la Tartiflette', 'du Grand Fromage', 'des Myrtilles', 'du Chamois Rieur',
     'de la Raclette', 'des Edelweiss', 'du Bouquetin', 'des Nuages', 'de la Crème Brûlée', 'du Vent Fou',
@@ -62,6 +71,7 @@
         grass: a.grass.map(C), meadow: C(a.meadow), forest: C(a.forestFloor), alpine: C(a.alpine),
         rock: C(a.rock), rockDark: C(a.rockDark), snow: C(a.snow), sand: C(a.sand), dirt: C(a.dirt),
         bed: C(a.sand).lerp(C('#3f7f74'), 0.55), hedge: C(a.forestFloor).lerp(C('#2f6a2c'), 0.4),
+        gravel: C('#dccfb2'),
         crops: a.crops.map((c) => C(c[0]))
       };
       let tw = 0;
@@ -81,6 +91,7 @@
       this._computeMountainness();
       this._planRivers();
       this._buildBridgeMask();
+      this._planVillages();
       this._planLakes();
       this._planRoadside();
       this._nameClimbs();
@@ -303,7 +314,7 @@
       // --- Route : on aplanit le terrain sous chaque passage (branche) de la route.
       const br = this._br;
       const nb = this.route.branches(x, z, Landscape.ROAD_REACH, br);
-      o.roadD = 1e9; o.roadY = 0; o.roadI = -1;
+      o.roadD = 1e9; o.roadY = 0; o.roadI = -1; o.vill = 0;
       if (nb > 0) {
         // du plus loin au plus proche : la branche la plus proche a le dernier mot
         const order = this._order || (this._order = new Int32Array(8));
@@ -318,12 +329,14 @@
         for (let q = 0; q < nb; q++) {
           const k = order[q];
           const d = br.d[k], yk = br.y[k];
-          if (d < o.roadD) { o.roadD = d; o.roadY = yk; o.roadI = br.i[k]; }
+          const vw = this.villageW[br.i[k]];
+          if (d < o.roadD) { o.roadD = d; o.roadY = yk; o.roadI = br.i[k]; o.vill = vw; }
           if (this.bridgeMask[br.i[k]] && o.dr < o.rw + 3) continue; // pont : la rivière passe dessous
           const flat = yk - 0.12;
           const delta = Math.abs(h - flat);
-          const inner = half + 2.0;
-          const T = 3.5 + Math.min(delta * 0.42, 15);
+          // dans les villages, une large plateforme accueille les maisons
+          const inner = half + 2.0 + vw * 24;
+          const T = 3.5 + Math.min(delta * 0.42, 15) + vw * 10;
           const w = 1 - smoothstep(inner, inner + T, d);
           if (w > 0) h = h + (flat - h) * w;
         }
@@ -355,6 +368,12 @@
       const nearWater = (o.lakeRn < 1.2) || (o.dr < o.rw + 3.2 && a < o.wl + 1.3);
       if (nearWater) {
         o.cover = COVER.SAND; col.copy(C.sand); return;
+      }
+      // village : pelouses et placettes gravillonnées
+      if (o.vill > 0.05 && o.roadD < half + 30 && slope < 0.5) {
+        o.cover = COVER.VILLAGE;
+        col.copy(C.grass[0]).lerp(C.grass[1], 0.5).lerp(C.gravel, clamp((half + 11 - o.roadD) / 6, 0, 1) * 0.7 * Math.min(1, o.vill * 1.5));
+        return;
       }
 
       // couleur végétale de base
@@ -645,6 +664,74 @@
       for (const [a, b] of this.bridges) for (let i = a; i <= b; i++) this.bridgeMask[i] = 1;
     }
 
+    // ---------------------------------------------------------------- villages
+    // Choisit des portions de route peu pentues et pas trop sinueuses pour y faire traverser des villages.
+    _planVillages() {
+      const R = this.route, sp = R.spacing, n = R.n;
+      const rnd = mulberry32(this.seed ^ 0x51ab7e);
+      this.villageW = new Float32Array(n);
+      this.villages = [];
+      if (R.length < 1500) return;
+      const want = Math.min(10, Math.max(1, Math.round(R.length / 6500 * rnd.range(0.7, 1.35))));
+      const gap = Math.round(700 / sp);
+      for (let attempt = 0; attempt < 80 * want && this.villages.length < want; attempt++) {
+        const halfLen = Math.round(rnd.range(140, 250) / sp);
+        const span = R.iEnd - R.iStart - 2 * halfLen - 30;
+        if (span <= 0) break;
+        const ic = R.iStart + halfLen + 15 + Math.floor(rnd() * span);
+        const i0 = ic - halfLen, i1 = ic + halfLen;
+        if (this.villages.some((v) => i1 + gap > v.i0 && i0 - gap < v.i1)) continue;
+        let ok = true;
+        for (let i = i0 - 10; i <= i1 + 10 && ok; i++) {
+          if (Math.abs(R.grade[i]) > 0.085 || R.y[i] > 1900 || this.bridgeMask[i] || Math.abs(R.curv[i]) > 1 / 30 || R.dup[i]) ok = false;
+        }
+        for (let i = i0; i <= i1 && ok; i += 3) {
+          const q = this._riverDist(R.x[i], R.z[i]);
+          if (q.d < q.rw + 45) ok = false;
+        }
+        // pas d'autre passage de la route à travers le village (lacets, boucle)
+        for (let i = i0; i <= i1 && ok; i += 4) {
+          const cx0 = Math.floor(R.x[i] / 20), cz0 = Math.floor(R.z[i] / 20);
+          for (let cx = cx0 - 3; cx <= cx0 + 3 && ok; cx++) {
+            for (let cz = cz0 - 3; cz <= cz0 + 3 && ok; cz++) {
+              const arr = R.cells.get(B3D.Route.key(cx, cz));
+              if (!arr) continue;
+              for (const j of arr) {
+                if (j >= i0 - 30 && j <= i1 + 30) continue;
+                if (Math.hypot(R.x[j] - R.x[i], R.z[j] - R.z[i]) < 65) { ok = false; break; }
+              }
+            }
+          }
+        }
+        if (!ok) continue;
+        const M = this.base(R.x[ic], R.z[ic], {}).M;
+        const style = (R.y[ic] > 950 || M > 0.6) ? 'montagne' : (R.lat0 < 45.4 ? 'sud' : 'nord');
+        this.villages.push({ i0, i1, ic, style, seed: (rnd() * 4294967296) >>> 0 });
+      }
+      this.villages.sort((a, b) => a.i0 - b.i0);
+      const used = new Set();
+      for (const v of this.villages) {
+        let name;
+        for (let k = 0; k < 20; k++) {
+          const pre = VIL_PREFIX[Math.floor(rnd() * VIL_PREFIX.length)];
+          const g = pre === 'Sainte-' || pre === 'La ' ? 'f' : pre === 'Les ' ? 'p' : pre === 'Le ' || pre === 'Saint-' ? 'm' : rnd.pick(['m', 'f']);
+          const base = rnd.pick(VIL_BASE[g]);
+          let suf = VIL_SUFFIX[Math.floor(rnd() * VIL_SUFFIX.length)];
+          if (!pre && !suf) suf = '-les-Bains';
+          name = pre + base + suf;
+          if (!used.has(name)) break;
+        }
+        used.add(name);
+        v.name = name;
+        // poids "village" : rampe douce aux entrées
+        const ramp = 10;
+        for (let i = v.i0 - ramp; i <= v.i1 + ramp; i++) {
+          const w = smoothstep(0, ramp, Math.min(i - (v.i0 - ramp), v.i1 + ramp - i));
+          this.villageW[i] = Math.max(this.villageW[i], w);
+        }
+      }
+    }
+
     // ---------------------------------------------------------------- lacs
     _planLakes() {
       const R = this.route, rnd = this.rnd;
@@ -668,6 +755,12 @@
         if (this.lakes.some((o) => Math.hypot(o.x - cx, o.z - cz) < o.r * 1.7 + r * 1.7 + 20)) continue;
         const rq = this._riverDist(cx, cz);
         if (rq.d < r * 1.7 + rq.rw + 20) continue;
+        // ni dans un village
+        let nearVillage = false;
+        for (const v of this.villages) {
+          for (let i = v.i0; i <= v.i1 && !nearVillage; i += 4) if (Math.hypot(R.x[i] - cx, R.z[i] - cz) < r * 1.7 + 45) nearVillage = true;
+        }
+        if (nearVillage) continue;
         // Terrain pas trop pentu
         const b0 = this.base(cx, cz, {}).B;
         let maxDev = 0;
@@ -703,7 +796,7 @@
       this.dropL = dropL; this.dropR = dropR;
       const rails = (drop) => {
         const m = new Uint8Array(n);
-        for (let i = 0; i < n; i++) m[i] = drop[i] > 3.0 && !this.bridgeMask[i] ? 1 : 0;
+        for (let i = 0; i < n; i++) m[i] = drop[i] > 3.0 && !this.bridgeMask[i] && this.villageW[i] < 0.05 ? 1 : 0;
         // combler les petits trous
         let last = -100;
         for (let i = 0; i < n; i++) {
@@ -741,13 +834,19 @@
       const forest = P.forestThr < -0.05 ? 'denses' : P.forestThr < 0.15 ? 'moyennes' : 'clairsemées';
       let fields = P.fieldThr < 0.0 ? 'nombreux' : P.fieldThr < 0.15 ? 'quelques-uns' : 'rares';
       if (this.route.stats.minEle > P.fieldMaxAlt) fields = 'aucun (trop haut)';
-      const relief = P.mountainAmp > 520 ? 'spectaculaire' : P.mountainAmp > 400 ? 'marqué' : 'doux';
+      // relief réellement visible : dépend du parcours (montagnitude moyenne) et de la graine
+      let mAvg = 0;
+      for (let k = 0; k < this.cM.length; k++) mAvg += this.cM[k];
+      mAvg /= this.cM.length;
+      const score = P.mountainAmp * mAvg * mAvg + P.hillAmp + 16 * mAvg;
+      const relief = score > 330 ? 'spectaculaire' : score > 70 ? 'marqué' : 'doux';
       return [
         { icon: '🎨', label: 'Ambiance', value: this.amb.name },
         { icon: '⛰️', label: 'Relief', value: relief },
         { icon: '🌲', label: 'Forêts', value: forest },
         { icon: '🌾', label: 'Champs', value: fields },
         { icon: '🏞️', label: 'Lacs', value: String(this.lakes.length) },
+        { icon: '🏘️', label: 'Villages', value: this.villages.length ? String(this.villages.length) : 'aucun' },
         { icon: '🌊', label: 'Rivières', value: String(this.rivers.length) + (this.bridges.length ? ' (' + this.bridges.length + ' pont' + (this.bridges.length > 1 ? 's' : '') + ')' : '') }
       ];
     }
