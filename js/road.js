@@ -98,7 +98,7 @@
         const v = (i * route.spacing) / TEX_LEN;
         gb.v(x - rx * half, y, z - rz * half, 0, 1, 0, 0, v);
         gb.v(x + rx * half, y, z + rz * half, 0, 1, 0, 1, v);
-        if (i > a) {
+        if (i > a && !(route.dup[i] && route.dup[i - 1])) {
           const k = (i - a) * 2;
           gb.tri(k - 2, k - 1, k); gb.tri(k - 1, k + 1, k);
         }
@@ -111,7 +111,7 @@
           sk.v(ex, y, ez, rx * side, 0, rz * side);
           sk.v(ex + rx * side * 0.25, y - depth, ez + rz * side * 0.25, rx * side, 0, rz * side);
         }
-        if (i > a) {
+        if (i > a && !(route.dup[i] && route.dup[i - 1])) {
           const k = (i - a) * 4;
           // gauche (side -1) : normale vers la gauche
           sk.tri(k - 4, k, k - 3); sk.tri(k - 3, k, k + 1);
@@ -169,8 +169,10 @@
         gb.box(route.x[i] + rx * off2 * side, route.y[i] + 0.3, route.z[i] + rz * off2 * side, 0.07, 0.55, 0.07, route.tx[i], route.tz[i]);
       }
     };
-    for (const [a, b] of runs(L.railL)) rail(a, b, -1);
-    for (const [a, b] of runs(L.railR)) rail(a, b, 1);
+    // sur une portion parcourue deux fois, une seule série de glissières (celle du premier passage)
+    const notDup = (m) => m.map((v, i) => (v && !route.dup[i] ? 1 : 0));
+    for (const [a, b] of runs(notDup(L.railL))) rail(a, b, -1);
+    for (const [a, b] of runs(notDup(L.railR))) rail(a, b, 1);
     // parapets des ponts
     for (const [a, b] of L.bridges) {
       for (const side of [-1, 1]) {

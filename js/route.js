@@ -166,6 +166,7 @@
       this._computeDerived();
       this._computeStats();
       this._buildSpatialIndex();
+      this._computeOverlaps();
       this._detectClimbs();
     }
 
@@ -250,6 +251,34 @@
       }
       this.coarseCells = cmap;
       this.coarseCell = COARSE_CELL;
+    }
+
+    // Repère les échantillons qui repassent sur une portion déjà parcourue (aller-retour, boucle) :
+    // la chaussée et les glissières n'y sont dessinées qu'une fois.
+    _computeOverlaps() {
+      const n = this.n, X = this.x, Z = this.z, Y = this.y;
+      this.dup = new Uint8Array(n);
+      for (let i = 0; i < n; i++) {
+        const cx0 = Math.floor(X[i] / CELL), cz0 = Math.floor(Z[i] / CELL);
+        let found = false;
+        for (let cx = cx0 - 1; cx <= cx0 + 1 && !found; cx++) {
+          for (let cz = cz0 - 1; cz <= cz0 + 1 && !found; cz++) {
+            const arr = this.cells.get(Route.key(cx, cz));
+            if (!arr) continue;
+            for (let k = 0; k < arr.length; k++) {
+              const j = arr[k];
+              if (j >= i - 4) continue;
+              const ax = X[j], az = Z[j], bx = X[j + 1] - ax, bz = Z[j + 1] - az;
+              const l2 = bx * bx + bz * bz || 1e-9;
+              let t = ((X[i] - ax) * bx + (Z[i] - az) * bz) / l2;
+              t = t < 0 ? 0 : t > 1 ? 1 : t;
+              const d = Math.hypot(ax + bx * t - X[i], az + bz * t - Z[i]);
+              if (d < 2.5 && Math.abs(Y[j] + (Y[j + 1] - Y[j]) * t - Y[i]) < 1.5) { found = true; break; }
+            }
+          }
+        }
+        if (found) this.dup[i] = 1;
+      }
     }
 
     // Segment le plus proche dans un rayon donné. out = {i, t, d, side, y}
