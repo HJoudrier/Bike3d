@@ -181,7 +181,7 @@
       class: 'rm-sq rm-card', type: 'button', 'aria-pressed': 'false', 'aria-label': 'Orientation de la carte',
       onclick: () => { TG.setNorthUp(!(G.snap && G.snap.northUp)); refresh(); },
     }, icCompass());
-    E.side = h('div', { class: 'rm-side' }, E.clock, E.rank, E.prof, pauseButton('rm-sq rm-card'), E.speedWrap, E.baseWrap, E.compass, E.zoom, E.tilt, E.quit);
+    E.side = h('div', { class: 'rm-side' }, E.clock, E.rank, E.prof, pauseButton('rm-sq rm-card'), E.speedWrap, E.baseWrap, E.compass, ...(PYR.view3d ? PYR.view3d.buttons() : []), E.zoom, E.tilt, E.quit);
     // grand écran : les trois boutons d'affichage (statistiques, profil, puissance) en haut de la colonne de gauche
     E.views = h('div', { class: 'rm-views wide-only' }, E.tgStats, E.tgProfile, E.tgCurve);
 
@@ -898,6 +898,7 @@
     if (mode) unmount();
     mode = want;
     if (mode) mount();
+    if (PYR.view3d) PYR.view3d.setStage(!!mode); // la vue 3D ne recouvre la carte que sur la page de jeu
     TG.applyFollowLimits(); // le relais est libre (sans durée ni limites) sur téléphone
     // téléphone : le profil d’élévation n’a ni boutons ni déplacement, seulement le zoom à deux doigts, centré sur le coureur
     if (G && G.chart) G.chart.zoom.setLock(mode === 'phone', 0.5);
@@ -1084,16 +1085,20 @@
     E.bar.setAttribute('aria-valuenow', String(Math.round(s.shown)));
     E.bar.setAttribute('aria-valuetext', `${PB.LABELS[zi]}, ${Math.round(s.shown)} watts`);
     E.m_sprint.setAttribute('aria-pressed', String(s.boost > 0));
-    E.m_sprint.disabled = s.finished;
+    // home-trainer ou vraie route : la puissance est mesurée, la barre la montre sans la régler, et les tactiques ne servent pas
+    const real = !!s.source && s.source !== 'avatar';
+    E.bar.classList.toggle('rm-measured', real);
+    E.bar.setAttribute('aria-readonly', String(real));
+    E.m_sprint.disabled = s.finished || real;
     E.sprFill.style.width = (Math.min(1, s.boost) * 100) + '%';
     // Relais, Suivre et Suivre les attaques s'activent indépendamment les uns des autres
     const lay = s.layers;
     for (const id of ['relay', 'follow', 'cover']) {
       const b = E['m_' + id];
       b.setAttribute('aria-pressed', String(lay[id]));
-      b.disabled = s.finished;
+      b.disabled = s.finished || real;
     }
-    E.wAuto.disabled = s.live;
+    E.wAuto.disabled = s.live || real;
     E.wAuto.setAttribute('aria-pressed', String(s.mode === 'auto'));
     // mode relais : « Passer le relais » (quand on mène) et durée d'un relais (fixée en défi et en course en direct)
     // « Suivre les attaques » et les limites W′ / PPR : sous « Suivre », tant qu'on suit (avec ou sans les attaques)
@@ -1358,13 +1363,13 @@
       b.querySelector('.ic-pause').toggleAttribute('hidden', s.paused);
       b.querySelector('.ic-play').toggleAttribute('hidden', !s.paused);
       b.setAttribute('aria-label', s.paused ? 'Reprendre' : 'Mettre en pause');
-      b.disabled = s.live || s.finished;
+      b.disabled = s.live || s.finished || s.source === 'road';
     }
     E.speed.textContent = s.slowed ? '×1' : '×' + s.scale;
     E.speed.classList.toggle('slowed', !!s.slowed);
     E.speed.title = s.slowed ? 'Vitesse ×1 le temps de l\'évènement (réglage : ×' + s.scale + ')' : '';
-    E.speed.disabled = s.live;
-    if (s.live) setSpeedPicker(false);
+    E.speed.disabled = s.live || (!!s.source && s.source !== 'avatar');
+    if (E.speed.disabled) setSpeedPicker(false);
     for (const b of E.speedOpts.children) b.setAttribute('aria-checked', String(Number(b.dataset.v) === s.scale));
     E.quit.hidden = !(s.paused || s.finished);
 

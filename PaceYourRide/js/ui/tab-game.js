@@ -58,6 +58,12 @@
 
   function liveActive() { return !!(PYR.live && PYR.live.inRace()); }
 
+  /** Comment tu participes (presence.js) : avatar (barre de puissance), home-trainer (watts mesurés) ou sur la vraie route (GPS). */
+  function source() { return PYR.presence ? PYR.presence.normKind(store.state.game.source) : 'avatar'; }
+
+  /** Vitesse du temps choisie : ×1 en direct et pour un cycliste réel (home-trainer, route), qui pédale en temps réel. */
+  function timeScale() { return G.mode === 'live' || source() !== 'avatar' ? 1 : Number(store.state.game.timeScale) || 1; }
+
   /** Vent subi par un coureur : {kmh, rot (° : sens où il souffle, 0 = vers l'avant du cycliste), app (km/h, vent apparent), head, side (km/h)} ou null. */
   function windOf(r) {
     const c = r && r.cond;
@@ -151,7 +157,7 @@
   function gustNow(t) {
     const gs = G.ctx && G.ctx.gusts;
     if (!gs) return 0;
-    const scale = G.mode === 'live' ? 1 : Number(store.state.game.timeScale) || 1;
+    const scale = timeScale();
     const w = U.clamp(Math.round(scale * 0.3), 1, 40);
     const t1 = Math.min(gs.length - 1, Math.floor(t));
     let sum = 0, n = 0;
@@ -232,7 +238,9 @@
       // le vent, la météo et les revêtements font partie du parcours simulé (et des manches à air affichées)
       ['winds', 'weather', 'surfaces', 'env', 'road', 'checkpoints', 'feedZones'].forEach((e) => store.on(e, () => { if (!G.running && !G.counting && !G.liveStart) T.reset(); }));
       store.on('game', (ev) => {
-        if (ev && /^game\.(bots|botLevel|events|form|fuel|physio|pullSec|peloton)$/.test(ev.path) && !G.running && !G.counting && !G.liveStart) T.reset();
+        if (ev && /^game\.(bots|botLevel|events|form|fuel|physio|pullSec|peloton|source)$/.test(ev.path) && !G.running && !G.counting && !G.liveStart) T.reset();
+        // course en direct pas encore partie : on peut encore choisir avatar, home-trainer ou route (la partie est réarmée)
+        else if (ev && ev.path === 'game.source' && G.liveStart && !G.running) T.armLive(G.liveStart);
       });
       T.renderLegend();
     },
@@ -404,8 +412,10 @@
       $('#g-start').disabled = isLive;
       $('#g-pause').disabled = true;
       $('#g-pause').textContent = 'Pause';
-      $('#g-speed').disabled = isLive;
-      $('#g-auto').disabled = isLive;
+      const real = source() !== 'avatar'; // home-trainer ou route : temps réel, ni pilote automatique
+      $('#g-speed').disabled = isLive || real;
+      $('#g-auto').disabled = isLive || real;
+      if (real) { $('#g-auto').checked = false; G.auto = false; }
       $('#g-quit').disabled = isLive; // en direct, on reste sur la page de jeu jusqu'à l'arrivée
       if (isLive) { $('#g-auto').checked = false; G.auto = false; }
       $('#game-result').hidden = true;
@@ -439,7 +449,9 @@
       G.cmd = Math.round(inputs.athlete.ftp * 0.75 / 10) * 10;
       // le profil du cycliste (celui de la machine imposée en armes égales) donne sa carte athlète au modèle physiologique
       const riderIn = machine && machine.rider ? machine.rider : store.state.rider;
-      G.me = Race.addRider(race, { id: 'me', name: myName(), color: ME_COLOR, human: true, setup: inputs.setup, athlete: inputs.athlete, v0: inputs.v0, margin: inputs.margin, form, cmd: G.cmd, gut: Number(store.state.rider.gut) || 0, kit: Fu.normKit(store.state.game.kit), rider: riderIn });
+      const src = source();
+      if (PYR.gameSource) PYR.gameSource.prepare(src === 'road' ? inputs.course : null);
+      G.me = Race.addRider(race, { id: 'me', name: myName(), color: ME_COLOR, human: true, measured: src === 'trainer', driven: src === 'road', setup: inputs.setup, athlete: inputs.athlete, v0: inputs.v0, margin: inputs.margin, form, cmd: G.cmd, gut: Number(store.state.rider.gut) || 0, kit: Fu.normKit(store.state.game.kit), rider: riderIn });
       G.ctx = G.me.ctx; G.st = G.me.st;
       T.applyFollowLimits();
       const nBots = G.mode === 'solo' ? Math.max(0, Math.min(Race.MAX_BOTS, Math.floor(Number(store.state.game.bots) || 0))) : 0;
@@ -490,6 +502,8 @@
     start() {
       if (G.mode === 'live' || G.counting) return;
       if (G.mode === 'challenge' && !String(store.state.rider.name || '').trim()) { askName(() => T.start()); return; }
+      const miss = PYR.gameSource && PYR.gameSource.missing();
+      if (miss) { setStatus(miss, true); D.toast(miss, 'error'); return; }
       if (!G.ready || G.finished) T.reset();
       if (!G.ready || G.running) return;
       $('#g-start').disabled = true;
@@ -568,9 +582,11 @@
 
     togglePause() {
       if (!G.ready || G.finished || G.mode === 'live' || G.counting) return;
+      if (source() === 'road' && G.running) { D.toast('Sur la vraie route, la course ne se met pas en pause : elle suit ta position.'); return; }
       if (G.running) {
         G.running = false;
         PYR.map.followSettle();
+        T.render(Math.min(1, G.acc)); // la vue 3D s'arrête aussi
         $('#g-pause').textContent = 'Reprendre';
         setStatus('Pause.');
         mobile('refresh');
@@ -596,7 +612,7 @@
         return;
       }
       T.decayBoost(now);
-      const base = Number(store.state.game.timeScale) || 1;
+      const base = timeScale();
       const scale = T.effScale(base);
       G.acc += dt * scale;
       // la simulation ne prend jamais plus de STEP_BUDGET_MS par image : à 90 coureurs et ×50, mieux vaut ralentir un peu le temps de course que saccader l'affichage
@@ -660,6 +676,8 @@
         G.running = true;
         T.enterGame();
         if (countdownSec() > 0) T.flashGo();
+        const miss = PYR.gameSource && PYR.gameSource.missing(); // home-trainer non relié, GPS coupé : on part quand même, à l'arrêt
+        if (miss) D.toast(miss, 'error');
         setStatus('C\'est parti ! Règle la puissance avec la jauge ou les flèches ↑ ↓, ou choisis une tactique (1 à 9).');
       }
       let n = 0;
@@ -676,6 +694,7 @@
           w: G.st.wbal / G.ctx.w0, tac: me.tac.mode, ph: me.tac.phase, inc: me.incident ? me.incident.type : null,
           sp: Cl.packSplits(me.splits), // temps de passage aux sprints et aux sommets
           y: me.lat ? Math.round(me.lat.y * 100) / 100 : undefined, // peloton en 2D : position latérale
+          k: PYR.presence ? PYR.presence.CODE[source()] : undefined, // avatar, home-trainer ou route
         });
       }
       if (G.st.finished) T.finish();
@@ -703,6 +722,15 @@
           y: Number.isFinite(o.y) ? o.y : undefined, // sans position latérale (ancienne version) : placé par peloton.js
         }));
       }
+      // cycliste réel : ses watts mesurés (home-trainer) ou sa position sur la vraie route, pour cette seconde
+      const src = source();
+      if (src === 'trainer' && PYR.gameSource) {
+        me.tac.cmd = PYR.gameSource.power();
+        G.cmd = Math.round(me.tac.cmd);
+      } else if (src === 'road' && PYR.gameSource) {
+        me.drive = PYR.gameSource.drive();
+        G.cmd = Math.round(Number.isFinite(me.drive.P) ? me.drive.P : 0);
+      }
       const p = plan();
       if (G.auto && p && G.mode !== 'live') {
         if (me.tac.mode !== 'manual') Tac.setMode(me, 'manual', me.st.t);
@@ -711,6 +739,7 @@
       }
       if (G.auto && G.feed.length) Race.takeFeed(race, me, true); // pilote automatique : musette s'il reste peu de vivres
       Race.step(race);
+      if (src === 'trainer' && PYR.gameSource) PYR.gameSource.load(me); // pente, vent et abri vers le home-trainer
       G.lastP = me.lastP;
       G.lastPcmd = me.lastPcmd;
       G.pHist.push(me.lastP);
@@ -734,7 +763,7 @@
 
     /** Annonce le passage à ×1 (et le retour à la vitesse choisie). */
     watchSlow() {
-      const base = Number(store.state.game.timeScale) || 1;
+      const base = timeScale();
       const slow = T.effScale(base) < base;
       if (slow === G.slowed) return;
       G.slowed = slow;
@@ -814,7 +843,7 @@
           if (r === G.me) continue;
           const s = r.finished ? L : Math.min(L, ext === undefined ? r.prevS + (r.st.s - r.prevS) * f : r.st.s + r.st.v * ext);
           const y = r.lat ? (ext === undefined ? r.lat.prevY + (r.lat.y - r.lat.prevY) * f : r.lat.y) : undefined;
-          out.push({ id: r.id, name: r.name, color: r.color, s, y, v: r.st.v, time: r.finished ? r.time : null, bot: true, stopped: !!r.incident });
+          out.push({ id: r.id, name: r.name, color: r.color, s, y, v: r.st.v, P: r.lastP, time: r.finished ? r.time : null, bot: true, stopped: !!r.incident });
         }
       }
       if (G.mode === 'live' && PYR.live) {
@@ -822,7 +851,8 @@
         for (const o of PYR.live.opponents()) {
           const p = ext2 && ext2.get('live-' + o.id);
           const y = Number.isFinite(o.y) ? o.y : p ? p.y : undefined;
-          out.push({ id: 'live-' + o.id, name: o.name, color: o.color, s: o.s, y, v: o.v, time: o.finished ? o.time : null, live: true, stopped: !!o.stopped });
+          const icon = o.kind && o.kind !== 'avatar' && PYR.presence ? PYR.presence.ICON[o.kind] + ' ' : '';
+          out.push({ id: 'live-' + o.id, name: icon + o.name, color: o.color, s: o.s, y, v: o.v, P: o.P, kind: o.kind, time: o.finished ? o.time : null, live: true, stopped: !!o.stopped });
         }
       }
       return out;
@@ -854,6 +884,29 @@
       if (follows) PYR.map.follow(PYR.map.latLngAt(s, y));
       if (now - G.lastSock > 250) { PYR.map.updateWindsocks(sockWind(tNow)); G.lastSock = now; }
       G.renderS = s;
+      if (PYR.view3d) T.publish3d(s, y, others, tNow);
+    },
+
+    /** Vue 3D (view3d.js) : la place de chacun à cette image ; la vue lit aussi la météo à la position du joueur. */
+    publish3d(s, y, others, t) {
+      const me = G.me;
+      PYR.view3d.publish({
+        course: G.ctx.course, cps: G.cps, feed: G.feed, t,
+        k: T.effScale(timeScale()),
+        run: G.running && !G.finished && performance.now() >= G.holdUntil,
+        me: {
+          id: 'me', name: myName(), color: ME_COLOR, kind: source(), s, y, v: me.incident ? 0 : me.st.v, P: G.lastP, w: me.st.wbal / G.ctx.w0,
+          dr: me.draft && me.draft.k > 0 && me.draft.k < 1 ? 1 - me.draft.k : 0, st: !!me.incident, fin: !!me.finished, cp: G.ctx.cp,
+        },
+        others: others.map((o) => {
+          // fantôme (plan optimal, défi) : sa vitesse d'après sa trace ; il est arrivé quand son temps est passé
+          const ghost = !o.bot && !o.live;
+          return {
+            id: o.id, name: o.name, color: o.color, kind: o.bot ? 'bot' : o.live ? o.kind || 'avatar' : 'ghost', s: o.s, y: o.y, P: o.P,
+            v: ghost ? Math.max(0, R.tracePosAt(o.trace, t + 1) - o.s) : o.v, st: o.stopped, fin: ghost ? t >= o.time : o.time !== null && o.time !== undefined,
+          };
+        }),
+      });
     },
 
     /** Classement instantané et écart avec l'adversaire le plus proche devant (ou derrière). */
@@ -1075,7 +1128,7 @@
         mode: G.auto ? 'auto' : me.tac.mode, layers: G.auto ? { follow: false, cover: false, relay: false } : Tac.layersOf(me),
         paused: G.ready && !G.running && !G.finished, finished: G.finished, live: G.mode === 'live',
         fwd: G.fwd || [], usage: G.usage || { use: 0, d: 1 },
-        slowed: G.slowed, scale: Number(store.state.game.timeScale) || 1,
+        slowed: G.slowed, scale: timeScale(), source: source(),
         boost: me.tac.mode === 'sprint' && me.human ? me.tac.boost || 0 : 0,
         // mode relais : « Passer le relais » (possible en tête du groupe) et durée d'un relais (fixée hors partie solo)
         followW: Number(store.state.game.followW) || 0, followPpr: Number(store.state.game.followPpr) || 100,
@@ -1607,7 +1660,7 @@
      */
     sprintTap() {
       const me = G.me;
-      if (!me || G.finished || !G.running) return;
+      if (!me || G.finished || !G.running || source() !== 'avatar') return;
       if (G.auto) { G.auto = false; $('#g-auto').checked = false; }
       const line = Tac.lineFor(me, G.cps, 'sprint') ?? Tac.lineFor(me, G.cps, 'attack');
       Tac.sprintTap(me, me.st.t, line);
@@ -1635,7 +1688,7 @@
     /** Choisit une tactique ; la même touche une seconde fois rend la main (mode manuel). */
     setTactic(mode) {
       const me = G.me;
-      if (!me || G.finished) return;
+      if (!me || G.finished || source() !== 'avatar') return;
       if (mode === 'attack' || mode === 'sprint') { T.sprintTap(); return; }
       if (G.auto) { G.auto = false; $('#g-auto').checked = false; }
       const t = me.st.t;
@@ -1690,6 +1743,7 @@
 
     /** Réglage à la jauge : reprise en main (ou puissance de relais si on est en mode relais). */
     setCmd(v) {
+      if (source() !== 'avatar') return; // home-trainer ou route : la puissance est mesurée
       if (G.auto) { G.auto = false; $('#g-auto').checked = false; }
       G.cmd = U.clamp(Math.round(v), 0, G.gaugeMax);
       const me = G.me;
@@ -1969,5 +2023,6 @@
     el.classList.toggle('error', !!error);
   }
 
+  T.source = source;
   PYR.tabGame = T;
 })(globalThis.PYR = globalThis.PYR || {});

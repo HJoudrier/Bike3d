@@ -487,3 +487,28 @@ kbd {
 }
 .toast small { display: block; font-size: 16px; font-weight: 500; }
 @keyframes toastIn { from { transform: translate(-50%, -20px) scale(0.8); opacity: 0; } }
+
+/* ============ Vue pilotée par PaceYourRide (index.html?pyr) ============ */
+body.pyr .toast { top: 30%; font-size: 20px; padding: 8px 16px; }
+body.pyr .toast small { font-size: 14px; }
+body.pyr #screen-loading { background: #cfe9fb; }
+.pyr-hud {
+  position: fixed;
+  left: 14px;
+  top: 14px;
+  z-index: 15;
+  min-width: 190px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 0 4px 0 var(--ink);
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 16px;
+}
+.pyr-hud .ph-main b { font-size: 44px; line-height: 1; }
+.pyr-hud .ph-main small { margin-left: 4px; font-size: 15px; }
+.pyr-hud .ph-row { display: flex; justify-content: space-between; gap: 14px; margin-top: 4px; }
+.pyr-hud .ph-btns { display: flex; gap: 6px; margin-top: 8px; }
+.pyr-hud .ph-btns button { font: inherit; font-size: 18px; border: 2px solid var(--ink); border-radius: 10px; background: #fff; padding: 2px 10px; cursor: pointer; }
+@media (max-width: 600px) { .pyr-hud { left: 8px; top: 8px; min-width: 150px; font-size: 14px; } .pyr-hud .ph-main b { font-size: 34px; } }

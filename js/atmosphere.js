@@ -289,6 +289,19 @@
       this.windTarget = WIND[this.windLevel];
     }
 
+    // Vent réel imposé de l'extérieur (vue pilotée par PaceYourRide) : vitesse (m/s), provenance (° : d'où vient le vent, 0 = nord) ;
+    // null rend la main au vent tiré au sort.
+    setExternalWind(ms, fromDeg) {
+      if (!Number.isFinite(ms) || !Number.isFinite(fromDeg)) { this.extWind = null; return; }
+      // x = est, z = −nord : un vent du nord souffle vers +z (direction 0), un vent d'est vers −x
+      const dir = -fromDeg * Math.PI / 180;
+      if (!this.extWind) this.extWind = { speed: ms, dir };
+      else {
+        this.extWind.speed = ms;
+        this.extWind.dir += Math.atan2(Math.sin(dir - this.extWind.dir), Math.cos(dir - this.extWind.dir));
+      }
+    }
+
     // panneaux et textes à fond blanc (non éclairés) : assombris la nuit
     registerBasic(root) {
       if (!root) return;
@@ -371,8 +384,9 @@
       if (this.windTarget !== undefined) { this.windBase += (this.windTarget - this.windBase) * (1 - Math.exp(-dt / 8)); }
       this.gustT += dt * (0.35 + 0.5 * W.storm);
       const gust = Math.sin(this.gustT * 1.3) * 0.5 + Math.sin(this.gustT * 2.9 + 1.7) * 0.3 + Math.sin(this.gustT * 0.47 + 4) * 0.2;
-      const speed = Math.max(0, this.windBase * W.wind * (1 + (0.22 + 0.25 * W.storm) * gust));
-      this.windDir = this.windDir0 + 0.35 * Math.sin(this.time * 0.004 + 1) + 0.08 * Math.sin(this.gustT * 0.7);
+      const E = this.extWind;
+      const speed = E ? Math.max(0, E.speed * (1 + 0.18 * gust)) : Math.max(0, this.windBase * W.wind * (1 + (0.22 + 0.25 * W.storm) * gust));
+      this.windDir = E ? E.dir + 0.05 * Math.sin(this.gustT * 0.7) : this.windDir0 + 0.35 * Math.sin(this.time * 0.004 + 1) + 0.08 * Math.sin(this.gustT * 0.7);
       this.wind.speed = speed; this.wind.dir = this.windDir;
       this.wind.x = Math.sin(this.windDir) * speed; this.wind.z = Math.cos(this.windDir) * speed;
       // pluie ou neige ? En altitude (au-dessus de ~1 800 m) et en hiver, les précipitations tombent en neige.

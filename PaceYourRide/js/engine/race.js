@@ -98,7 +98,10 @@
    * Ajoute un coureur simulé.
    * o : {id, name, color, human, bot (personnalité), setup, athlete, v0, margin, form, kit, gut (entraînement de l'intestin, 0–1),
    *      rider (profil du cycliste : poids, taille, âge, sexe, carte athlète `physio`), physio (carte athlète déjà calculée, metabo.card),
-   *      physioOpts (état de départ du modèle physiologique, metabo.create)}
+   *      physioOpts (état de départ du modèle physiologique, metabo.create),
+   *      measured (puissance mesurée : home-trainer ou capteur, donnée chaque seconde par r.tac.cmd, sans plafond du simulateur),
+   *      driven (cycliste sur la vraie route : position mesurée, donnée chaque seconde par r.drive = {s, v, P}, cf. sim.drive)}
+   * Un cycliste réel (measured ou driven) n'a pas d'incident tiré au sort ; sur la route, il n'est pas non plus abrité (il roule pour de vrai).
    */
   function addRider(race, o) {
     const athlete = o.form ? Ph.scaleAthlete(o.athlete, o.form.cpK, o.form.wK) : o.athlete;
@@ -114,6 +117,7 @@
     }
     const r = {
       id: o.id, name: o.name, color: o.color, human: !!o.human, bot: o.bot || null,
+      measured: !!o.measured, driven: !!o.driven, drive: null,
       setup: o.setup, athlete, form: o.form || null, ctx, st, cond: {},
       fuel: race.rules.fuel ? Fu.create(o.setup.mRider, Object.assign({}, o.kit, { gutTraining: o.gut, physio: card, physioOpts: o.physioOpts })) : null,
       penv: phy ? {} : null,  // environnement du modèle physiologique (réutilisé chaque seconde)
@@ -286,8 +290,8 @@
     if (r.lat) Pel.applyLine(race.course, r); // peloton : la trajectoire (corde ou large) change le chemin parcouru et la vitesse en virage
     const d = view.info.get(r.id) || SOLO;
     if (r.incident && st.t >= r.incident.until) { log(race, r, 'restart', { of: r.incident.type }); r.incident = null; }
-    if (!r.incident && race.rules.events && st.t > 5) maybeIncident(race, r, d);
-    r.draft = r.incident ? SOLO : d;
+    if (!r.incident && race.rules.events && st.t > 5 && !r.measured && !r.driven) maybeIncident(race, r, d);
+    r.draft = r.incident || r.driven ? SOLO : d;
     c.cdaK = r.draft.k;
     c.stopped = !!r.incident;
     if (r.penv && r.fuel && r.fuel.phy) {
@@ -299,17 +303,19 @@
     let Pcmd = 0;
     if (!c.stopped) {
       if (r.bot) Tac.think(r, view, race);
-      Pcmd = Tac.command(r, view, race.rules);
+      // cycliste réel : ses watts mesurés (home-trainer) ; sur la route, ceux de son capteur
+      Pcmd = r.driven ? (r.drive && Number.isFinite(r.drive.P) ? r.drive.P : 0) : r.measured ? Math.max(0, Number(r.tac.cmd) || 0) : Tac.command(r, view, race.rules);
       if (race.feed.length) {
         feedZone(race, r);
         if (st.t < r.feedUntil) c.vCap = Math.min(c.vCap, Feed.GRAB_SPEED); // on lève le pied pour saisir la musette
       }
-      if (r.lat) Pcmd = Pel.guard(race, r, view, Pcmd); // peloton : pas à travers le coureur devant dans sa voie
+      if (r.lat && !r.driven) Pcmd = Pel.guard(race, r, view, Pcmd); // peloton : pas à travers le coureur devant dans sa voie
     }
     r.prevS = st.s;
     r.prevV = st.v;
     const v0 = st.v, s0 = st.s, t0 = st.t;
-    const P = Sim.step(ctx, st, Pcmd, c);
+    c.raw = r.measured;
+    const P = r.driven ? Sim.drive(ctx, st, r.drive, c) : Sim.step(ctx, st, Pcmd, c);
     crossings(race, r, s0, t0);
     // ligne du sprint ou du sommet franchie : l'effort s'arrête là
     if (r.tac.target !== null && r.tac.target !== undefined && st.s >= r.tac.target) Tac.afterLine(r, st.t);

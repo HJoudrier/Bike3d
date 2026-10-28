@@ -140,6 +140,8 @@
     p.tac = /^[a-z]{1,12}$/.test(String(m.tac)) ? String(m.tac) : 'manual';
     p.ph = /^[a-z]{1,8}$/.test(String(m.ph)) ? String(m.ph) : null;
     p.inc = m.inc === 'puncture' || m.inc === 'crash' ? m.inc : null;
+    // présence : avatar (a), home-trainer (t) ou cycliste sur la vraie route (r) ; absente chez une ancienne version : avatar
+    p.kind = PYR.presence ? PYR.presence.fromCode(m.k) : 'avatar';
     // peloton en 2D : position latérale (m, + = à droite) ; absente chez une ancienne version, il est alors placé chez nous
     p.y = m.y !== undefined && m.y !== null && Number.isFinite(Number(m.y)) ? U.clamp(Number(m.y), -15, 15) : undefined;
     // temps de passage aux sprints et aux sommets (classements annexes)
@@ -1312,6 +1314,7 @@
         return {
           id: p.id, name: p.name, color: p.color, s, v: p.inc ? 0 : p.v || 0, finished: !!p.finished, time: p.finished ? p.time : null,
           mode: p.tac || 'manual', phase: p.ph || null, stopped: !p.finished && !!p.inc, splits: playerSplits(p), y: p.y,
+          kind: p.kind || 'avatar', P: Number.isFinite(p.P) ? p.P : undefined,
         };
       });
     },
@@ -1326,7 +1329,7 @@
       if (!S || !S.race) return;
       const me = S.players.get(S.me.id);
       if (me) Object.assign(me, { s: st.s, v: st.v, t: st.t, at: Date.now() }, st.sp ? { sp: st.sp } : null);
-      const msg = { type: 'state', id: S.me.id, t: st.t, s: st.s, v: st.v, P: st.P, w: st.w, tac: st.tac, ph: st.ph || undefined, inc: st.inc || undefined, sp: st.sp || undefined, y: Number.isFinite(st.y) ? st.y : undefined };
+      const msg = { type: 'state', id: S.me.id, t: st.t, s: st.s, v: st.v, P: st.P, w: st.w, tac: st.tac, ph: st.ph || undefined, inc: st.inc || undefined, sp: st.sp || undefined, y: Number.isFinite(st.y) ? st.y : undefined, k: st.k || undefined };
       if (S.role === 'host') broadcast(msg); else toHost(msg);
     },
 

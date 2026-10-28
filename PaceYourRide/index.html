@@ -764,6 +764,16 @@
             <label><input type="checkbox" id="g-auto"> Pilote automatique</label>
           </div>
         </div>
+        <h3>Ta présence dans la course</h3>
+        <div class="field"><label for="g-source">Tu participes</label>
+          <select id="g-source" data-bind="game.source">
+            <option value="avatar">🎮 Avatar : tu règles la puissance de ton cycliste numérique</option>
+            <option value="trainer">🏠 Home-trainer ou capteur de puissance : tes watts réels</option>
+            <option value="road">🚴 Sur la vraie route : ta position GPS</option>
+          </select>
+        </div>
+        <div id="g-source-box"></div>
+        <p class="hint">Avatars, home-trainers et cyclistes sur la route se retrouvent dans la même course en direct, et dans la même vue 3D (bouton « 3D » de l'écran de course).</p>
         <h3>Météo</h3>
         <div data-wx-api></div>
         <h3>Course</h3>
@@ -883,6 +893,7 @@
   <script src="js/engine/replay.js"></script>
   <script src="js/engine/history.js"></script>
   <script src="js/engine/nav.js"></script>
+  <script src="js/engine/presence.js"></script>
   <script src="vendor/qrcode-generator/qrcode.js"></script>
   <script src="js/core/dom.js"></script>
   <script src="js/core/avatar.js"></script>
@@ -909,6 +920,8 @@
   <script src="js/ui/tab-shop.js"></script>
   <script src="js/ui/tab-perf.js"></script>
   <script src="js/ui/weather-fx.js"></script>
+  <script src="js/ui/view3d.js"></script>
+  <script src="js/ui/game-source.js"></script>
   <script src="js/ui/tab-game.js"></script>
   <script src="js/ui/game-mobile.js"></script>
   <script src="js/ui/sensors.js"></script>

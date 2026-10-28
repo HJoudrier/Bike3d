@@ -649,6 +649,8 @@
       const cs = sustainCap(ctx, st, P < cap ? P : cap);
       if (cs < cap) { cap = cs; capM = cs; st.capM = cs; }
     }
+    // puissance mesurée (home-trainer, capteur) : le corps du cycliste est sa propre limite, le simulateur ne la plafonne pas
+    if (cond.raw) cap = Infinity;
     st.capped = P > cap + 0.5;
     if (P > cap) P = cap;
 
@@ -727,6 +729,34 @@
   }
 
   /**
+   * Cycliste sur la vraie route : sa position est mesurée (GPS projeté sur le tracé), pas simulée. Avance l'état d'une seconde
+   * jusqu'à d.s (jamais en arrière, au plus la longueur du parcours), à la vitesse d.v (sinon la distance parcourue), avec la
+   * puissance d.P mesurée (sinon 0) : W′bal (Skiba), énergie cumulée et arrivée (instant interpolé dans la seconde) comme step.
+   * Sans position (d.s absent : pas encore de GPS), le cycliste reste sur place. Renvoie la puissance.
+   */
+  function drive(ctx, st, d, cond) {
+    const C = ctx.course, H = st.hist, t = st.t;
+    const kc = (st.capK > 0 ? st.capK : 1) * (cond && cond.capS > 0 ? cond.capS : 1);
+    const cpE = ctx.cp * kc, w0E = w0Of(ctx, st) * (cond && cond.wS > 0 ? cond.wS : 1);
+    const s0 = st.s;
+    const target = d && Number.isFinite(d.s) ? d.s : s0;
+    const s1 = Math.min(C.length, Math.max(s0, target));
+    const P = d && Number.isFinite(d.P) && d.P > 0 ? Math.min(d.P, 3000) : 0;
+    if (s1 >= C.length && !st.finished) {
+      st.finished = true;
+      st.tFinish = t + (s1 > s0 ? (C.length - s0) / (s1 - s0) : 1);
+    }
+    st.v = d && Number.isFinite(d.v) && d.v >= 0 ? Math.min(d.v, 40) : s1 - s0;
+    st.s = s1; st.t = t + 1; st.braking = false; st.capped = false; st.allout = 0;
+    if (P >= cpE) st.wbal -= (P - cpE);
+    else st.wbal = w0E - (w0E - st.wbal) * Math.exp(-ctx.recF * (cpE - P) / w0E);
+    H[t + 1] = H[t] + P;
+    st.work += P;
+    st.P = P;
+    return P;
+  }
+
+  /**
    * Taux d'utilisation de la courbe record : moyenne glissante sur les fenêtres longues (≥ 20 min),
    * moyenne et puissance normalisée sur la durée totale T (record interpolé).
    * 1 = à la limite, > 1 = infaisable.
@@ -758,5 +788,5 @@
     return u;
   }
 
-  PYR.sim = { LONG_WINDOW, SUSTAIN_H, enduranceUse, makeGusts, createContext, initState, cloneState, conditions, accel, availablePower, limitCap, recordBinding, forwardCurve, recordUsage, timeToExhaustion, recordTimeLeft, wprimeTimeLeft, w0Of, step };
+  PYR.sim = { LONG_WINDOW, SUSTAIN_H, enduranceUse, makeGusts, createContext, initState, cloneState, conditions, accel, availablePower, limitCap, recordBinding, forwardCurve, recordUsage, timeToExhaustion, recordTimeLeft, wprimeTimeLeft, w0Of, step, drive };
 })(globalThis.PYR = globalThis.PYR || {});

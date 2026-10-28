@@ -154,6 +154,7 @@
       get canReconnect() { return !!(bt() && bt().getDevices && readKnown()[kind]); },
       get known() { return readKnown()[kind] || null; },
       get name() { return dev ? dev.name || '' : ''; },
+      get device() { return dev; },
       get state() { return state; },
       get profile() { return prof ? prof.label : ''; },
       async connect(mode, onV, onS) {
@@ -202,6 +203,64 @@
     { service: 'cycling_power', characteristic: 'cycling_power_measurement', parse: parsePower, label: 'un capteur de puissance (Cycling Power)' },
     { service: 'fitness_machine', characteristic: 'indoor_bike_data', parse: parseFtms, label: 'un home-trainer (FTMS)' },
   ]);
+
+  /* ---------- home-trainer piloté (FTMS) ---------- */
+
+  /**
+   * « Set Indoor Bike Simulation Parameters » (Fitness Machine Control Point, code 0x11) : vent (m/s, résolution 0,001, > 0 de face),
+   * pente (%, résolution 0,01), coefficient de roulement (résolution 0,0001), cw = ½·ρ·CdA (kg/m, résolution 0,01). 7 octets.
+   */
+  function ftmsSimBytes(o) {
+    const b = new DataView(new ArrayBuffer(7));
+    const i16 = (x, k, lo, hi) => Math.max(lo, Math.min(hi, Math.round((Number(x) || 0) * k)));
+    b.setUint8(0, 0x11);
+    b.setInt16(1, i16(o.wind, 1000, -32768, 32767), true);
+    b.setInt16(3, i16(o.grade, 100, -32768, 32767), true);
+    b.setUint8(5, i16(o.crr, 10000, 0, 255));
+    b.setUint8(6, i16(o.cw, 100, 0, 255));
+    return new Uint8Array(b.buffer);
+  }
+
+  /**
+   * Pilotage d'un home-trainer connecté (celui de `power`) : prise de contrôle (0x00), départ (0x07), puis la charge à chaque
+   * appel de set({grade, wind, crr, cw}) — au plus une écriture toutes les `minMs` ms, et seulement si elle a changé.
+   * state : 'off', 'on', 'unsupported' (l'appareil n'a pas de point de contrôle FTMS : capteur de puissance seul).
+   */
+  function makeTrainer() {
+    let cp = null, busy = false, lastKey = '', lastAt = 0, pending = null;
+    const write = (bytes) => (cp.writeValueWithResponse ? cp.writeValueWithResponse(bytes) : cp.writeValue(bytes));
+    const api = {
+      state: 'off', minMs: 2000, writes: 0, error: '',
+      async attach(dev) {
+        api.detach();
+        try {
+          // le serveur GATT déjà relié (celui du capteur de puissance), sinon une nouvelle connexion
+          const server = dev.gatt.connected && dev.gatt.getPrimaryService ? dev.gatt : await dev.gatt.connect();
+          const svc = await server.getPrimaryService('fitness_machine');
+          cp = await svc.getCharacteristic('fitness_machine_control_point');
+          if (cp.startNotifications) await cp.startNotifications(); // les réponses du point de contrôle arrivent en indications
+          await write(Uint8Array.of(0x00));
+          await write(Uint8Array.of(0x07));
+          api.state = 'on'; api.error = '';
+        } catch (e) { cp = null; api.state = 'unsupported'; api.error = e.message || String(e); }
+        return api.state;
+      },
+      /** Charge du moment ; renvoie vrai si elle a été envoyée. */
+      async set(load, now) {
+        if (!cp || api.state !== 'on') return false;
+        const t = now === undefined ? Date.now() : now;
+        const key = [Math.round(load.grade * 10), Math.round(load.wind * 2), Math.round(load.crr * 10000), Math.round(load.cw * 100)].join(',');
+        if (key === lastKey || t - lastAt < api.minMs) { pending = key === lastKey ? null : load; return false; }
+        if (busy) { pending = load; return false; }
+        busy = true; lastKey = key; lastAt = t; pending = null;
+        try { await write(ftmsSimBytes(load)); api.writes++; return true; } catch (e) { api.error = e.message || String(e); return false; } finally { busy = false; }
+      },
+      detach() { cp = null; api.state = 'off'; lastKey = ''; lastAt = 0; pending = null; busy = false; },
+      get pending() { return pending; },
+    };
+    return api;
+  }
+  const trainer = makeTrainer();
 
   /** Ceinture cardio. */
   const hr = makeBle('hr', [{ service: 'heart_rate', characteristic: 'heart_rate_measurement', parse: parseHr, label: 'une ceinture cardio' }]);
@@ -271,5 +330,5 @@
     warn: { tones: [{ f: 1000, d: 90 }, { f: 1000, d: 90 }, { f: 1000, d: 90 }], vib: [300, 100, 300, 100, 300] },
   };
 
-  PYR.sensors = { gps, power, hr, wake, alerts, parsePower, parseFtms, parseHr, navigator: null, reconnectMs: 0 };
+  PYR.sensors = { gps, power, hr, trainer, wake, alerts, parsePower, parseFtms, parseHr, ftmsSimBytes, makeTrainer, navigator: null, reconnectMs: 0 };
 })(globalThis.PYR = globalThis.PYR || {});

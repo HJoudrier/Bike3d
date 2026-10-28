@@ -144,6 +144,7 @@
     PYR.tabShop.init();
     PYR.tabPerf.init();
     PYR.tabGame.init();
+    PYR.gameSource.init();
     PYR.gameMobile.init();
     PYR.tabRide.init();
     PYR.chartConfig.init();

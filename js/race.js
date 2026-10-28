@@ -40,6 +40,13 @@
     // rivaux : un nom tiré au sort par puissance
     const names = RIVAL_NAMES.slice();
     for (let i = names.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [names[i], names[j]] = [names[j], names[i]]; }
+    // vue pilotée par PaceYourRide : les sprints, les côtes classées et les ravitaillements sont ceux de sa course
+    if (L.extPoints) {
+      const race = planExternal(route, L, L.extPoints, rnd);
+      race.names = names;
+      L.race = race;
+      return race;
+    }
 
     // Grand Prix de la Montagne : chaque montée classée
     const koms = route.climbs.map((c, i) => ({
@@ -119,6 +126,37 @@
     const noFans = sprints.map((sp) => [sp.s - 160, sp.s + 50]).concat(feeds.map((f) => [f.s0 - 30, f.s1 + 30]));
     L.race = { sprints, koms, feeds, names, noFans };
     return L.race;
+  }
+
+  // Points de passage imposés (abscisses de la route) : { sprints: [s], koms: [{s0, s1, cat (0 = HC … 4)}], feeds: [{s0, s1}] }.
+  // Les arches ne sont pas déplacées : un sprint sur un pont garde son arche là où la course le place.
+  function planExternal(route, L, ext, rnd) {
+    const S0 = route.sStart;
+    const village = (s) => {
+      const v = L.villages.find((x) => s >= x.i0 * route.spacing && s <= x.i1 * route.spacing);
+      return v ? v.name : null;
+    };
+    const sprints = (ext.sprints || []).filter((s) => s > S0 && s < route.sEnd).sort((a, b) => a - b)
+      .map((s, k) => ({ s, village: village(s), n: k + 1 }));
+    const koms = (ext.koms || []).filter((k) => k.s1 > S0 && k.s1 <= route.sEnd + 1).sort((a, b) => a.s1 - b.s1).map((k, i) => {
+      const s1 = Math.min(k.s1, route.sEnd), s0 = Math.max(S0, Math.min(k.s0, s1 - 50));
+      const y0 = route.sample(s0, {}).y, y1 = route.sample(s1, {}).y;
+      const length = s1 - s0, gain = Math.max(0, y1 - y0);
+      // nom de la montée détectée par Bike3D au même endroit, sinon « Côte du km … »
+      const ci = route.climbs.findIndex((c) => S0 + c.d0 < s1 && S0 + c.d1 > s0);
+      const name = ci >= 0 ? L.climbNames[ci] : 'Côte du km ' + ((s1 - S0) / 1000).toFixed(1).replace('.', ',');
+      const cat = Math.max(0, Math.min(4, k.cat | 0));
+      return { i, name, cat, s0, s1, length, gain, avg: gain / Math.max(1, length), arch: true, foot: cat <= 2 && length > 1200 && s0 - S0 > 120 };
+    });
+    const feeds = [];
+    for (const f of ext.feeds || []) {
+      const s0 = Math.max(S0 + 50, f.s0), s1 = Math.min(f.s1, s0 + 320, route.sEnd - 50);
+      if (s1 - s0 < 60) continue;
+      const feed = buildFeedPlan(route, L, s0, s1, rnd);
+      if (feed) feeds.push(feed);
+    }
+    const noFans = sprints.map((sp) => [sp.s - 160, sp.s + 50]).concat(feeds.map((f) => [f.s0 - 30, f.s1 + 30]));
+    return { sprints, koms, feeds, noFans, external: true };
   }
 
   // Côté des soigneurs, positions des soigneurs, voitures d'équipe et tables.

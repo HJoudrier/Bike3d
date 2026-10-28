@@ -39,7 +39,8 @@
 
   class Cyclist {
     constructor(opts = {}) {
-      this.jersey = JERSEYS[opts.jersey] || JERSEYS.jaune;
+      // opts.custom : maillot imposé ({base, accent, style}), par exemple la couleur du joueur dans PaceYourRide
+      this.jersey = opts.custom || JERSEYS[opts.jersey] || JERSEYS.jaune;
       this.bikeColor = opts.bikeColor || '#e2463a';
       this.root = new THREE.Group(); // positionné / orienté dans le monde
       this.body = new THREE.Group(); // inclinaison (danseuse)

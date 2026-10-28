@@ -718,6 +718,24 @@
       this.tagTex = new Map();
     }
 
+    // Nom et couleur imposés de l'extérieur (vue pilotée par PaceYourRide : chaque coureur garde son nom et sa couleur)
+    setLook(i, name, color) {
+      const r = this.riders[i];
+      const look = name + '|' + color;
+      if (!r || r.look === look) return;
+      r.look = look;
+      const c = new THREE.Color(color || '#6f6d66');
+      r.name = name;
+      r.color = c;
+      r.team = { name: '', color: '#' + c.getHexString() };
+      const t = this.tagTex.get(r);
+      if (t) { t.dispose(); this.tagTex.delete(r); }
+      this.mBody.mesh.setColorAt(i, c);
+      this.mWheel.mesh.setColorAt(i * 2, c); this.mWheel.mesh.setColorAt(i * 2 + 1, c);
+      this.mBody.mesh.instanceColor.needsUpdate = true;
+      this.mWheel.mesh.instanceColor.needsUpdate = true;
+    }
+
     _tagTexture(r) {
       let t = this.tagTex.get(r);
       if (t) return t;

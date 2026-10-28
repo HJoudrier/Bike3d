@@ -51,6 +51,7 @@
       } catch (err) {
         this.showError('Ton navigateur ne permet pas l\'affichage 3D (WebGL indisponible). Essaie avec un navigateur récent ou active l\'accélération matérielle.');
         $('btn-model').disabled = true;
+        if (B3D.bridge && B3D.bridge.wanted()) B3D.bridge.fail('WebGL indisponible : la vue 3D ne peut pas s\'afficher dans ce navigateur.');
         return;
       }
       r.shadowMap.enabled = true;
@@ -80,6 +81,8 @@
       // réalité virtuelle (WebXR) ; la boucle passe par le moteur de rendu pour suivre le rythme du casque
       this.vr = new B3D.VRMode(this);
       this.renderer.setAnimationLoop(() => this.loop());
+      // vue 3D pilotée par PaceYourRide (index.html?pyr) : parcours et positions reçus de l'application
+      if (B3D.bridge && B3D.bridge.wanted()) B3D.bridge.attach(this);
     },
 
     saveSettings() {
@@ -485,6 +488,7 @@
       } catch (err) {
         console.error(err);
         this.building = false;
+        if (this.ext) { this.ext.fail('La génération du paysage a échoué (' + err.message + ').'); return; }
         document.querySelectorAll('#btn-model, #btn-remodel, #btn-validate').forEach((b) => { b.disabled = false; });
         this.hide('screen-loading');
         this.toMenu();
@@ -504,6 +508,7 @@
       const t0 = performance.now();
       const L = this.L = new B3D.Landscape(route, seed);
       this.seed = seed;
+      if (this.ext) this.ext.onLandscape(L); // sprints, côtes et ravitaillements de la course pilotée
       this.setLoading(0.15, 'Rivières, lacs et falaises…');
       await nextFrame();
 
@@ -534,7 +539,7 @@
       this.hcCrowd = new B3D.HCCrowd(this.scene, route, L);
       if (!this.hcCrowd.active) this.hcCrowd = null;
       else this.hcCrowd.setViewHeight(this.renderer.getDrawingBufferSize(new THREE.Vector2()).y);
-      this.cyclist = new B3D.Cyclist({ jersey: this.settings.jersey, bikeColor: ['#e2463a', '#3d7be0', '#1d1a2b', '#4cc35a', '#ff7aa8'][seed % 5] });
+      this.cyclist = new B3D.Cyclist({ jersey: this.settings.jersey, custom: this.ext ? this.ext.jersey() : null, bikeColor: ['#e2463a', '#3d7be0', '#1d1a2b', '#4cc35a', '#ff7aa8'][seed % 5] });
       this.scene.add(this.cyclist.root);
       this.placeCyclistAtStart();
       // panneaux et banderoles (non éclairés) : assombris la nuit
@@ -563,6 +568,14 @@
       try { await this.renderer.compileAsync(this.scene, this.camera); } catch (e) { this.renderer.compile(this.scene, this.camera); }
       this.setLoading(1, 'Prêt !');
       console.info('[Bike3D] paysage', seed, 'généré en', Math.round(performance.now() - t0), 'ms');
+      if (this.ext) {
+        // vue pilotée : pas d'aperçu, on rejoint directement la course
+        this.hide('screen-loading');
+        this.building = false;
+        this.clock.getDelta();
+        this.ext.onWorldReady();
+        return;
+      }
 
       // interface d'aperçu
       $('seed-label').textContent = seed;
@@ -720,6 +733,7 @@
       this.camIndex = (this.camIndex + 1) % CAMS.length;
       this.camState = null;
     },
+    cameraName() { return CAMS[this.camIndex].name; },
 
     // densité de spectateurs autour de l'échantillon i de la route (0..1), pour le son de la foule
     crowdDensity(i) {
@@ -957,18 +971,25 @@
       }
     },
 
+    // accélération du temps de course : touche T, ou celle de la course pilotée par PaceYourRide
+    simK() { return this.ext ? this.ext.timeK : TIME_SCALES[this.timeScaleIndex]; },
+
     updateRide(dtReal) {
       const R = this.ride, route = this.route, L = this.L, inp = this.input;
-      const ts = TIME_SCALES[this.timeScaleIndex];
-      const dt = dtReal * ts;
+      const dt = dtReal * this.simK();
       const half = L.roadHalf;
-      // direction (temps réel)
-      const targetLatV = ((inp.right ? 1 : 0) - (inp.left ? 1 : 0)) * (2.2 + Math.min(R.v, 12) * 0.12);
       const prevLatV = R.latV;
-      R.latV = lerp(R.latV, targetLatV, 1 - Math.exp(-dtReal * 6));
-      // physique en petits pas (stable même en temps accéléré)
-      const n = Math.max(1, Math.ceil(dt / 0.05)), h = dt / n;
-      for (let k = 0; k < n; k++) this.stepPlayer(h);
+      if (this.ext) {
+        // vue pilotée : positions, vitesses et puissances viennent de la simulation de PaceYourRide
+        this.ext.drive(dtReal, dt);
+      } else {
+        // direction (temps réel)
+        const targetLatV = ((inp.right ? 1 : 0) - (inp.left ? 1 : 0)) * (2.2 + Math.min(R.v, 12) * 0.12);
+        R.latV = lerp(R.latV, targetLatV, 1 - Math.exp(-dtReal * 6));
+        // physique en petits pas (stable même en temps accéléré)
+        const n = Math.max(1, Math.ceil(dt / 0.05)), h = dt / n;
+        for (let k = 0; k < n; k++) this.stepPlayer(h);
+      }
 
       // --- placement du cycliste
       const q = route.sample(R.s, this._rs);
@@ -1004,16 +1025,16 @@
       else if (R.msg === 'recover') this.toast('🔋 Ça repart !<small>Ta réserve se recharge, tu peux relancer</small>', 2200);
       R.msg = null;
 
-      // --- évènements de parcours : sprints, GPM, ravitaillement
+      // --- évènements de parcours : sprints, GPM, ravitaillement (en vue pilotée, c'est PaceYourRide qui les annonce)
       const d = R.s - route.sStart;
-      for (const ev of this.raceT.update(R, dt, dtReal, cyc.root.position)) {
+      if (!this.ext) for (const ev of this.raceT.update(R, dt, dtReal, cyc.root.position)) {
         this.toast(ev.toast, ev.dur);
         if (ev.sound) this.sound.raceCue(ev.sound);
         if (ev.refill) R.reserve = Math.min(PHYS.wp, R.reserve + ev.refill * PHYS.wp);
         // vibrations des manettes : ligne franchie, musette attrapée
         if (ev.sound && this.vr.presenting) this.vr.pulse(ev.sound === 'win' ? 0.8 : 0.45, ev.sound === 'musette' ? 120 : 220);
       }
-      if (this.peloton) this.handlePelotonEvents(dtReal);
+      if (this.peloton && !this.ext) this.handlePelotonEvents(dtReal);
       if (this.atmo) this.skyEvents();
       if (!R.flamme && route.length > 2500 && d >= route.length - 1000) {
         R.flamme = true;
@@ -1032,7 +1053,7 @@
       this.updateCows(dtReal);
       this.updateWildlife(dtReal);
 
-      if (d >= route.length) this.finish();
+      if (d >= route.length && !this.ext) this.finish();
     },
 
     // jauge de puissance au clavier : Z/S maintenues (aussi pendant le compte à rebours)
@@ -1272,7 +1293,8 @@
 
     // ------------------------------------------------------------------ boucle
     loop() {
-      const dt = Math.min(0.05, this.clock.getDelta());
+      const raw = this.clock.getDelta();
+      const dt = Math.min(0.05, raw);
       B3D.toon.shared.uTime.value += dt;
       if (this.state === 'menu' || this.building) return;
       const vr = this.vr && this.vr.presenting;
@@ -1302,6 +1324,12 @@
         if (vr) this.vr.updateRig(dt); else this.updateRideCamera(dt);
         this.tiles.update(this.focusX, this.focusZ, vr ? 3 : 6);
         if (!this.vr.session) this.updateHud();
+      } else if (this.state === 'pyr') {
+        // vue pilotée par PaceYourRide : les positions suivent l'horloge réelle de l'application, la caméra aussi (même à faible cadence)
+        const dtr = Math.min(0.25, raw);
+        this.ext.frame(dtr);
+        if (vr) this.vr.updateRig(dtr); else this.updateRideCamera(dtr);
+        this.tiles.update(this.focusX, this.focusZ, vr ? 3 : 6);
       } else if (this.state === 'finished') {
         // le cycliste continue sur sa lancée ; les autres finissent leur course
         this.ride.v *= Math.exp(-dt * 0.8);
@@ -1322,20 +1350,20 @@
         R.finishT += dt;
         this.sound.update(dt, R.v, R.v > 1, Math.max(0, 1 - R.finishT / 7));
       }
-      if (this.state === 'ride' || this.state === 'countdown' || this.state === 'finished') {
-        if (this.peloton) this.peloton.render(dt * TIME_SCALES[this.timeScaleIndex], this.camera);
-        if (this.convoy) this.convoy.update(dt * TIME_SCALES[this.timeScaleIndex], this.camera);
+      if (this.racing()) {
+        if (this.peloton) this.peloton.render(dt * this.simK(), this.camera);
+        if (this.convoy) this.convoy.update(dt * this.simK(), this.camera);
       }
       if (this.hcCrowd) {
         const racing = this.state !== 'preview';
-        this.hcCrowd.update(dt, this.camera, this.ridersForCrowd(), racing && this.ride ? this.ride.s : this.preview.s, racing ? dt * TIME_SCALES[this.timeScaleIndex] : dt);
+        this.hcCrowd.update(dt, this.camera, this.ridersForCrowd(), racing && this.ride ? this.ride.s : this.preview.s, racing ? dt * this.simK() : dt);
       }
       if (this.fauna) this.updateFauna(dt);
       // heure, météo et vent : le temps avance avec la course (accéléré avec T), pas pendant la pause
       if (this.atmo) {
-        const racing = this.state === 'ride' || this.state === 'countdown' || this.state === 'finished';
+        const racing = this.racing();
         const paused = this.state === 'paused';
-        this.atmo.update(paused ? 0 : racing ? dt * TIME_SCALES[this.timeScaleIndex] : dt, paused ? 0 : dt, this.camera);
+        this.atmo.update(paused ? 0 : racing ? dt * this.simK() : dt, paused ? 0 : dt, this.camera);
         this.applyNightLights();
         this._skySync = (this._skySync || 0) - dt;
         if (this._skySync <= 0) { this._skySync = 0.4; if (this.state === 'preview' || paused) this.syncSkyControls(); }
@@ -1397,11 +1425,14 @@
       return { clock: A.clock(), icon: A.info().icon, kmh: W.speed * 3.6, angle: Math.atan2(r, f) * 180 / Math.PI };
     },
 
+    // une course est à l'écran (jouée ici, ou pilotée par PaceYourRide)
+    racing() { return this.state === 'ride' || this.state === 'countdown' || this.state === 'finished' || this.state === 'pyr'; },
+
     // positions des coureurs (pour la foule des cols, qui s'écarte à leur passage)
     ridersForCrowd() {
       const out = this._crowdRiders || (this._crowdRiders = []);
       out.length = 0;
-      if (this.state === 'ride' || this.state === 'countdown' || this.state === 'finished') {
+      if (this.racing() && this.ride) {
         out.push(this.ride.s);
         if (this.peloton) for (const r of this.peloton.riders) out.push(r.s);
         // les motos et les voitures de la caravane passent aussi dans le couloir

@@ -19,6 +19,20 @@ Il faut un navigateur récent avec WebGL 2 (Chrome, Edge, Firefox ou Safari réc
 
 Pour jouer avec un casque de réalité virtuelle, voir [Réalité virtuelle](#réalité-virtuelle-meta-quest-et-autres-casques) : il faut alors servir le jeu avec `python3 tools/serve.py`.
 
+## Avec PaceYourRide : la vue 3D d'une course simulée
+
+Le dossier [`PaceYourRide/`](PaceYourRide/) contient l'application de stratégie et de course (parcours, cycliste, matériel, météo réelle, modèle physiologique, mode jeu, courses en direct). Son mode jeu peut afficher la course **dans le paysage de Bike3D** au lieu du fond de carte : c'est PaceYourRide qui simule, Bike3D qui montre.
+
+1. Servir **la racine du dépôt** (les deux applications doivent être sur le même site) : `python3 -m http.server 8000`, puis ouvrir `http://localhost:8000/PaceYourRide/`.
+2. Tracer ou importer un parcours, aller dans **Mode jeu**, cliquer sur **Démarrer**.
+3. Sur l'écran de course, le bouton **3D** de la colonne remplace la carte par le paysage (le HUD de PaceYourRide reste par-dessus). 🎥 (ou un toucher sur la vue, ou la touche <kbd>C</kbd>) change de caméra, 🔇 / 🔊 coupe ou remet le son, ⧉ ouvre la vue dans **une autre fenêtre** avec son propre compteur (second écran, téléviseur devant le home-trainer).
+
+Ce que la vue reçoit de PaceYourRide, à chaque image : la position de chaque coureur (le joueur, les coureurs virtuels, les fantômes, les autres joueurs d'une course en direct), sa position latérale dans le peloton en 2D, sa vitesse et sa puissance, l'abri (le sillage devient vert), et la météo à la position et à l'heure du joueur (heure locale, pluie, neige, orage, vent réel). Les sprints, les côtes classées et les zones de ravitaillement de la course y ont leurs arches. La graine du paysage est tirée du parcours : **tous les joueurs d'une course en direct roulent dans le même monde**. Les touches pressées dans la vue (puissance, tactiques, changement de rang…) pilotent le jeu comme d'habitude.
+
+Les participants peuvent être des **avatars** (puissance réglée à la jauge, avec la physiologie de l'utilisateur), des cyclistes sur **home-trainer** (leurs watts réels, le home-trainer FTMS reçoit la pente, le vent et l'abri) ou des cyclistes **sur la vraie route** (position GPS) : voir le README de PaceYourRide, « Vue 3D et monde partagé ».
+
+Techniquement, `index.html?pyr` ouvre Bike3D en vue pilotée (`js/bridge.js`) : il attend le parcours par `postMessage`, construit le paysage, puis place un peloton « marionnette » (même rendu que les coureurs de Bike3D) là où la simulation le met. Le protocole est décrit en tête de `js/bridge.js`. Ajouter `&hud=1` affiche le compteur de la vue.
+
 ## Déroulement
 
 1. **Importer un GPX** (clic ou glisser-déposer), ou choisir un parcours de démo. Les fichiers `samples/*.gpx` permettent de tester l'import.
@@ -192,6 +206,7 @@ Le terrain est découpé en tuiles chargées autour du cycliste, ce qui permet d
 | `js/toon.js`, `js/props.js` | matériaux cartoon, contours, objets du décor |
 | `js/hud.js`, `js/audio.js`, `js/confetti.js`, `js/game.js` | HUD, sons, confettis, boucle de jeu |
 | `js/vr.js` | réalité virtuelle : nacelle de caméra, compteur sur la potence, panneaux, manettes, effet tunnel |
+| `js/bridge.js` | vue pilotée par PaceYourRide (`index.html?pyr`) : parcours et positions reçus par `postMessage`, peloton « marionnette », ciel et météo imposés, compteur de la fenêtre à part, touches renvoyées au jeu |
 | `tools/serve.py` | serveur local HTTP / HTTPS pour jouer depuis un casque (`python3 tools/serve.py --https`) |
 | `tools/make-samples.js` | régénère les GPX d'exemple (`node tools/make-samples.js`) |
 
