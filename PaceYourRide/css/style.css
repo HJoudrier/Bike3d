@@ -311,6 +311,14 @@ body[data-tab="shop"] .side, body[data-tab="bike"] .side { flex: 1 1 auto; width
 }
 .shop-art .art-stack { position: absolute; left: 0; width: 100%; }
 .shop-art .art-stack img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; pointer-events: none; }
+/* vélo en 3D : la vitrine de Bike3D (../showroom.html) dans un cadre aux mêmes proportions que les photos */
+.shop-top .shop-views { margin-left: auto; }
+.shop-top .shop-views button { font-size: 13px; padding: 5px 14px; }
+.shop-art-3d {
+  position: relative; overflow: hidden; border-radius: 14px; margin: 0 auto; background: var(--surface-2);
+  aspect-ratio: 1304 / 800; width: min(100%, calc((100vh - 290px) * 1.63));
+}
+.shop-art-3d iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
 .shop-preview { font-size: 13px; color: var(--accent); font-weight: 600; margin: 6px 2px 0; }
 .shop-summary { background: var(--surface-2); border-radius: var(--radius); padding: 10px 12px; margin: 8px 0 4px; }
 .shop-summary .hint { margin: 8px 0 0; }
@@ -933,7 +941,7 @@ details.manual[open] summary { margin-bottom: 6px; }
   .shop-top { flex-wrap: wrap; }
   .shop-page { grid-template-columns: 1fr; gap: 12px; }
   .shop-figure { position: static; }
-  .shop-art .art-frame { width: 100%; }
+  .shop-art .art-frame, .shop-art-3d { width: 100%; }
   .grid3 { grid-template-columns: 1fr 1fr; }
   /* 16 px minimum : iOS ne zoome pas la page à la prise de focus d'un champ */
   input[type="number"], input[type="text"], input[type="search"], select, textarea { font-size: 16px; padding: 9px 10px; }

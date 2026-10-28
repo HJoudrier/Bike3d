@@ -96,7 +96,9 @@
       // mode jeu, grand écran : les statistiques en vignettes (une carte par donnée) plutôt qu'en liste
       gameStatsTiles: false,
       // mode jeu : vue 3D (Bike3D) à la place du fond de carte sur la page de jeu (view3d.js)
-      view3d: false },
+      view3d: false,
+      // magasin : le vélo en 3D (vitrine de Bike3D) ou en photos
+      shopView: '3d' },
   });
 
   const listeners = Object.create(null);

@@ -8,7 +8,7 @@
      course : { key (empreinte : on ne reconstruit que si elle change), name, seed (même graine pour tous les joueurs
                 d'une course en direct : même paysage), lat[], lng[], ele[] (points du parcours, m), length (m),
                 cps : [{type: 'sprint' | 'kom' | 'finish', s, start (pied d'une côte), cat ('hc', '1'…'4')}],
-                feed : [{s, end}] (zones de ravitaillement), me : {name, color},
+                feed : [{s, end}] (zones de ravitaillement), me : {name, color, gear (équipement du joueur : voir gear)},
                 surfaces : [{s, end, kind ('smooth' | 'asphalt' | 'rough' | 'cobbles' | 'cobbles_hard' | 'gravel_hard' |
                 'gravel_loose' | 'dirt' | 'wet' | 'grass'), w (largeur, m)}] (portions de revêtement), roadW (largeur hors portions, m) }
      frame  : { t (temps de course, s), k (secondes de course par seconde réelle : ×1 … ×50), run (la course avance),
@@ -16,6 +16,8 @@
                 s (m depuis le départ), y (m, + à droite ; absent : file unique), v (m/s), P (W), w (W′ restant, 0–1),
                 dr (abri : part de la traînée économisée), st (arrêté), fin (arrivé)}],
                 env : {hour (heure locale, si la météo est connue), T (°C), rain (mm/h), ws (m/s), wd (° d'où vient le vent)} }
+     gear   : { gear : {frame, wheels, tire, position, helmet, clothing, glasses, socks, shoes} } (vélo et tenue du joueur, ceux de
+                la vitrine du magasin, voir B3D.Cyclist.GEAR ; un nouvel équipement change le cycliste sans reconstruire le paysage)
      cmd    : { cmd: 'camera' | 'sound' | 'reroll' | 'hud', on }
    Bike3D → PaceYourRide
      hello  : la vue est prête à recevoir le parcours (renvoyé chaque seconde tant qu'il n'est pas arrivé)
@@ -139,6 +141,7 @@
       if (this.hostWin && e.source !== this.hostWin) return; // seule l'application qui nous a ouverts pilote la vue
       if (m.type === 'course') this.onCourse(m);
       else if (m.type === 'frame') this.onFrame(m);
+      else if (m.type === 'gear') this.setGear(m.gear);
       else if (m.type === 'cmd') this.onCmd(m);
     },
 
@@ -166,7 +169,7 @@
         this.fail('Parcours reçu illisible.');
         return;
       }
-      if (m.key && m.key === this.key) return;
+      if (m.key && m.key === this.key) { this.setGear(m.me && m.me.gear); return; }
       if (this.game.building) { this.pending = m; return; } // on attend la fin de la génération en cours
       this.key = m.key || String(Date.now());
       const seed = (num(m.seed, hashString(this.key)) >>> 0) % 1000000;
@@ -185,6 +188,8 @@
       this.kS = route.length / this.pyrLen; // les deux tracés sont lissés différemment : on se repère en proportion
       this.ready = false;
       this.me = m.me || {};
+      this.gearLate = false;
+      this.setGear(this.me.gear, true);
       this.hud.classList.add('hidden');
       if (g.peloton) { g.peloton.dispose(); g.peloton = null; }
       this.castKey = null;
@@ -203,6 +208,20 @@
       const c = this.me && /^#[0-9a-f]{6}$/i.test(this.me.color) ? this.me.color : '#eb6834';
       return { name: 'PaceYourRide', base: c, accent: '#1d1a2b', style: 'stripe' };
     },
+
+    // équipement du joueur (vélo, roues, position, tenue) ; build : le monde va être construit avec
+    setGear(g, build) {
+      if (!g || typeof g !== 'object' || Array.isArray(g)) return;
+      const key = JSON.stringify(B3D.Cyclist.normGear(g));
+      if (key === this.gearKey) return;
+      this.gearKey = key;
+      this.gearObj = g;
+      if (build) return;
+      if (this.ready && !this.game.building) this.game.swapCyclist();
+      else this.gearLate = true; // reçu pendant la construction : on change de cycliste une fois le monde prêt
+    },
+
+    gear() { return this.gearObj || null; },
 
     onLandscape(L) {
       const m = this.course, cps = Array.isArray(m.cps) ? m.cps : [];
@@ -250,6 +269,7 @@
       g.playerProxy = { isPlayer: true, s: g.ride.s, lat: 0, v: 0, done: false, state: 'player', name: this.me.name || 'Toi' };
       if (g.convoy) g.convoy.reset(null, g.playerProxy);
       g.camState = null;
+      if (this.gearLate) { this.gearLate = false; g.swapCyclist(); }
       g.placeCyclistAtStart();
       // l'heure et le temps suivent la course de PaceYourRide (météo réelle si elle est connue)
       if (g.atmo) { g.atmo.setFlow(0); this.baseHour = g.atmo.hour; g.atmo.setWeather(g.atmo.state); }

@@ -544,7 +544,7 @@
       this.hcCrowd = new B3D.HCCrowd(this.scene, route, L);
       if (!this.hcCrowd.active) this.hcCrowd = null;
       else this.hcCrowd.setViewHeight(this.renderer.getDrawingBufferSize(new THREE.Vector2()).y);
-      this.cyclist = new B3D.Cyclist({ jersey: this.settings.jersey, custom: this.ext ? this.ext.jersey() : null, bikeColor: ['#e2463a', '#3d7be0', '#1d1a2b', '#4cc35a', '#ff7aa8'][seed % 5] });
+      this.cyclist = this.newCyclist(seed);
       this.scene.add(this.cyclist.root);
       this.placeCyclistAtStart();
       // panneaux et banderoles (non éclairés) : assombris la nuit
@@ -617,6 +617,29 @@
       this.hide('screen-preview'); this.hide('hud'); this.hide('screen-pause'); this.hide('screen-finish');
       this.show('screen-menu');
       this.disposeWorld();
+    },
+
+    // Cycliste du joueur : maillot choisi (ou sa couleur dans PaceYourRide), vélo du jeu ou équipement acheté au magasin de PaceYourRide
+    newCyclist(seed) {
+      return new B3D.Cyclist({
+        jersey: this.settings.jersey, custom: this.ext ? this.ext.jersey() : null, gear: this.ext ? this.ext.gear() : null,
+        bikeColor: ['#e2463a', '#3d7be0', '#1d1a2b', '#4cc35a', '#ff7aa8'][seed % 5]
+      });
+    },
+
+    // Nouvel équipement en course : on change le cycliste à la même place, le coup de pédale continue
+    swapCyclist() {
+      const old = this.cyclist;
+      if (!old) return;
+      const c = this.newCyclist(this.seed || 0);
+      c.root.position.copy(old.root.position);
+      c.root.quaternion.copy(old.root.quaternion);
+      Object.assign(c, { crank: old.crank, wheelAngle: old.wheelAngle, standT: old.standT, tuckT: old.tuckT, strokes: old.strokes, time: old.time });
+      c.head.visible = old.head.visible;
+      this.scene.remove(old.root);
+      old.dispose();
+      this.scene.add(c.root);
+      this.cyclist = c;
     },
 
     placeCyclistAtStart() {

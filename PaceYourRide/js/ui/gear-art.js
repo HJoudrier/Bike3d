@@ -4,7 +4,8 @@
  * cadre ou les roues montés n'ont pas d'image (voir PHOTOS), la silhouette par défaut (default.png) la remplace.
  * Ce module choisit les images selon l'équipement monté et les affiche ; une nouvelle combinaison ne remplace
  * l'ancienne qu'une fois toutes ses images chargées.
- * Pour ajouter une photo : un PNG au cadre PHOTO dans img/bike/ et une entrée dans PHOTOS. */
+ * Pour ajouter une photo : un PNG au cadre PHOTO dans img/bike/ et une entrée dans PHOTOS.
+ * gear3d donne le même équipement au vélo en 3D de Bike3D (vitrine du magasin, vue 3D du mode jeu). */
 (function (PYR) {
   'use strict';
 
@@ -19,7 +20,7 @@
     wheels: { c45: 'wheels-c45', disc: 'wheels-disc' },
   };
   const FRAME_FALLBACK = { road: 'alu', climber: 'climber', aero: 'aero', tt: 'tt', gravel: 'gravel' };
-  const WHEEL_FALLBACK = { box: 'box', low: 'alu', mid: 'c45', deep: 'c65', disc: 'disc', spoked: 'gravel' };
+  const WHEEL_FALLBACK = { box: 'box', low: 'alu', mid: 'c45', deep: 'c65', deep80: 'c80', disc: 'disc', spoked: 'gravel' };
 
   /** Article du magasin monté pour un réglage (l'article choisi s'il correspond, sinon le modèle de référence). */
   function pick(cat, id, field, value, fallback) {
@@ -93,5 +94,21 @@
     if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1500 }); else setTimeout(run, 200);
   }
 
-  PYR.gearArt = { update, preload, layers, PHOTOS, PHOTO, BASE };
+  /**
+   * Équipement du vélo et du cycliste en 3D (le cycliste de Bike3D : vitrine du magasin et vue 3D du mode jeu) : le modèle de cadre et de
+   * roues du magasin (ceux choisis, sinon ceux de référence pour le réglage), les pneus, la position, le casque, la tenue, les lunettes,
+   * les chaussettes et les chaussures. opts : {rider, bike, picks}.
+   */
+  function gear3d(opts) {
+    const r = opts.rider || {}, b = opts.bike || {}, picks = opts.picks || {}, Ph = PYR.physics;
+    // valeurs absentes : celles que prend la simulation (buildSetup)
+    const id = (list, v, k) => Ph.byId(Ph[list], v, k).id;
+    return {
+      frame: b.frame === 'mtb' || b.frame === 'city' ? b.frame : frameKey(b, picks), wheels: wheelKey(b, picks), tire: id('TIRES', b.tire, 2),
+      position: id('POSITIONS', r.position, 3), helmet: id('HELMETS', r.helmet, 0), clothing: id('CLOTHING', r.clothing, 1),
+      glasses: id('GLASSES', r.glasses, 1), socks: id('SOCKS', r.socks, 1), shoes: id('SHOES', b.shoes, 2),
+    };
+  }
+
+  PYR.gearArt = { update, preload, layers, gear3d, PHOTOS, PHOTO, BASE };
 })(globalThis.PYR = globalThis.PYR || {});

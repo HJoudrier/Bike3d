@@ -930,6 +930,8 @@
         me: {
           id: 'me', name: myName(), color: ME_COLOR, kind: source(), s, y, v: me.incident ? 0 : me.st.v, P: G.lastP, w: me.st.wbal / G.ctx.w0,
           dr: me.draft && me.draft.k > 0 && me.draft.k < 1 ? 1 - me.draft.k : 0, st: !!me.incident, fin: !!me.finished, cp: G.ctx.cp,
+          // ton vélo et ta tenue en 3D, ceux de la vitrine du magasin
+          gear: PYR.gearArt ? PYR.gearArt.gear3d({ rider: store.state.rider, bike: store.state.bike, picks: store.state.shop || {} }) : undefined,
         },
         others: others.map((o) => {
           // fantôme (plan optimal, défi) : sa vitesse d'après sa trace ; il est arrivé quand son temps est passé

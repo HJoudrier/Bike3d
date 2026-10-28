@@ -7,6 +7,8 @@
  *   - Bike3D annonce qu'il est prêt (hello) : on lui envoie le parcours (course) ; il construit le paysage autour ;
  *   - à chaque image du mode jeu, la position de chacun (frame) : joueur, coureurs virtuels, fantômes, autres joueurs en
  *     direct (avatars, home-trainers, cyclistes sur la vraie route), avec la météo lue à la position et à l'heure du joueur ;
+ *   - l'équipement du joueur (me.gear dans le parcours, puis gear quand il change : achat au magasin) : son vélo, ses roues et sa
+ *     position, les mêmes que dans la vitrine 3D du magasin (gear-art.js, gear3d) ;
  *   - Bike3D renvoie les touches pressées quand il a le focus (key), elles pilotent le jeu comme d'habitude.
  * La graine du paysage vient de l'empreinte du parcours : tous les joueurs d'une course en direct ont le même monde.
  * Le détail du protocole est en tête de js/bridge.js côté Bike3D. Adresse de la vue : ../index.html, ou celle enregistrée par
@@ -27,6 +29,7 @@
   let stage = false;       // la page de jeu est affichée
   let courseRef = null, courseMsg = null; // dernier parcours envoyé (et l'objet de simulation dont il vient)
   let last = null;         // dernière image, renvoyée à une vue qui vient de s'ouvrir
+  let gearKey = null;      // équipement du joueur déjà envoyé
   let sound = false;
   const btn = {};
   const status = new Map(); // fenêtre → dernier état annoncé ('building', 'ready', 'error')
@@ -105,6 +108,7 @@
       surfaces: surfacesOf(course), roadW: course.roadWidth,
       me: { name: me.name, color: me.color || ME_COLOR }, cp: me.cp,
     };
+    if (me.gear && typeof me.gear === 'object') msg.me.gear = me.gear; // vélo, roues, position, tenue (n'entre pas dans l'empreinte)
     // empreinte complète (la vue ne se reconstruit que si elle change) : tracé, revêtements, points de passage, ravitaillements
     let x = 2166136261;
     const extra = JSON.stringify([msg.surfaces, msg.roadW, msg.cps, msg.feed]);
@@ -164,8 +168,11 @@
     if (o.course !== courseRef) {
       courseRef = o.course;
       const msg = courseMessage(o.course, o.cps, o.feed, o.me);
-      if (!courseMsg || msg.key !== courseMsg.key) { courseMsg = msg; broadcast(courseMsg); }
+      if (!courseMsg || msg.key !== courseMsg.key) { courseMsg = msg; gearKey = JSON.stringify(o.me.gear || null); broadcast(courseMsg); }
     }
+    // nouvel équipement (magasin) : la vue change le vélo du joueur sans reconstruire le paysage
+    const gk = JSON.stringify(o.me.gear || null);
+    if (gk !== gearKey) { gearKey = gk; if (o.me.gear) broadcast({ type: 'gear', gear: o.me.gear }); }
     last = o;
     broadcast(frameMessage(o));
   }
@@ -182,6 +189,7 @@
       if (last && last.course) {
         courseRef = last.course;
         courseMsg = courseMessage(last.course, last.cps, last.feed, last.me);
+        gearKey = JSON.stringify(last.me.gear || null);
         post(src, courseMsg);
         post(src, frameMessage(last));
       }

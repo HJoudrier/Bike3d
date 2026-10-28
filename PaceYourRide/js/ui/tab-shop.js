@@ -1,9 +1,12 @@
 /* author : Hugo Joudrier-Faure */
 /* PaceYourRide — onglet « Magasin », en deux rayons :
  *   Vélo : cadre, roues, pneus, transmission ;
- *   Cycliste : casque, lunettes, maillot ou combinaison, chaussettes, chaussures, épilation.
+ *   Cycliste : position sur le vélo (un réglage, gratuit), casque, lunettes, maillot ou combinaison, chaussettes,
+ *   chaussures, épilation.
  * À gauche, l'illustration du vélo (et du cycliste dessus) reflète l'équipement monté — et l'article
- * survolé, en aperçu ; à droite, la liste des composants. Chaque achat modifie les réglages du vélo et
+ * survolé, en aperçu : en 3D, le vélo et le cycliste du jeu 3D (la vitrine de Bike3D, ../showroom.html, dans un
+ * cadre : le cycliste pédale sur place sur un home-trainer, on tourne la caméra autour de lui), ou en photos ;
+ * à droite, la liste des composants. Chaque achat modifie les réglages du vélo et
  * du cycliste (visibles dans l'onglet Équipement) ; la synthèse compare l'équipement monté à
  * un équipement d'entrée de gamme. */
 (function (PYR) {
@@ -18,6 +21,63 @@
   ];
 
   let pending = null, dirty = true, preview = null;
+
+  /* ---------- vélo en 3D : la vitrine de Bike3D, le même modèle que dans la vue 3D du mode jeu ---------- */
+
+  const SHOWROOM = '../showroom.html';
+  const ME_COLOR = '#eb6834'; // couleur du joueur dans le mode jeu (maillot et casque)
+  /** frame : le cadre (iframe) ; ready : la vitrine a répondu ; failed : elle ne répond pas (retour aux photos) ; opts : équipement à montrer. */
+  const v3 = { frame: null, ready: false, failed: false, opts: null, sent: null, timer: null };
+
+  const view = () => (!v3.failed && !(store.state.ui && store.state.ui.shopView === 'photo') ? '3d' : 'photo');
+
+  /** Couleur du fond (celle des encadrés de la page, claire ou sombre selon le thème). */
+  function background() {
+    const c = getComputedStyle(document.documentElement).getPropertyValue('--surface-2').trim();
+    const hex = /^#[0-9a-f]{6}$/i.test(c) ? c : '#ebebea';
+    const n = parseInt(hex.slice(1), 16);
+    return { bg: hex, dark: 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) < 128 };
+  }
+
+  function post3d(msg) {
+    if (v3.frame && v3.frame.contentWindow) v3.frame.contentWindow.postMessage(Object.assign({ pyr3d: 1 }, msg), '*');
+  }
+
+  /** Envoie l'équipement à la vitrine (si elle est prête et qu'il a changé). */
+  function send3d() {
+    if (!v3.ready || !v3.opts) return;
+    const msg = Object.assign({ type: 'gear', gear: PYR.gearArt.gear3d(v3.opts), color: ME_COLOR }, background());
+    const key = JSON.stringify(msg);
+    if (key === v3.sent) return;
+    v3.sent = key;
+    post3d(msg);
+  }
+
+  /** Crée le cadre de la vitrine (une fois : il garde son état quand on passe aux photos et qu'on revient). */
+  function showroom() {
+    if (v3.frame) return;
+    v3.frame = h('iframe', { src: SHOWROOM, title: 'Ton vélo en 3D : glisse pour tourner autour du cycliste, molette ou pincement pour zoomer', allow: 'fullscreen' });
+    $('#shop-art-3d').appendChild(v3.frame);
+    // pas de réponse (fichiers de Bike3D absents, navigateur trop ancien) : les photos
+    v3.timer = setTimeout(() => { if (!v3.ready) fail3d(); }, 10000);
+  }
+
+  function fail3d(text) {
+    if (v3.failed) return;
+    v3.failed = true;
+    clearTimeout(v3.timer);
+    D.toast(text || 'La vue 3D du vélo ne répond pas : retour aux photos.', 'error');
+    T.renderArt();
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('message', (e) => {
+      const m = e.data;
+      if (!m || m.pyr3d !== 1 || !v3.frame || e.source !== v3.frame.contentWindow) return;
+      if (m.type === 'hello') { v3.ready = true; clearTimeout(v3.timer); v3.sent = null; send3d(); post3d({ type: 'run', on: visible() }); }
+      else if (m.type === 'status' && m.state === 'error') fail3d('La 3D n\'est pas disponible dans ce navigateur : retour aux photos.');
+    });
+  }
 
   function selection() {
     if (!store.state.shop || typeof store.state.shop !== 'object') store.state.shop = {};
@@ -80,9 +140,10 @@
     }
   }
 
-  /** Réglages si l'on montait l'article (masses comprises), à partir de l'équipement actuel. */
+  /** Réglages si l'on montait l'article (masses comprises), à partir de l'équipement actuel ; « position » : la position sur le vélo. */
   function withItem(cat, id) {
     const st = store.state;
+    if (cat === 'position') return { rider: Object.assign({}, st.rider, { position: id }), bike: Object.assign({}, st.bike) };
     const p = Cat.patchFor(cat, id, st.rider, st.bike, selection());
     return { rider: Object.assign({}, st.rider, p.rider), bike: Object.assign({}, st.bike, p.bike) };
   }
@@ -143,16 +204,34 @@
       for (const b of document.querySelectorAll('[data-shop-page]')) {
         b.addEventListener('click', () => T.showPage(b.dataset.shopPage));
       }
+      for (const b of document.querySelectorAll('[data-shop-view]')) {
+        b.addEventListener('click', () => { store.set('ui.shopView', b.dataset.shopView, true); T.renderArt(); });
+      }
       T.render();
     },
 
-    onShow() { if (dirty) T.render(); },
+    onShow() { if (dirty) T.render(); post3d({ type: 'run', on: true }); },
+
+    /** La vitrine ne tourne que quand on la voit. */
+    onHide() { post3d({ type: 'run', on: false }); },
 
     showPage(id) {
       if (!PAGES.some((x) => x.id === id)) return;
       store.set('ui.shopPage', id, true);
       preview = null;
       T.render(true);
+    },
+
+    /** Position sur le vélo : un réglage (le même que dans l'onglet Équipement), qu'on essaie ici en 3D. */
+    setPosition(id) {
+      const pos = Ph.POSITIONS.find((x) => x.id === id);
+      if (!pos) return;
+      store.state.rider.position = id;
+      preview = null;
+      store.save();
+      PYR.app.refreshBindings();
+      store.emit('rider', { path: 'rider.position' });
+      D.toast(`Position : ${pos.label.toLowerCase()}`);
     },
 
     /** Achat (ou remontage) d'un article. */
@@ -186,22 +265,34 @@
       return { rider, bike, picks };
     },
 
-    /** Illustration : l'équipement monté, ou l'article survolé en aperçu. */
+    /** Illustration : l'équipement monté, ou l'article survolé en aperçu ; en 3D (vitrine de Bike3D) ou en photos. */
     renderArt() {
-      const box = $('#shop-art');
-      if (!box) return;
-      const pg = page();
+      const box = $('#shop-art-photo'), box3 = $('#shop-art-3d');
+      if (!box || !box3) return;
+      const pg = page(), mode = view();
       const names = Cat.CATEGORIES.filter((c) => c.page === pg).map((c) => {
         const id = preview && preview.cat === c.id ? preview.id : mounted(c.id);
         return id ? `${c.label.toLowerCase()} ${Cat.get(c.id, id).name}` : null;
       }).filter(Boolean);
-      PYR.gearArt.update(box, Object.assign(T.artOptions(preview), {
-        label: `${PAGES.find((x) => x.id === pg).art} : ${names.join(', ')}`,
-      }));
+      const opts = Object.assign(T.artOptions(preview), { label: `${PAGES.find((x) => x.id === pg).art} : ${names.join(', ')}` });
+      for (const b of document.querySelectorAll('[data-shop-view]')) {
+        b.setAttribute('aria-pressed', String(b.dataset.shopView === mode));
+        if (b.dataset.shopView === '3d') b.disabled = v3.failed;
+      }
+      box3.hidden = mode !== '3d';
+      box.hidden = mode === '3d';
+      if (mode === '3d') {
+        showroom();
+        v3.opts = opts;
+        v3.frame.setAttribute('aria-label', opts.label);
+        send3d();
+      } else {
+        PYR.gearArt.update(box, opts);
+      }
       const cap = $('#shop-preview');
       if (cap) {
-        const it = preview && Cat.get(preview.cat, preview.id);
-        cap.textContent = it ? `Aperçu : ${it.name} — clique pour le monter` : '';
+        const it = preview && (preview.cat === 'position' ? Ph.POSITIONS.find((x) => x.id === preview.id) : Cat.get(preview.cat, preview.id));
+        cap.textContent = !it ? '' : preview.cat === 'position' ? `Aperçu : ${it.label.toLowerCase()} — clique pour la prendre` : `Aperçu : ${it.name} — clique pour le monter`;
         cap.hidden = !it;
       }
     },
@@ -224,6 +315,7 @@
       const P = refPower();
       const now = Ph.buildSetup(store.state.rider, store.state.bike);
       const cur = { flat: speedOf(now, P, 0), climb: speedOf(now, P, 0.06) };
+      if (pg === 'rider') box.appendChild(T.positionSection(cur, P));
       for (const cat of Cat.CATEGORIES.filter((c) => c.page === pg)) {
         const on = mounted(cat.id);
         const bought = selection()[cat.id];
@@ -263,8 +355,37 @@
       T.renderArt();
       // images des articles de la page, chargées d'avance pour un aperçu immédiat au survol
       const cats = Cat.CATEGORIES.filter((c) => c.page === pg);
-      PYR.gearArt.preload([].concat(...cats.map((c) => Cat.ITEMS[c.id].map((it) => T.artOptions({ cat: c.id, id: it.id })))));
+      if (view() === 'photo') PYR.gearArt.preload([].concat(...cats.map((c) => Cat.ITEMS[c.id].map((it) => T.artOptions({ cat: c.id, id: it.id })))));
       T.renderSummary();
+    },
+
+    /** Position sur le vélo (page Cycliste) : chaque position se voit en 3D au survol, avec son effet sur la vitesse. */
+    positionSection(cur, P) {
+      const now = Ph.byId(Ph.POSITIONS, store.state.rider.position, 3).id;
+      const sec = h('section', { class: 'shop-cat', 'data-cat': 'position' });
+      sec.appendChild(h('div', { class: 'shop-cat-head' }, h('h3', null, 'Position sur le vélo'), h('span', { class: 'shop-cur' }, Ph.byId(Ph.POSITIONS, now).label)));
+      sec.appendChild(h('p', { class: 'hint' }, 'Un réglage, pas un achat (aussi dans l\'onglet Équipement) : plus le buste est couché, moins l\'air freine. Les positions contre-la-montre montent des prolongateurs sur le cintre.'));
+      const list = h('div', { class: 'shop-opts', role: 'group', 'aria-label': 'Position sur le vélo' });
+      for (const pos of Ph.POSITIONS) {
+        const isOn = pos.id === now;
+        const gain = isOn ? null : gainText('position', pos.id, cur, P);
+        const btn = h('button', {
+          type: 'button', class: 'shop-item', 'aria-pressed': String(isOn), 'data-item': pos.id,
+          onclick: () => { if (!isOn) T.setPosition(pos.id); },
+        },
+        h('span', { class: 'name' }, pos.label),
+        h('span', { class: 'price' }, 'réglage'),
+        h('span', { class: 'specs' }, `surface frontale ×${U.fmt(pos.factor, 2)}`),
+        isOn ? h('span', { class: 'gain on' }, 'Ta position') : h('span', { class: 'gain' + (gain.sign > 0 ? ' up' : gain.sign < 0 ? ' down' : '') }, gain.text));
+        const show = () => T.setPreview(isOn ? null : { cat: 'position', id: pos.id });
+        btn.addEventListener('pointerenter', show);
+        btn.addEventListener('focus', show);
+        btn.addEventListener('blur', () => T.setPreview(null));
+        list.appendChild(btn);
+      }
+      list.addEventListener('pointerleave', () => T.setPreview(null));
+      sec.appendChild(list);
+      return sec;
     },
 
     /** Synthèse : masse, CdA, Crr, rendement, valeur, et gain par rapport à un équipement d'entrée de gamme. */

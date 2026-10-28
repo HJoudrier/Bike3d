@@ -588,11 +588,18 @@
             <button type="button" data-shop-page="bike" aria-pressed="true">Vélo</button>
             <button type="button" data-shop-page="rider" aria-pressed="false">Cycliste</button>
           </div>
+          <div class="seg-control shop-views" role="group" aria-label="Affichage du vélo">
+            <button type="button" data-shop-view="3d" aria-pressed="true" title="Ton vélo en 3D, celui du jeu 3D : le cycliste pédale sur place, glisse pour tourner autour">3D</button>
+            <button type="button" data-shop-view="photo" aria-pressed="false" title="Photos des cadres et des roues">Photo</button>
+          </div>
         </div>
-        <p class="hint">Choisis ton équipement : chaque article change la masse, l'aérodynamisme, le roulement ou la transmission, et donc ta vitesse, ta stratégie optimale et tes courses. Survole un article pour le voir sur le dessin, clique pour le monter. Les réglages détaillés restent modifiables dans l'onglet Équipement. Modèles génériques, prix indicatifs.</p>
+        <p class="hint">Choisis ton équipement : chaque article change la masse, l'aérodynamisme, le roulement ou la transmission, et donc ta vitesse, ta stratégie optimale et tes courses. Survole un article pour le voir sur ton vélo (en 3D, tel qu'il roulera dans la vue 3D du jeu : fais tourner la caméra autour du cycliste), clique pour le monter. Les réglages détaillés restent modifiables dans l'onglet Équipement. Modèles génériques, prix indicatifs.</p>
         <div class="shop-page">
           <figure class="shop-figure">
-            <div class="shop-art" id="shop-art"></div>
+            <div class="shop-art" id="shop-art">
+              <div class="shop-art-3d" id="shop-art-3d" hidden></div>
+              <div class="shop-art-photo" id="shop-art-photo"></div>
+            </div>
             <figcaption class="shop-preview" id="shop-preview" hidden></figcaption>
             <div class="shop-summary" id="shop-summary"></div>
           </figure>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Bike3D — vitrine</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #ebebea; font: 500 12px/1.3 system-ui, -apple-system, 'Segoe UI', sans-serif; color: #2b2a28; }
+    body.dark { color: #e8e6e1; }
+    #view { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: grab; outline: none; } /* au doigt : glisser à la verticale fait défiler la page */
+    #view.drag { cursor: grabbing; }
+    .tools { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
+    .tools button {
+      width: 30px; height: 30px; border-radius: 15px; border: 0; padding: 0; font-size: 15px; line-height: 30px; cursor: pointer;
+      background: rgba(255, 255, 255, 0.82); color: #2b2a28; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    }
+    body.dark .tools button { background: rgba(40, 40, 38, 0.85); color: #e8e6e1; }
+    .tools button[aria-pressed="false"] { opacity: 0.55; }
+    .hint { position: absolute; left: 10px; bottom: 12px; opacity: 0.7; pointer-events: none; transition: opacity 0.6s; }
+    .hint.off { opacity: 0; }
+    .msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+  </style>
+</head>
+<body>
+  <canvas id="view" tabindex="0" aria-label="Vélo et cycliste en 3D : glisse pour tourner autour"></canvas>
+  <div class="hint" id="hint">Glisse pour tourner autour · molette ou pincement pour zoomer</div>
+  <div class="tools">
+    <button type="button" id="btn-rider" aria-pressed="true" title="Montrer ou cacher le cycliste">🚴</button>
+    <button type="button" id="btn-reset" title="Vue de départ (double-clic)">⟲</button>
+  </div>
+  <script src="vendor/three.min.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/toon.js"></script>
+  <script src="js/cyclist.js"></script>
+  <script src="js/showroom.js"></script>
+</body>
+</html>

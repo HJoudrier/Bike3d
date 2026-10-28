@@ -353,3 +353,72 @@ test('crevaisons : en course, bien plus sur le gravier et les pavés, et bien mo
   assert.ok(cobbles >= 5 && cobbles > 3 * Math.max(1, asphalt), `pavés ${cobbles} / asphalte ${asphalt}`);
   assert.ok(gravelRoad >= 5 && gravelRoad > 2.5 * Math.max(1, gravelTires), `gravier : pneus route ${gravelRoad} / pneus gravel ${gravelTires}`);
 });
+
+/* ---------- vélo en 3D : le magasin et la vue 3D montrent le même cycliste (B3D.Cyclist de Bike3D) ---------- */
+
+require(path.join(__dirname, '..', 'js', 'ui', 'gear-art.js'));
+const fs = require('fs');
+const BIKE3D = path.join(__dirname, '..', '..');
+const hasBike3d = fs.existsSync(path.join(BIKE3D, 'js', 'cyclist.js'));
+
+/** Le cycliste de Bike3D chargé à part (three.js, utilitaires, rendu cartoon) : ses listes d'équipement. */
+function bike3dCyclist() {
+  const vm = require('vm');
+  const ctx = { console: { log() {}, warn() {}, error() {} } };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  for (const f of ['vendor/three.min.js', 'js/util.js', 'js/toon.js', 'js/cyclist.js']) vm.runInContext(fs.readFileSync(path.join(BIKE3D, f), 'utf8'), ctx, { filename: f });
+  return ctx.B3D.Cyclist;
+}
+
+test('vélo 3D : modèle de cadre et de roues du magasin, cadre de VTT ou de ville, roues de 60 et 80 mm', () => {
+  const G = PYR.gearArt.gear3d, Cat = PYR.catalog;
+  const rider = { position: 'drops', helmet: 'aero', clothing: 'skinsuit', glasses: 'shield', socks: 'aero' };
+  const g = G({ rider, bike: { frame: 'road', wheels: 'deep80', tire: 'race', shoes: 'carbon' }, picks: { frame: 'endurance', wheels: 'c80' } });
+  assert.deepEqual(g, { frame: 'endurance', wheels: 'c80', tire: 'race', position: 'drops', helmet: 'aero', clothing: 'skinsuit', glasses: 'shield', socks: 'aero', shoes: 'carbon' });
+  // article du magasin qui ne correspond plus au réglage (modifié dans l'onglet Équipement) : le modèle de référence du réglage
+  assert.equal(G({ bike: { frame: 'road', wheels: 'deep' }, picks: { frame: 'aero', wheels: 'c45' } }).frame, 'alu');
+  assert.equal(G({ bike: { frame: 'road', wheels: 'deep' }, picks: { frame: 'aero', wheels: 'c45' } }).wheels, 'c65');
+  assert.equal(G({ bike: { frame: 'mtb' } }).frame, 'mtb');
+  assert.equal(G({ bike: { frame: 'city' } }).frame, 'city');
+  assert.equal(Cat.get('wheels', 'c65').name, 'Carbone 60 mm');
+  const c80 = Cat.get('wheels', 'c80');
+  assert.ok(PYR.physics.byId(PYR.physics.WHEELS, c80.bike.wheels).dcda < PYR.physics.byId(PYR.physics.WHEELS, 'deep').dcda, '80 mm : plus aérodynamiques que 60 mm');
+  assert.ok(c80.mass > Cat.get('wheels', 'c65').mass && c80.price > Cat.get('wheels', 'c65').price, 'plus lourdes et plus chères');
+  assert.equal(G({ bike: { wheels: 'deep80' } }).wheels, 'c80');
+  // chaque cadre et chaque paire de roues du magasin se voit en 3D comme tel
+  for (const it of Cat.ITEMS.frame) assert.equal(G({ bike: it.bike, picks: { frame: it.id } }).frame, it.id);
+  for (const it of Cat.ITEMS.wheels) assert.equal(G({ bike: it.bike, picks: { wheels: it.id } }).wheels, it.id);
+});
+
+test('vélo 3D : Bike3D connaît chaque cadre, roue, pneu, position, casque, tenue, lunettes, chaussettes et chaussures', { skip: !hasBike3d && 'Bike3D absent' }, () => {
+  const C = bike3dCyclist(), Ph = PYR.physics, Cat = PYR.catalog, L = C.GEAR;
+  const known = (list, ids, what) => { for (const id of ids) assert.ok(list.includes(id), `${what} inconnu de Bike3D : ${id}`); };
+  known(L.frames, Cat.ITEMS.frame.map((it) => it.id).concat(['mtb', 'city']), 'cadre');
+  known(L.wheels, Cat.ITEMS.wheels.map((it) => it.id), 'roues');
+  known(L.tires, Ph.TIRES.filter((t) => t.id !== 'custom').map((t) => t.id), 'pneu');
+  known(L.positions, Ph.POSITIONS.map((x) => x.id), 'position');
+  known(L.helmets, Ph.HELMETS.map((x) => x.id), 'casque');
+  known(L.clothing, Ph.CLOTHING.map((x) => x.id), 'tenue');
+  known(L.glasses, Ph.GLASSES.map((x) => x.id), 'lunettes');
+  known(L.socks, Ph.SOCKS.map((x) => x.id), 'chaussettes');
+  known(L.shoes, Ph.SHOES.map((x) => x.id), 'chaussures');
+  // l'équipement envoyé passe tel quel ; un pneu personnalisé ou une valeur inconnue prend celle du vélo du jeu
+  const g = PYR.gearArt.gear3d({ rider: { position: 'tt_pro', helmet: 'tt', clothing: 'skinsuit_tt', glasses: 'none', socks: 'classic' }, bike: { frame: 'tt', wheels: 'disc', tire: 'tubeless', shoes: 'aero' }, picks: {} });
+  assert.deepEqual(JSON.parse(JSON.stringify(C.normGear(g))), g); // (objet venu d'un autre contexte)
+  const n = C.normGear({ frame: 'gravel', tire: 'custom', position: 'superman' });
+  assert.equal(n.frame, 'gravel');
+  assert.equal(n.tire, 'road');
+  assert.equal(n.position, 'hoods');
+  assert.equal(C.normGear(null).wheels, 'tri', 'sans équipement : les roues à bâtons du jeu');
+});
+
+test('vue 3D : l\'équipement du joueur part avec le parcours sans changer son empreinte', () => {
+  const { course } = setupFor(makeProfile([{ len: 2000, grade: 0.02 }]));
+  const gear = PYR.gearArt.gear3d({ rider: { position: 'tt' }, bike: { frame: 'tt', wheels: 'disc', tire: 'race' }, picks: {} });
+  const a = V3.courseMessage(course, [], [], { name: 'Hugo', gear });
+  const b = V3.courseMessage(course, [], [], { name: 'Hugo' });
+  assert.deepEqual(a.me.gear, gear);
+  assert.equal(b.me.gear, undefined);
+  assert.equal(a.key, b.key, 'changer de vélo ne reconstruit pas le paysage');
+});

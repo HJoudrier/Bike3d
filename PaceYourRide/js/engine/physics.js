@@ -68,7 +68,8 @@
     { id: 'box', label: 'Jante plate (≈ 18 mm, 32 rayons)', dcda: 0.003 },
     { id: 'low', label: 'Profil bas (20–30 mm)', dcda: 0 },
     { id: 'mid', label: 'Mi-hautes (40–50 mm)', dcda: -0.006 },
-    { id: 'deep', label: 'Hautes (60–80 mm)', dcda: -0.010 },
+    { id: 'deep', label: 'Hautes (60 mm)', dcda: -0.010 },
+    { id: 'deep80', label: 'Très hautes (80 mm)', dcda: -0.012 },
     { id: 'disc', label: 'Lenticulaire AR + haute AV', dcda: -0.016 },
     { id: 'spoked', label: 'Rayons VTT / gravel', dcda: 0.004 },
   ];
