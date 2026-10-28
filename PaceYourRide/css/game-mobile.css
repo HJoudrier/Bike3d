@@ -1,0 +1,566 @@
+/* author : Hugo Joudrier-Faure */
+/* PaceYourRide — écran de course (voir js/ui/game-mobile.js). Rien ne s'applique tant que <body> n'a pas l'attribut
+ * data-race, posé du décompte à « Quitter » : "phone" = plein écran sur téléphone, "wide" = grand écran (la page est conservée :
+ * barre du haut, profil sous la carte, panneau de droite avec le classement en temps réel). */
+
+/* palette des zones de la barre de puissance (comme style.css : sombre automatique, ou forcé par [data-theme]) */
+:root {
+  --rz1: #eaf3de; --rz1t: #27500a;
+  --rz2: #c0dd97; --rz2t: #27500a;
+  --rz3: #fac775; --rz3t: #633806;
+  --rz4: #f0997b; --rz4t: #712b13;
+  --rz5: #f7c1c1; --rz5t: #791f1f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --rz1: #27500a; --rz1t: #c0dd97;
+    --rz2: #3b6d11; --rz2t: #eaf3de;
+    --rz3: #854f0b; --rz3t: #faeeda;
+    --rz4: #993c1d; --rz4t: #faece7;
+    --rz5: #a32d2d; --rz5t: #fcebeb;
+  }
+}
+:root[data-theme="dark"] {
+  --rz1: #27500a; --rz1t: #c0dd97;
+  --rz2: #3b6d11; --rz2t: #eaf3de;
+  --rz3: #854f0b; --rz3t: #faeeda;
+  --rz4: #993c1d; --rz4t: #faece7;
+  --rz5: #a32d2d; --rz5t: #fcebeb;
+}
+
+/* l'ancien bloc HUD est remplacé dans les deux cas ; certains éléments ne servent que sur un des deux écrans */
+body[data-race] .game-dock { display: none; }
+/* panneau du mode jeu : réglages avant le départ (page de réglages), classements et « Quitter » ensuite (page de jeu) */
+body[data-race] .game-setup { display: none; }
+body:not([data-race]) #game-side-charts, body:not([data-race]) #g-quit { display: none; }
+
+/* décompte avant le départ : un grand chiffre au centre de l'écran de course, puis « Partez ! » ; la carte et les commandes restent actives */
+.game-countdown { position: absolute; inset: 0; z-index: 1120; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.game-countdown[hidden] { display: none; }
+.game-countdown > span {
+  min-width: 1.5em; padding: 0.05em 0.35em; border-radius: 999px; text-align: center;
+  font-size: clamp(72px, 16vmin, 168px); font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums;
+  color: #fff; background: rgba(15, 23, 42, 0.62); text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  animation: game-cd 1s ease-out; /* sans remplissage : si l'animation ne tourne pas, le chiffre reste net */
+}
+.game-countdown > span.go { font-size: clamp(44px, 9vmin, 104px); padding: 0.15em 0.6em; background: rgba(21, 128, 61, 0.85); }
+@keyframes game-cd { 0% { opacity: 0.4; transform: scale(1.35); } 18% { opacity: 1; transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0.6; transform: scale(0.95); } }
+body[data-race="phone"] .wide-only, body[data-race="wide"] .phone-only { display: none !important; }
+
+/* ---------- téléphone : plein écran ---------- */
+body[data-tab="game"][data-race="phone"] {
+  height: 100dvh; min-height: 0; overflow: hidden;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+body[data-race="phone"] .topbar, body[data-race="phone"] .credit, body[data-race="phone"] .side, body[data-race="phone"] .bottom { display: none; }
+body[data-tab="game"][data-race="phone"] .layout { flex: 1 1 auto; min-height: 0; height: 100%; }
+body[data-tab="game"][data-race="phone"] .stage { flex: 1 1 auto; min-height: 0; height: 100%; display: flex; flex-direction: column; }
+body[data-tab="game"][data-race="phone"] .map-wrap { flex: 1 1 auto; height: auto; min-height: 0; }
+
+/* ---------- grand écran : la carte prend toute la hauteur, le profil et la puissance selon la durée se posent dessus ; le panneau de droite reste visible ---------- */
+/* puissance selon la durée, à côté du profil d'élévation */
+.game-curve { position: relative; display: none; order: 3; flex: 0 0 170px; flex-direction: column; min-height: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 6px 14px 4px; }
+.game-curve .chart-head { margin-bottom: 0; }
+.gc-grip { position: absolute; left: 0; right: 0; top: -5px; height: 11px; cursor: ns-resize; touch-action: none; z-index: 6; }
+.gc-grip::after { content: ""; position: absolute; left: 50%; top: 4px; width: 38px; height: 3px; margin-left: -19px; border-radius: 2px; background: var(--border-strong); }
+.gc-grip:hover::after, .gc-grip:focus-visible::after { background: var(--accent); }
+.gc-grip:focus-visible { outline: none; }
+.game-curve .chart-head .hint { font-size: 11px; }
+body[data-tab="game"][data-race="wide"] .game-curve { display: flex; }
+/* colonne de gauche sur la carte, alignée à gauche, de haut en bas : statistiques, profil d'élévation, puissance selon la durée ; les blocs
+   restent serrés les uns contre les autres et le groupe est centré verticalement entre le bas du HUD (--rm-top) et les réserves (glycogène,
+   hydratation) ; les deux graphiques sont des vignettes à largeur (--vg-w) et hauteur réglables, les statistiques gardent leur largeur fixe
+   et défilent si la hauteur manque */
+.rm-charts {
+  display: none; position: absolute; left: calc(10px + env(safe-area-inset-left)); top: var(--rm-ltop, var(--rm-top, 76px)); bottom: calc(var(--rm-dock-h, 0px) + 8px);
+  width: max-content; max-width: calc(100% - 200px); flex-direction: column; align-items: flex-start; justify-content: center; gap: 8px; pointer-events: none;
+}
+body[data-race="wide"] .rm-charts { display: flex; }
+body[data-race="wide"] .rm-charts > :not(.rm-stats) {
+  pointer-events: auto; position: relative; flex: none !important; order: 0; width: var(--vg-w, 320px); max-width: 100%; height: 150px;
+  background: var(--surface); border: 0.5px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow);
+}
+body[data-race="wide"] .rm-charts .chart-head .hint { display: none; }
+/* panneau de droite (grand écran) : les statistiques, le profil et la puissance réglés pour s'y afficher sont des sections comme le classement :
+   titre de section (même style que « Classements », avec son filet), contenu directement sur le fond du panneau, sans cadre, ni carte, ni
+   coins arrondis ; ils se placent sous le classement et au-dessus du texte d'aide. La hauteur des graphiques se règle dans la fenêtre de
+   configuration du graphique (150 px par défaut). */
+.game-side-charts { display: flex; flex-direction: column; margin: 0; } /* l'ordre des sections est celui de leur propriété order (réglage de chaque bloc) */
+.game-side-charts > .bottom, .game-side-charts > .game-curve, .game-side-charts > .rm-stats {
+  display: block; position: relative; width: auto; height: auto; padding: 0; margin: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
+}
+.game-side-charts > .bottom, .game-side-charts > .game-curve { flex: none !important; }
+.game-side-charts .chart-head { display: block; margin: 0; }
+.game-side-charts .chart-head .hint, .game-side-charts .gc-grip { display: none; }
+.game-side-charts .chart-head h3 { font-size: 14px; margin: 20px 0 8px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--ink); font-weight: 700; }
+.game-side-charts .bottom-view[data-view="game"] { display: block; }
+.game-side-charts .chart-box { position: relative; flex: none; height: 150px; }
+.game-side-charts .rm-stats-card { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible; }
+.game-side-charts .rm-sr { font-size: 13px; }
+/* statistiques en vignettes : une carte par donnée (libellé au-dessus de la valeur), en grille ; le titre occupe toute la ligne */
+.rm-stats-card.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+/* sur la carte, le bloc est un peu plus large en vignettes (deux par ligne) ; dans la bande latérale il prend toute la largeur */
+body[data-race="wide"] .rm-stats.tiles-on { width: 236px; }
+body[data-race="wide"] .game-side-charts > .rm-stats.tiles-on { width: auto; }
+.rm-stats-card.tiles .chart-head { grid-column: 1 / -1; margin-bottom: 0; }
+.rm-stats-card.tiles .rm-sr { flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; padding: 6px 8px; line-height: 1.2; white-space: normal; background: var(--surface-2); border-radius: 8px; }
+.rm-stats-card.tiles .rm-sr span { font-size: 11px; }
+.rm-stats-card.tiles .rm-sr strong { font-size: 15px; }
+.game-side-charts .rm-stats-card.tiles { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.game-side-charts .rm-stats-card.tiles .rm-sr { font-size: 13px; }
+/* l'ancien bloc de cartes de statistiques en bas du panneau de droite est fusionné dans « Statistiques » en mode jeu sur grand écran */
+body[data-race="wide"] #game-stats { display: none; }
+.rm-stats-card .chart-head { margin-bottom: 4px; }
+/* poignées des vignettes : bord haut (hauteur) et bord droit (largeur), visibles seulement quand elles sont sur la carte */
+.vg-grip { display: none; position: absolute; z-index: 6; touch-action: none; }
+body[data-race="wide"] .rm-charts .vg-grip { display: block; }
+.vg-top { left: 0; right: 0; top: -5px; height: 11px; cursor: ns-resize; }
+.vg-right { top: 0; bottom: 0; right: -5px; width: 11px; cursor: ew-resize; }
+.vg-grip::after { content: ""; position: absolute; border-radius: 2px; background: var(--border-strong); }
+.vg-top::after { left: 50%; top: 4px; width: 38px; height: 3px; margin-left: -19px; }
+.vg-right::after { top: 50%; left: 4px; height: 38px; width: 3px; margin-top: -19px; }
+.vg-grip:hover::after, .vg-grip:focus-visible::after { background: var(--accent); }
+.vg-grip:focus-visible { outline: none; }
+/* profils masqués par les boutons du carré de droite (grand écran) */
+body[data-tab="game"][data-race="wide"][data-hide-profile] .bottom { display: none; }
+body[data-tab="game"][data-race="wide"][data-hide-curve] .game-curve { display: none; }
+.rm-sq[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.rm-sq[aria-pressed="false"] { color: var(--muted); }
+/* entête sur toute la longueur de la carte : vitesse, puissance, pente, puis temps, distance et restant, sur une seule ligne ; dessous, une
+   rangée (--rm-top, le bas de l'entête) : boutons d'affichage, réserves, pause et vitesse ; les alertes de course (--rm-ctop) sont centrées
+   juste sous les réserves, et les colonnes de gauche et de droite commencent sous la rangée */
+body[data-race="wide"] .rm-hud { left: calc(10px + env(safe-area-inset-left)); right: calc(10px + env(safe-area-inset-right)); top: 10px; flex-direction: row; padding: 6px 8px; }
+body[data-race="wide"] .rm-hud1, body[data-race="wide"] .rm-hud2 { flex: 1 1 0; min-width: 0; }
+body[data-race="wide"] .rm-hud2 { margin: 0; padding: 0; border-top: 0; border-left: 0.5px solid var(--border-strong); }
+body[data-race="wide"] .rm-hv { font-size: 24px; }
+body[data-race="wide"] .rm-hi.sm .rm-hv { font-size: 20px; }
+/* le zoom de la carte (+ / −) à droite, centré sous le bouton des fonds de carte (troisième bouton de la rangée de droite : 46 px, le zoom en
+   fait 34, d'où 16 px du bord) ; sa position verticale (--rm-zoomtop) est posée en JS d'après le bas de cette rangée */
+body[data-race="wide"] .leaflet-top.leaflet-left { left: auto; right: calc(16px + env(safe-area-inset-right)); top: calc(var(--rm-zoomtop, 120px) - 10px); }
+body[data-race="wide"] .leaflet-left .leaflet-control { margin-left: 0; }
+body[data-race="wide"] .rm-chips { top: var(--rm-ctop, var(--rm-top, 76px)); left: 50%; right: auto; transform: translateX(-50%); width: max-content; max-width: min(520px, calc(100% - 340px)); justify-content: center; }
+/* pause, vitesse et fond de carte en haut de la colonne de droite (sous l'entête), la même que les actions : trois boutons sur ses 150 px,
+   de mêmes dimensions que les trois boutons de gauche */
+body[data-race="wide"] .rm-side { top: var(--rm-top, 70px); right: 10px; width: 150px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.rm-basewrap { position: relative; }
+.rm-basewrap > .rm-sq { width: 100%; min-width: 0; }
+/* liste des fonds de carte : se déroule sous le bouton, sur la largeur de la colonne */
+.rm-basemenu { position: absolute; top: calc(100% + 6px); right: 0; width: 150px; padding: 5px; display: flex; flex-direction: column; gap: 3px; z-index: 5; }
+.rm-basemenu[hidden] { display: none; }
+.rm-bo { padding: 7px 8px; border: 0.5px solid transparent; border-radius: 8px; background: none; font-size: 13px; font-weight: 500; text-align: left; cursor: pointer; }
+.rm-bo:hover { background: var(--surface-2); }
+.rm-bo[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 650; }
+/* réserves (glycogène, hydratation, W′, Record, Tenable) : sous l'entête, entre les trois boutons de gauche (150 px) et les deux de droite (150 px) */
+.rm-reserves { display: none; position: absolute; left: calc(168px + env(safe-area-inset-left)); right: calc(168px + env(safe-area-inset-right)); top: var(--rm-top, 70px); }
+body[data-race="wide"] .rm-reserves { display: block; }
+.rm-reserves > * { pointer-events: auto; }
+body[data-race="wide"] .rm-reserves .rm-pop { bottom: auto; top: calc(100% + 8px); width: 100%; }
+/* le bas de l'écran ne garde que la barre de puissance : plus de pile de réserves */
+body[data-race="wide"] .rm-bottom { display: none; }
+/* statistiques, profil et puissance : trois petits boutons en haut de la colonne de gauche (sous l'entête), au-dessus des blocs qu'ils affichent */
+.rm-views { display: none; position: absolute; left: calc(10px + env(safe-area-inset-left)); top: var(--rm-top, 70px); gap: 6px; }
+body[data-race="wide"] .rm-views { display: flex; }
+body[data-race="wide"] .rm-side > .rm-sq, body[data-race="wide"] .rm-side > .rm-speedwrap, body[data-race="wide"] .rm-speedwrap > .rm-sq { width: 100%; min-width: 0; }
+/* statistiques : premier bloc de la colonne de gauche (bouton « statistiques » : masqué), de largeur fixe (indépendante des graphiques) */
+.rm-stats { display: none; flex: 0 1 auto; min-height: 0; width: 178px; margin: 0; flex-direction: column; pointer-events: none; }
+body[data-race="wide"] .rm-stats { display: flex; margin: 0; }
+body[data-race="wide"][data-hide-stats] .rm-stats { display: none; }
+.rm-stats-card { pointer-events: auto; padding: 6px 10px; min-height: 0; overflow: auto; }
+.rm-sr { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; line-height: 22px; white-space: nowrap; }
+.rm-sr span { color: var(--ink-2); }
+.rm-sr strong { font-weight: 650; font-variant-numeric: tabular-nums; }
+/* bas de la carte : une seule carte de réserves, en deux colonnes de lignes (glycogène et hydratation à gauche, W′ et Record à droite),
+   puis « Tenable » à droite */
+body[data-race="wide"] .rm-res { align-items: center; }
+body[data-race="wide"] .rm-bars { display: grid; grid-template-rows: auto auto; row-gap: 10px; align-content: center; flex: 1;
+  /* « Tenable » au milieu (120 px) ; la colonne de gauche a 20 px de plus que celle de droite (écart entre les libellés « Hydratation » et « W′ »)
+     pour que les quatre barres aient la même longueur */
+  grid-template-columns: calc((100% - 148px) / 2 + 20px) 120px minmax(0, 1fr); column-gap: 14px; }
+/* ordre dans la grille : glycogène, hydratation | Tenable (sur les deux lignes) | W′, Record */
+body[data-race="wide"] .rm-bars > :nth-child(1) { grid-column: 1; grid-row: 1; }
+body[data-race="wide"] .rm-bars > :nth-child(2) { grid-column: 1; grid-row: 2; }
+body[data-race="wide"] .rm-bars > :nth-child(3) { grid-column: 2; grid-row: 1 / span 2; }
+body[data-race="wide"] .rm-bars > :nth-child(4) { grid-column: 3; grid-row: 1; }
+body[data-race="wide"] .rm-bars > :nth-child(5) { grid-column: 3; grid-row: 2; }
+body[data-race="wide"] .rm-bars > .rm-tte { align-self: center; min-width: 0; max-width: none; padding: 0 8px; border-left: 0.5px solid var(--border); border-right: 0.5px solid var(--border); }
+/* toutes les lignes en une rangée : libellé, barre, valeur */
+/* le libellé n'a que la largeur de son texte (--lab-w, réglée par colonne : « Hydratation » à gauche, « PPR » et « W′ » à droite) : les barres sont plus longues */
+body[data-race="wide"] .rm-row { flex: 0 0 auto; min-width: 0; display: grid; grid-template-columns: var(--lab-w, 84px) minmax(0, 1fr) auto; grid-template-areas: "lab trk val"; gap: 8px; align-items: center; }
+body[data-race="wide"] .rm-bars > :nth-child(1), body[data-race="wide"] .rm-bars > :nth-child(2) { --lab-w: 68px; } /* 28 + 40 */
+body[data-race="wide"] .rm-bars > :nth-child(4), body[data-race="wide"] .rm-bars > :nth-child(5) { --lab-w: 28px; }
+body[data-race="wide"] .rm-lab { grid-area: lab; width: auto; }
+body[data-race="wide"] .rm-val { grid-area: val; width: auto; min-width: 38px; font-weight: 600; }
+body[data-race="wide"] .rm-track { grid-area: trk; height: 8px; }
+body[data-race="wide"] .rm-tte { min-width: 110px; }
+/* option « Afficher la durée tenable (TTE) dans le HUD » décochée : plus de vignette « Tenable » (ni de colonne vide entre les barres) */
+body[data-hide-tte] .rm-tte, body[data-hide-tte] .hud-tte { display: none; }
+@container (min-width: 621px) { body[data-hide-tte] .hud-cards { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+body[data-race="wide"][data-hide-tte] .rm-bars { grid-template-columns: calc((100% - 28px) / 2 + 10px) 0 minmax(0, 1fr); }
+body[data-race="wide"] .rm-pop { right: auto; width: min(560px, 100%); }
+body[data-race="wide"] .rm-panel { padding-top: 6px; padding-bottom: 8px; }
+body[data-race="wide"] .rm-act, body[data-race="wide"] .rm-step { min-height: 38px; }
+/* deuxième ligne du bas : barre de puissance ; sur grand écran, le bouton Attaque / Sprint à sa droite (même colonne que les actions) */
+.rm-dock-row { display: flex; gap: 8px; align-items: stretch; }
+.rm-dock-row .rm-panel { flex: 1 1 auto; min-width: 0; }
+.rm-act.rm-sprint-big {
+  flex: 0 0 150px; width: 150px; min-height: 0; padding: 0 8px; border-radius: 12px; font-size: 16px; font-weight: 750; line-height: 1.15; text-align: center;
+  background: var(--surface); color: var(--critical); border: 1.5px solid var(--critical); box-shadow: var(--shadow); pointer-events: auto;
+}
+.rm-act.rm-sprint-big { color: var(--ink); }
+.rm-act.rm-sprint-big[aria-pressed="true"] { background: var(--surface); color: var(--ink); border-color: var(--critical); box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.35), var(--shadow); }
+/* grand écran : les actions (Relais, Suivre, Suivre les attaques, Pilote auto, Manger, Boire) en colonne à droite de la carte, au-dessus du bas */
+/* la colonne est centrée verticalement entre les six petits boutons (--rm-rtop, leur bas) et le bas ; seuls ses boutons captent les gestes */
+.rm-acts.rm-actcol {
+  position: absolute; right: 10px; top: var(--rm-rtop, 120px); bottom: calc(var(--rm-dock-h, 0px) + 8px); margin: 0; width: 150px;
+  flex-direction: column; justify-content: center; gap: 5px; pointer-events: none;
+}
+.rm > .rm-acts.rm-actcol { pointer-events: none; }
+.rm-acts.rm-actcol button { pointer-events: auto; }
+.rm-acts.rm-actcol .rm-act { flex: none; min-height: 34px; padding: 5px 10px; white-space: nowrap; background: var(--surface); border-color: var(--border-strong); box-shadow: var(--shadow); font-size: 13px; }
+.rm-acts.rm-actcol .rm-act[aria-pressed="true"], .rm-acts.rm-actcol .rm-act.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+/* mode relais : sous « Relais », « Passer le relais » et la durée d'un relais, légèrement en retrait */
+.rm-relaysub { display: flex; flex-direction: column; gap: 5px; margin-left: 12px; }
+.rm-relaysub[hidden] { display: none; }
+.rm-acts.rm-actcol .rm-relaysub, .rm-acts.rm-actcol .rm-relaysub * { pointer-events: auto; }
+.rm-acts.rm-actcol .rm-relaysub .rm-act { min-height: 30px; padding: 4px 8px; font-size: 12px; }
+/* les trois champs (Durée, W′ >, PPR <) ont la même grille : libellé, champ, unité (s ou %) : alignés et de même longueur */
+.rm-pullf {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) 12px; align-items: center; column-gap: 6px; padding: 4px 8px; font-size: 11px; line-height: 1.15; color: var(--ink-2);
+  background: var(--surface); border: 0.5px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow);
+}
+.rm-pullf input {
+  box-sizing: border-box; width: 100%; min-width: 0; padding: 3px 6px; font: inherit; font-size: 13px; font-weight: 600; text-align: right; color: var(--ink);
+  background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 6px;
+}
+.rm-pullf input:disabled { opacity: 0.55; }
+/* champ de durée : vrai champ numérique (petites flèches du navigateur) ; au-delà de 300 s son texte est masqué et le symbole ∞ s'affiche par-dessus */
+.rm-numwrap { position: relative; display: block; min-width: 0; }
+/* le ∞ est gros, et centré dans le champ, horizontalement et verticalement */
+/* le ∞ prend la place exacte du texte « 300 » (position et taille posées par fitInf en JS), à gauche des petites flèches du navigateur, dont
+   la largeur est fixée à 16 px pour que le calcul soit sûr */
+.rm-numwrap .rm-inf { display: none; position: absolute; color: var(--ink); pointer-events: none; }
+.rm-infsvg { width: 100%; height: 100%; display: block; overflow: visible; }
+.rm-numwrap > input::-webkit-inner-spin-button { width: 16px; margin: 0; }
+.rm-pullic { display: flex; align-items: center; color: var(--ink-2); }
+.rm-pullf .rm-ic { width: 16px; height: 16px; }
+.rm-numwrap.is-inf .rm-inf { display: block; }
+.rm-numwrap.is-inf > input { color: transparent; caret-color: transparent; }
+.rm-numwrap.is-inf > input::selection { background: transparent; }
+/* limite presque atteinte (W′ > ou PPR <) : le champ clignote en orange (à moins de 10 points), puis en rouge (à moins de 3 points) */
+.rm-pullf.warn-orange { animation: rm-warn-orange 1.1s ease-in-out infinite; }
+.rm-pullf.warn-red { animation: rm-warn-red 0.55s ease-in-out infinite; }
+@keyframes rm-warn-orange { 50% { background: rgba(245, 158, 11, 0.4); border-color: #f59e0b; } }
+@keyframes rm-warn-red { 50% { background: rgba(220, 38, 38, 0.45); border-color: #dc2626; } }
+.rm-pullf small { font-size: 11px; }
+/* téléphone : sous la rangée d'actions, sur une ligne */
+.rm-panel > .rm-relaysub { flex-direction: row; align-items: stretch; margin: 8px 0 0; }
+.rm-panel > .rm-relaysub .rm-pullf:first-child { flex: 1.5; }
+.rm-panel > .rm-relaysub .rm-pullf { flex: 1; }
+/* « Poches / Bidons » remplace Manger et Boire : un bouton (à gauche de la barre de puissance, ou dans la rangée de Ravito sur téléphone) qui ouvre la
+   fenêtre des bidons, du camelback, des gels et des barres */
+.rm #hud-eat, .rm #hud-drink { display: none !important; }
+.rm-pocketsbtn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; line-height: 1.15; }
+.rm-pocketsbtn[hidden] { display: none; }
+.rm-pocketsbtn small { font-size: 11px; font-weight: 500; color: var(--ink-2); }
+.rm-dock-row .rm-pocketsbtn {
+  flex: 0 0 104px; width: 104px; padding: 0 6px; border-radius: 12px; font-size: 13px; font-weight: 650; text-align: center; pointer-events: auto;
+  background: var(--surface); border: 0.5px solid var(--border-strong); box-shadow: var(--shadow);
+}
+.rm-pocketsbtn[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.rm-pocketsbtn[aria-expanded="true"] small { color: inherit; }
+.rm-pockets {
+  position: absolute; left: calc(10px + env(safe-area-inset-left)); bottom: calc(var(--rm-dock-h, 0px) + 8px); z-index: 8; width: 370px; max-width: calc(100% - 20px);
+  max-height: calc(100% - var(--rm-dock-h, 0px) - 80px); overflow-y: auto; padding: 6px 12px 10px;
+}
+.rm-pockets[hidden] { display: none; }
+body[data-race="phone"] .rm-pockets { left: 0; right: 0; top: auto; bottom: calc(100% + 8px); width: auto; max-width: none; max-height: var(--rm-pk-max, 45dvh); z-index: 3; }
+/* téléphone : les poches se referment en touchant ailleurs ; pas de séparateur sous la dernière ligne */
+body[data-race="phone"] .rm-pockets > .rm-pkrow:last-of-type { border-bottom: 0; }
+.rm-pkh { margin: 10px 0 2px; font-size: 12px; font-weight: 650; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink-2); }
+.rm-pknote { margin: 4px 0; font-size: 12px; color: var(--ink-2); }
+.rm-pkrow { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 0.5px solid var(--border); }
+.rm-pkname { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; }
+.rm-pkname small { font-weight: 400; color: var(--ink-2); }
+.rm-pkbar { display: block; height: 5px; margin-top: 4px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.rm-pkbar i { display: block; height: 100%; background: var(--accent); }
+.rm-pkvol, .rm-pknum { min-width: 46px; text-align: right; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rm-pknum { min-width: 26px; text-align: center; font-size: 14px; }
+.rm-pkbtn { min-width: 66px; padding: 6px 10px; border-radius: 8px; border: 0.5px solid var(--border-strong); background: var(--surface-2); font-size: 13px; font-weight: 650; cursor: pointer; }
+.rm-pkbtn:disabled { opacity: 0.5; cursor: default; }
+.rm-pkstepper { display: flex; align-items: center; gap: 4px; }
+.rm-pkstep { width: 28px; height: 28px; border-radius: 8px; border: 0.5px solid var(--border-strong); background: var(--surface-2); font-size: 16px; font-weight: 650; cursor: pointer; padding: 0; }
+.rm-pockets select { max-width: 190px; padding: 4px 6px; font-size: 13px; border-radius: 8px; border: 0.5px solid var(--border-strong); background: var(--surface-2); color: var(--ink); }
+/* Manger / Boire (et Ravito) rejoignent les autres actions de la colonne, avec le même style */
+.rm-acts.rm-actcol .rm-fuel, .rm-acts.rm-actcol .rm-fuel .hud-fuel-actions { display: contents; }
+.rm-acts.rm-actcol .rm-fuel > :not([hidden]) { margin: 0; }
+.rm-acts.rm-actcol .rm-fuel .btn {
+  flex: none; width: 100%; min-height: 34px; padding: 5px 10px; justify-content: center; white-space: nowrap;
+  background: var(--surface); border: 0.5px solid var(--border-strong); box-shadow: var(--shadow); font-size: 13px;
+}
+body[data-race="wide"] .rm-barwrap { height: 54px; }
+body[data-race="wide"] .rm-res { padding: 7px 12px; }
+/* l'attribution (obligatoire) se place à gauche de la colonne d'actions, au-dessus du bas */
+body[data-race="wide"] .leaflet-bottom.leaflet-right { margin-right: 160px; }
+/* contrôles de la carte : le zoom reste en haut à gauche, le choix du fond et l'échelle cèdent la place */
+body[data-race="wide"] .leaflet-top.leaflet-right, body[data-race="wide"] .leaflet-control-scale, body[data-race="wide"] .map-legend,
+body[data-race="wide"] .leaflet-bottom .leaflet-control:has(.map-legend) { display: none; }
+/* la carte reste interactive entre les commandes (le conteneur laisse passer les gestes) */
+.rm { position: absolute; inset: 0; z-index: 1100; pointer-events: none; }
+.rm > * { pointer-events: auto; }
+.rm-card { background: var(--surface); border: 0.5px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow); }
+.rm button { font: inherit; color: inherit; }
+
+/* contrôles Leaflet : seule l'attribution (obligatoire) reste, tout en bas */
+body[data-race="phone"] .leaflet-top, body[data-race="phone"] .leaflet-control-scale, body[data-race="phone"] .map-legend { display: none; }
+body[data-race="phone"] .leaflet-bottom .leaflet-control:has(.map-legend) { display: none; }
+body[data-race] .leaflet-control-attribution { font-size: 10px; padding: 0 4px; }
+/* l'attribution (obligatoire) reste visible, au-dessus du bas de la carte superposé */
+body[data-race] .leaflet-bottom { margin-bottom: calc(var(--rm-dock-h, 0px) + 6px); }
+
+/* ---------- HUD ---------- */
+.rm-hud {
+  position: absolute; top: calc(10px + env(safe-area-inset-top)); left: calc(10px + env(safe-area-inset-left)); right: calc(10px + env(safe-area-inset-right));
+  display: flex; flex-direction: column; padding: 8px 6px;
+}
+.rm-hud1, .rm-hud2 { display: flex; }
+/* grand écran : temps, distance et restant sur une seconde ligne, plus petite */
+.rm-hud2 { margin-top: 6px; padding-top: 6px; border-top: 0.5px solid var(--border); }
+.rm-hi { flex: 1; text-align: center; min-width: 0; }
+.rm-hi + .rm-hi { border-left: 0.5px solid var(--border); }
+.rm-hv { display: block; font-size: 26px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.rm-hi.sm .rm-hv { font-size: 16px; }
+.rm-hv.cap { color: var(--critical); }
+/* vent relatif : flèche (tournée par le script) puis vitesse ; fréquence cardiaque */
+.rm-hi.wd .rm-hv { display: flex; align-items: center; justify-content: center; gap: 3px; }
+.rm-wa { display: inline-flex; width: 1em; height: 1em; transition: transform 0.4s; }
+.rm-wa svg { width: 100%; height: 100%; }
+.rm-hi[title] { cursor: help; }
+.rm-hi.fc .rm-hv { color: var(--critical); }
+.rm-hi[hidden] { display: none; }
+/* puissance suivie, en vert, des watts économisés par l'aspiration : 190 (−24) */
+.rm-hvrow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: baseline; column-gap: 4px; }
+.rm-hvrow .rm-hv { grid-column: 2; }
+.rm-hvrow .rm-hd { grid-column: 3; justify-self: start; }
+.rm-hvrow .rm-vam { grid-column: 3; justify-self: start; }
+.rm-vam { color: var(--ink-2); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: help; }
+.rm-hd { color: var(--good-text); font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: help; }
+.rm-hd[hidden] { display: none; }
+.rm-needle { transform-box: view-box; transform-origin: 50% 50%; transform: rotate(var(--north, 0deg)); }
+.rm-hd.edge { color: var(--danger); } /* peloton en 2D : en bordure */
+.rm-hu { display: block; font-size: 11px; color: var(--ink-2); }
+
+/* alerte de course, puces (tactique, météo, prochain point, aspiration) : sous le HUD, à gauche des boutons */
+.rm-chips {
+  position: absolute; top: calc(78px + env(safe-area-inset-top)); left: calc(10px + env(safe-area-inset-left)); right: calc(66px + env(safe-area-inset-right));
+  display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; pointer-events: none;
+}
+.rm-chips > * { pointer-events: none; }
+.rm-chips .hud-chips { display: contents; }
+.rm-chips .hud-tactic { background: var(--surface); border: 0.5px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12px; }
+.rm-chips .hud-next { max-width: 100%; }
+.rm-chips .hud-banner {
+  position: static; transform: none; max-width: 100%; flex: 0 1 100%; text-align: left; font-size: 13px; line-height: 1.3; padding: 7px 11px;
+}
+
+/* ---------- boutons carrés ---------- */
+.rm-side { position: absolute; top: calc(78px + env(safe-area-inset-top)); right: calc(10px + env(safe-area-inset-right)); display: flex; flex-direction: column; gap: 8px; }
+.rm-sq {
+  width: 46px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; padding: 0; cursor: pointer; font-variant-numeric: tabular-nums; touch-action: manipulation;
+}
+div.rm-sq { cursor: default; font-size: 12px; }
+.rm-sq:active, .rm-act:active, .rm-step:active { transform: scale(0.95); }
+/* liste des vitesses : déroulée vers la gauche à partir du bouton, la vitesse actuelle en surbrillance */
+.rm-speedwrap { position: relative; }
+.rm-speedopts { position: absolute; top: 0; right: calc(100% + 8px); display: flex; gap: 5px; transform-origin: right center; animation: rm-unroll 0.16s ease-out; }
+.rm-speedopts .rm-so { width: 42px; flex: none; }
+.rm-speedopts .rm-so[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+@keyframes rm-unroll { from { opacity: 0; transform: scaleX(0.4); } }
+/* grand écran : la liste se déroule vers le bas, par-dessus les autres boutons, pour que tous les choix restent visibles */
+body[data-race="wide"] .rm-speedopts { top: calc(100% + 6px); right: 0; flex-direction: column; gap: 4px; z-index: 6; transform-origin: top center; animation-name: rm-unroll-down; }
+body[data-race="wide"] .rm-speedopts .rm-so { width: 46px; }
+@keyframes rm-unroll-down { from { opacity: 0; transform: scaleY(0.4); } }
+.rm-sq.slowed { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.rm-ic { width: 18px; height: 18px; fill: currentColor; }
+.rm-ic.ic-line { fill: none; }
+.rm-tiltphone { transform-box: view-box; transform-origin: 50% 50%; transform: rotate(var(--tilt, 0deg)); transition: transform 0.1s linear; }
+.rm-sq:disabled, .rm-act:disabled { opacity: 0.45; cursor: default; }
+
+/* ---------- pile du bas de la carte : feuille, ravitaillement, réserves ---------- */
+/* le bas de la carte : réserves, puis barre de puissance et actions, superposés à la carte */
+.rm-dock {
+  position: absolute; left: calc(10px + env(safe-area-inset-left)); right: calc(10px + env(safe-area-inset-right)); bottom: calc(10px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 8px;
+}
+.rm-dock, .rm-bottom { pointer-events: none; }
+.rm-dock > *, .rm-bottom > * { pointer-events: auto; }
+.rm-bottom { position: relative; display: flex; flex-direction: column; }
+.rm-fuel > :not([hidden]) { margin-bottom: 8px; }
+.rm-fuel .hud-fuel-actions { display: flex; gap: 8px; }
+.rm-fuel .btn {
+  flex: 1 1 0; min-height: 44px; padding: 6px 8px; justify-content: center; background: var(--surface); border: 0.5px solid var(--border-strong);
+  box-shadow: var(--shadow); font-size: 13px; font-weight: 600; touch-action: manipulation;
+}
+.rm-fuel .btn kbd { display: none; }
+.rm-fuel .btn span { font-size: 11px; font-weight: 400; }
+.rm-fuel .feed-btn.active { background: #0a7ea4; border-color: #0a7ea4; color: #fff; }
+/* dans la colonne d'actions (grand écran), la règle de style des boutons de la colonne est plus prioritaire : le bouton Ravito actif (zone de
+   ravitaillement : musette à prendre) garde son fond bleu, sinon texte blanc sur fond blanc */
+.rm-acts.rm-actcol .rm-fuel .feed-btn.active { background: #0a7ea4; border-color: #0a7ea4; color: #fff; }
+.rm-acts.rm-actcol .rm-fuel .feed-btn.active span { color: #fff; }
+
+.rm-res { display: flex; gap: 8px; padding: 10px 12px; cursor: pointer; text-align: left; touch-action: manipulation; }
+.rm-bars { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 9px; min-width: 0; }
+.rm-row { display: flex; align-items: center; gap: 3px; font-size: 12px; }
+.rm-lab { width: 65px; color: var(--ink-2); flex: none; }
+.rm-track { flex: 1; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.rm-fill { height: 100%; width: 100%; border-radius: 3px; background: var(--good); transition: width 0.2s, background-color 0.3s; }
+.rm-val { width: 38px; display: flex; justify-content: flex-end; white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
+.rm-track.stacked { display: flex; }
+.rm-track.stacked .rm-fill { flex: none; border-radius: 0; }
+.rm-liver { width: 0; background: var(--gly-liver); }
+.rm-gut { flex: none; height: 100%; width: 0; background: repeating-linear-gradient(135deg, var(--gly-intestine) 0 3px, transparent 3px 6px); transition: width 0.2s; }
+.rm-gut.stomach { background: repeating-linear-gradient(135deg, var(--gly-stomach) 0 3px, transparent 3px 6px); }
+.rm-info { cursor: help; }
+.rm-tte.rm-info:hover, .rm-row.rm-info:hover .rm-lab { color: var(--accent); }
+.rm-pop { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); padding: 8px 12px 10px; font-size: 13px; line-height: 1.35; max-height: 55dvh; overflow-y: auto; cursor: pointer; z-index: 2; }
+.rm-pop h4 { margin: 0 0 4px; font-size: 14px; }
+.rm-pl { margin: 3px 0; }
+.rm-pop h4.rm-sub { margin-top: 8px; font-size: 13px; }
+.rm-fwd { display: grid; grid-template-columns: 1fr auto auto auto; gap: 2px 14px; margin: 3px 0; font-variant-numeric: tabular-nums; }
+.rm-fwd .r { text-align: right; }
+.rm-fwd .hd { font-size: 11px; color: var(--ink-2); }
+.rm-fwd .lim { font-weight: 650; color: var(--critical); }
+.rm-pl.lim { font-weight: 650; color: var(--critical); }
+.rm-pl.help { color: var(--ink-2); font-size: 12px; }
+.rm-pl.sum { border-top: 0.5px solid var(--border); padding-top: 4px; margin-top: 5px; font-weight: 600; }
+.rm-tte { border-left: 0.5px solid var(--border); padding-left: 8px; min-width: 92px; max-width: 124px; text-align: center; display: flex; flex-direction: column; justify-content: center; flex: none; }
+.rm-tl { font-size: 11px; color: var(--ink-2); }
+.rm-tv { font-size: 27px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.rm-ts { font-size: 11px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- feuille Profil / Classement / Plus ---------- */
+.rm-sheet { padding: 8px 10px 10px; display: flex; flex-direction: column; max-height: min(320px, 40dvh); overflow: hidden; margin-bottom: 8px; }
+.rm-sh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex: none; }
+.rm-shtitle { font-size: 14px; padding-left: 4px; }
+.rm-shr { display: flex; align-items: center; gap: 8px; }
+.rm-clsgroup { display: flex; gap: 4px; }
+.rm-clsgroup[hidden], .rm-clsbtn[hidden] { display: none; }
+.rm-clsbtn { width: 34px; height: 34px; border-radius: 9px; border: 0.5px solid var(--border-strong); background: var(--surface); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; touch-action: manipulation; color: var(--ink); }
+.rm-clsbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.rm-clsbtn .rm-ic { width: 18px; height: 18px; }
+.rm-clsbtn .jersey { width: 18px; height: 18px; margin: 0; }
+.rm-sheet #classif-tabs { display: none !important; }
+.rm-shr[hidden] { display: none; }
+/* téléphone : pas de ligne « X mène : … devant toi » dans le classement, et le bouton Résumé / Tous est dans l'entête de la feuille */
+.rm-sheet .board-lead, .rm-sheet .board-head { display: none; }
+.rm-view { flex: 1; min-height: 0; overflow-y: auto; }
+.rm-stats { display: flex; gap: 8px; margin-bottom: 6px; }
+.rm-prof-slot .chart-box { height: 150px; min-height: 0; flex: none; }
+.rm-prof-slot .legend { margin: 6px 0 0; }
+.rm-sheet .board-scroll { max-height: none; overflow: visible; }
+.rm-sheet .live-board.all .board-scroll { max-height: none; }
+.rm-sheet #game-classif { margin-bottom: 0; }
+.rm-note { margin: 4px 0; font-size: 13px; color: var(--ink-2); }
+.rm-fin { display: flex; gap: 8px; margin-top: 8px; }
+
+/* ---------- panneau du bas : barre de puissance et tactiques ---------- */
+.rm-panel { flex: none; background: var(--surface); border: 0.5px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 12px 12px; }
+.rm-p1 { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin-bottom: 2px; }
+.rm-p1 span:first-child { color: var(--ink-2); }
+.rm-p1 span:last-child { font-weight: 600; }
+.rm-p2 { display: flex; align-items: center; gap: 8px; }
+.rm-step {
+  width: 46px; height: 46px; flex: none; border: 0.5px solid var(--border-strong); border-radius: 10px; background: var(--surface-2);
+  font-size: 26px; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; touch-action: manipulation; cursor: pointer;
+}
+.rm-barwrap { flex: 1; position: relative; height: 60px; padding-top: 9px; min-width: 0; }
+.rm-bar { position: relative; display: flex; height: 32px; border-radius: 7px; overflow: hidden; touch-action: none; cursor: pointer; outline-offset: 3px; }
+.rm-z { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; min-width: 0; overflow: hidden; padding: 0 4px; white-space: nowrap; user-select: none; -webkit-user-select: none; cursor: pointer; }
+@media (hover: hover) { .rm-z:hover { filter: brightness(0.92); } }
+.rm-z:active { filter: brightness(0.85); }
+/* partie indisponible : grisée, hachurée (la version claire : plus d'une minute impossible à tenir) */
+/* bandes de durée tenable : jaune (20 min), orange (5 min), rouge (1 min), gris (15 s), un peu transparentes et hachurées à 135° comme la
+   restriction automatique (variables --c : couleur, --a : opacité du trait, de plus en plus forte quand la durée raccourcit) */
+.rm-hb {
+  position: absolute; top: 0; bottom: 0; pointer-events: none;
+  background: repeating-linear-gradient(135deg, rgba(var(--c), var(--a)) 0 3px, rgba(var(--c), calc(var(--a) * 0.4)) 3px 8px);
+  border-left: 1px solid rgba(var(--c), 0.9);
+  -webkit-backdrop-filter: grayscale(0.7); backdrop-filter: grayscale(0.7);
+}
+.rm-hl { position: absolute; top: 46px; font-size: 10px; line-height: 1; color: var(--ink-2); transform: translateX(-50%); pointer-events: none; white-space: nowrap; padding-top: 4px; border-top: 3px solid rgb(var(--c)); margin-top: -3px; }
+.rm-lock {
+  position: absolute; top: 0; bottom: 0; right: 0; left: 100%; pointer-events: none;
+  /* restriction automatique : gris moyen en hachures diagonales marquées (les zones restent lisibles entre les traits) */
+  background: repeating-linear-gradient(135deg, rgba(105, 105, 105, 0.72) 0 3px, rgba(105, 105, 105, 0.22) 3px 8px);
+  -webkit-backdrop-filter: grayscale(1); backdrop-filter: grayscale(1);
+  border-left: 1px solid var(--ink-2);
+}
+.rm-z.z1 { background: var(--rz1); color: var(--rz1t); }
+.rm-z.z2 { background: var(--rz2); color: var(--rz2t); }
+.rm-z.z3 { background: var(--rz3); color: var(--rz3t); }
+.rm-z.z4 { background: var(--rz4); color: var(--rz4t); }
+.rm-z.z5 { background: var(--rz5); color: var(--rz5t); }
+.rm-z.on { box-shadow: inset 0 0 0 2px var(--ink); font-weight: 700; }
+.rm-cursor { position: absolute; top: 0; width: 6px; height: 50px; border-radius: 3px; background: var(--ink); border: 1.5px solid var(--surface); transform: translateX(-50%); pointer-events: none; }
+.rm-cursor.hot { background: var(--critical); }
+.rm-tick { position: absolute; top: 9px; height: 32px; width: 2px; pointer-events: none; transform: translateX(-50%); }
+.rm-tick.pc { background: var(--ink); }
+.rm-tick.max { background: var(--critical); opacity: 0.75; }
+.rm-tlab { position: absolute; top: 46px; font-size: 11px; color: var(--ink-2); transform: translateX(-50%); pointer-events: none; }
+.rm-acts { display: flex; gap: 8px; margin-top: 8px; }
+.rm-act {
+  flex: 1; min-height: 44px; padding: 10px 0; border-radius: 10px; border: 0.5px solid var(--border-strong); background: var(--surface-2);
+  font-size: 14px; font-weight: 600; text-align: center; touch-action: manipulation; cursor: pointer;
+}
+.rm-act.rm-spr { position: relative; overflow: hidden; }
+/* le bouton se remplit de gauche à droite avec le niveau de l'effort (0 à 100 %), et se vide quand on cesse d'appuyer */
+.rm-act.rm-spr i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(220, 38, 38, 0.5); border-right: 2px solid var(--critical); pointer-events: none; transition: width 0.08s linear; }
+.rm-act.rm-spr > span { position: relative; z-index: 1; }
+.rm-act.rm-spr[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); border-color: var(--critical); }
+.rm-act.rm-sprint-big[aria-pressed="true"] { background: var(--surface); }
+.rm-act[aria-pressed="true"], .rm-act.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.rm button:focus-visible, .rm-panel button:focus-visible, .rm-bar:focus-visible, .rm-res:focus-visible { outline: 2px solid var(--accent); }
+
+/* notifications : sous le HUD, au-dessus de tout */
+body[data-race="phone"] .toasts { top: calc(150px + env(safe-area-inset-top)); bottom: auto; }
+
+/* ---------- téléphone en paysage : carte à gauche, commandes à droite ---------- */
+@media (max-width: 950px) and (max-height: 520px) and (orientation: landscape) {
+  /* la barre de puissance et les actions occupent une colonne à droite, sur la carte ; le reste (HUD, réserves) reste à gauche */
+  body[data-race="phone"] .rm-panel {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(44vw, 380px); display: flex; flex-direction: column; justify-content: center;
+    border-radius: 0; border-width: 0 0 0 0.5px; box-shadow: none; overflow-y: auto; z-index: 1150;
+    padding: calc(8px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) 12px;
+  }
+  body[data-race="phone"] .rm-dock { right: calc(min(44vw, 380px) + 10px); }
+  body[data-race="phone"] .rm-side { right: calc(min(44vw, 380px) + 10px); }
+  body[data-race="phone"] .leaflet-bottom.leaflet-right { margin-right: min(44vw, 380px); }
+  .rm-hud { right: auto; width: min(300px, calc(100% - 76px)); }
+  .rm-chips { top: calc(68px + env(safe-area-inset-top)); }
+  .rm-side { top: calc(10px + env(safe-area-inset-top)); gap: 6px; }
+  .rm-sq { height: 38px; }
+  .rm-hv { font-size: 22px; }
+  .rm-hud { padding: 5px 6px; }
+  .rm-res { padding: 7px 10px; }
+  .rm-bars { gap: 6px; }
+  .rm-tv { font-size: 22px; }
+  .rm-sheet { max-height: calc(100dvh - 120px); }
+  body[data-race="phone"] .toasts { top: calc(110px + env(safe-area-inset-top)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-countdown > span { animation: none; }
+  .rm-speedopts { animation: none; }
+  .rm-pullf.warn-orange, .rm-pullf.warn-red { animation: none; }
+  .rm-pullf.warn-orange { background: rgba(245, 158, 11, 0.4); border-color: #f59e0b; }
+  .rm-pullf.warn-red { background: rgba(220, 38, 38, 0.45); border-color: #dc2626; }
+  .rm-fill { transition: none; }
+  .rm-sq:active, .rm-act:active, .rm-step:active { transform: none; }
+}
+.rm-pass[hidden] { display: none; }
+/* téléphone : « Passer le relais » est avec les autres contrôles de la feuille « Plus », sur toute la largeur */
+
+/* téléphone : profil d'élévation sans boutons de zoom ni de déplacement ; le pincement à deux doigts zoome, rien d'autre ne le déplace */
+.chart-box.zoom-locked .chart-zoom { display: none !important; }
+.rm-prof-slot .chart-box canvas { touch-action: none; }

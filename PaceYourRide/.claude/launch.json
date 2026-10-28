@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "paceyourride",
+      "runtimeExecutable": "py",
+      "runtimeArgs": ["-m", "http.server", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "paceyourride-8010",
+      "runtimeExecutable": "py",
+      "runtimeArgs": ["-m", "http.server", "8010"],
+      "port": 8010,
+      "autoPort": false
+    }
+  ]
+}

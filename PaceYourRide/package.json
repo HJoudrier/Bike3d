@@ -1,0 +1,10 @@
+{
+  "name": "paceyourride",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tracé de parcours, modèle cycliste/vélo, stratégie d'allure optimale et mode jeu — HTML, CSS et JavaScript uniquement.",
+  "scripts": {
+    "test": "node --test tests/engine.test.js tests/gradient.test.js tests/codec.test.js tests/race.test.js tests/classif.test.js tests/bench.test.js tests/feed.test.js tests/fuel.test.js tests/weather.test.js tests/weather-fx.test.js tests/plan-gpx.test.js tests/plan-workout.test.js tests/activity.test.js tests/power-bar.test.js tests/slowdown.test.js tests/sprint-boost.test.js tests/record-interp.test.js tests/ride.test.js tests/ride-mixed.test.js tests/activity-export.test.js tests/history.test.js tests/nav.test.js tests/nutrition.test.js tests/sensors.test.js tests/rider-profile.test.js tests/library.test.js tests/metabo.test.js tests/optimizer-physio.test.js tests/peloton.test.js tests/tilt.test.js",
+    "start": "python3 -m http.server 8000"
+  }
+}

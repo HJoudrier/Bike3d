@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<!-- author : Hugo Joudrier-Faure -->
+<!-- Lance les tests du moteur dans un navigateur, sans Node : servir le dossier (py -m http.server 8000) puis ouvrir
+     http://localhost:8000/tests/browser.html  (?f=ride,nutrition pour choisir les fichiers, sans « .test.js »). -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Tests PaceYourRide</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; }
+  .ok { color: #0a7a0a; } .ko { color: #c22; font-weight: 600; } pre { white-space: pre-wrap; margin: 2px 0 8px 18px; color: #c22; }
+  #sum { font-weight: 600; margin: 8px 0; }
+</style>
+</head>
+<body>
+<h1>Tests du moteur</h1>
+<div id="sum">…</div>
+<div id="out"></div>
+<script>
+(function () {
+  'use strict';
+  const FILES = ['engine', 'gradient', 'codec', 'race', 'classif', 'bench', 'feed', 'fuel', 'weather', 'weather-fx', 'plan-gpx', 'plan-workout', 'activity', 'power-bar', 'slowdown', 'sprint-boost', 'record-interp', 'ride', 'ride-mixed', 'activity-export', 'replay', 'history', 'nav', 'nutrition', 'sensors', 'rider-profile', 'library', 'metabo', 'optimizer-physio', 'peloton', 'tilt'];
+  const q = new URLSearchParams(location.search).get('f');
+  const wanted = q ? q.split(',') : FILES;
+  const queue = [];
+  let current = '';
+
+  const fetchSync = (url) => { const x = new XMLHttpRequest(); x.open('GET', url + '?t=' + Date.now(), false); x.send(); if (x.status !== 200) throw new Error('404 ' + url); return x.responseText; };
+  const norm = (p) => { const out = []; for (const seg of p.split('/')) { if (seg === '..') out.pop(); else if (seg && seg !== '.') out.push(seg); } return '/' + out.join('/'); };
+  const path = { join: (...a) => norm(a.join('/')), basename: (p) => p.split('/').pop(), dirname: (p) => p.split('/').slice(0, -1).join('/') };
+
+  function fail(msg) { const e = new Error(msg); e.name = 'AssertionError'; throw e; }
+  const show = (x) => { try { return JSON.stringify(x); } catch (e) { return String(x); } };
+  function deepEq(a, b) {
+    if (Object.is(a, b)) return true;
+    if (typeof a !== typeof b || a === null || b === null || typeof a !== 'object') return false;
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    const ka = Object.keys(a), kb = Object.keys(b);
+    if (ka.length !== kb.length) return false;
+    return ka.every((k) => deepEq(a[k], b[k]));
+  }
+  const assert = {
+    ok: (v, m) => { if (!v) fail(m || 'attendu vrai, reçu ' + show(v)); },
+    equal: (a, b, m) => { if (!Object.is(a, b) && a !== b) fail(m || `${show(a)} !== ${show(b)}`); },
+    notEqual: (a, b, m) => { if (a === b) fail(m || `${show(a)} === ${show(b)}`); },
+    deepEqual: (a, b, m) => { if (!deepEq(a, b)) fail(m || `${show(a)} ≠ ${show(b)}`); },
+    match: (s, re, m) => { if (!re.test(s)) fail(m || `${show(s)} ne correspond pas à ${re}`); },
+    throws: (fn, re, m) => { try { fn(); } catch (e) { if (re instanceof RegExp && !re.test(e.message)) fail(m || 'mauvaise erreur : ' + e.message); return; } fail(m || 'aucune exception'); },
+    rejects: async (p, re, m) => { try { await (typeof p === 'function' ? p() : p); } catch (e) { return; } fail(m || 'aucun rejet'); },
+  };
+  const test = (name, opts, fn) => { if (typeof opts === 'function') fn = opts; queue.push({ file: current, name, fn }); };
+  test.test = test;
+
+  // seul usage de Buffer dans les tests : décoder du texte UTF-8 (plan-workout)
+  if (typeof Buffer === 'undefined') globalThis.Buffer = { from: (a) => ({ toString: () => new TextDecoder().decode(Uint8Array.from(a)) }) };
+
+  const modules = {};
+  const sandbox = (code, extra) => {
+    const module = { exports: {} };
+    new Function('require', 'module', 'exports', '__dirname', '__filename', code)(makeRequire(), module, module.exports, '/tests', '/tests/x.js');
+    return module.exports;
+  };
+  function makeRequire() {
+    return function (name) {
+      if (name === 'node:test') return test;
+      if (name === 'node:assert/strict' || name === 'node:assert' || name === 'assert') return assert;
+      if (name === 'path') return path;
+      const p = name.startsWith('./') ? norm('/tests/' + name) : norm(name);
+      if (modules[p]) return modules[p].exports;
+      const code = fetchSync(p);
+      const m = modules[p] = { exports: {} };
+      new Function('require', 'module', 'exports', '__dirname', '__filename', code)(makeRequire(), m, m.exports, p.split('/').slice(0, -1).join('/'), p);
+      return m.exports;
+    };
+  }
+  globalThis.require = makeRequire();
+
+  const out = document.getElementById('out'), sum = document.getElementById('sum');
+  async function run() {
+    for (const f of wanted) { current = f; try { sandbox(fetchSync(`/tests/${f}.test.js`)); } catch (e) { queue.push({ file: f, name: 'chargement', fn: () => { throw e; } }); } }
+    let pass = 0, bad = 0;
+    for (const t of queue) {
+      const row = document.createElement('div');
+      const t0 = performance.now();
+      try {
+        await t.fn();
+        pass++; row.className = 'ok'; row.textContent = `✓ [${t.file}] ${t.name} (${Math.round(performance.now() - t0)} ms)`;
+      } catch (e) {
+        bad++; row.className = 'ko'; row.textContent = `✗ [${t.file}] ${t.name}`;
+        const pre = document.createElement('pre'); pre.textContent = (e && e.stack) || String(e); row.appendChild(pre);
+      }
+      out.appendChild(row);
+      sum.textContent = `${pass} réussis, ${bad} échoués sur ${queue.length}`;
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    sum.textContent = `${pass} réussis, ${bad} échoués sur ${queue.length} — terminé`;
+    window.__done = { pass, bad, total: queue.length };
+  }
+  window.addEventListener('load', run);
+})();
+</script>
+</body>
+</html>
