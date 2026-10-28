@@ -61,6 +61,17 @@
     setTimeout(() => t.remove(), ms || (type === 'error' ? 6000 : 3500));
   };
 
+  const FLASH_KEY = 'paceyourride.flash';
+  /** Message à afficher une fois la page rechargée (D.flushFlash, au démarrage de l'application). */
+  D.flash = function (msg) {
+    try { sessionStorage.setItem(FLASH_KEY, msg); } catch (e) { /* stockage indisponible : pas de message */ }
+  };
+  D.flushFlash = function () {
+    let msg = null;
+    try { msg = sessionStorage.getItem(FLASH_KEY); sessionStorage.removeItem(FLASH_KEY); } catch (e) { /* stockage indisponible */ }
+    if (msg) D.toast(msg, null, 6000);
+  };
+
   D.download = function (filename, content, mime) {
     const blob = content instanceof Blob ? content : new Blob([content], { type: mime || 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);

@@ -19,7 +19,7 @@
     'js/engine/replay.js', 'js/engine/history.js', 'js/engine/nav.js', 'js/engine/presence.js',
     'vendor/qrcode-generator/qrcode.js',
     // état, stockage, échanges
-    'js/core/dom.js', 'js/core/avatar.js', 'js/core/codec.js', 'js/core/zip.js', 'js/core/race-data.js', 'js/core/store.js', 'js/core/library.js',
+    'js/core/dom.js', 'js/core/avatar.js', 'js/core/codec.js', 'js/core/zip.js', 'js/core/race-data.js', 'js/core/store.js', 'js/core/library.js', 'js/core/route-file.js',
     // interface : chaque page n'initialise que ses parties (js/app.js)
     'js/ui/services.js', 'js/ui/route-model.js', 'js/ui/charts.js', 'js/ui/chart-config.js', 'js/ui/map-poi.js', 'js/ui/map.js',
     'js/ui/classif-view.js', 'js/ui/tab-route.js', 'js/ui/tab-weather.js', 'js/ui/rider-physio.js', 'js/ui/tab-rider.js', 'js/ui/rider-import.js',

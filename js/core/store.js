@@ -172,6 +172,19 @@
       this.saveNow();
     },
 
+    /** Parcours complet lu d'un fichier (GPX enrichi, js/core/route-file.js) : il remplace le tracé, les sprints et les côtes, les ravitaillements,
+     *  les revêtements, le vent, la météo et la largeur de route du projet (ce qui manque repart des valeurs par défaut), champs vérifiés comme
+     *  à l'ouverture ; le cycliste, l'équipement et les réglages sont conservés. */
+    importRoute(data) {
+      if (!data || typeof data !== 'object' || !data.route) throw new Error('Fichier de parcours invalide');
+      const s = serialize(this.state);
+      PYR.library.startRoute(s);
+      PYR.library.apply('route', s, data);
+      this.state = sanitize(merge(defaults(), upgrade(s)));
+      this.plan = null;
+      this.saveNow();
+    },
+
     /** Profil du cycliste seul (identité, morphologie, intestin, seuils, records) : un petit fichier à garder ou à échanger. La tenue et la position (page Équipements) n'en font pas partie. */
     exportRider() {
       const rider = cleanRider(this.state.rider);

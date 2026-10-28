@@ -8,7 +8,7 @@
  *   - classements intermédiaires : ordre et écarts de passage à chaque point.
  * Les points de passage (« cps ») sont triés par distance ; le dernier est toujours l'arrivée.
  * Ils sont choisis sur la page Parcours (liste enregistrée avec le projet, voir fromList) : posés à la main
- * (distance, catégorie, points distribués) ou ajoutés automatiquement (build, toItems). */
+ * (distance, catégorie, points distribués) ou ajoutés automatiquement, un par un (nextSprint, nextClimb). */
 (function (PYR) {
   'use strict';
 
@@ -111,6 +111,65 @@
       if (best !== null && bestScore <= 5) out.push(best);
     }
     return out.sort((a, b) => a - b);
+  }
+
+  const SPRINT_GAP = 2000;   // distance minimale (m) entre un sprint ajouté et un autre sprint, le départ ou l'arrivée
+
+  /**
+   * Un sprint intermédiaire de plus, là où il n'y en a pas encore : vers le milieu du plus grand intervalle libre entre le
+   * départ, les sprints déjà posés (taken : distances en m) et l'arrivée, sur la portion la plus plate des environs, loin des
+   * côtes détectées (climbs) et des zones à éviter (avoid : [{start, end}] en m, côtes posées à la main, ravitaillements).
+   * Faute de plat dans cet intervalle, on essaie le suivant. Renvoie la distance de la ligne (m), ou null s'il n'y a plus de place.
+   */
+  function nextSprint(ele, step, climbs, taken, avoid) {
+    const n = ele ? ele.length : 0, L = step * (n - 1);
+    if (!(n > 2) || L < 4000) return null;
+    const at = (s) => {
+      const x = U.clamp(s / step, 0, n - 1), i = Math.min(n - 2, Math.floor(x));
+      return ele[i] + (ele[i + 1] - ele[i]) * (x - i);
+    };
+    const marks = [0, ...(taken || []).filter((s) => s > 0 && s < L).sort((a, b) => a - b), L];
+    const gaps = [];
+    for (let k = 1; k < marks.length; k++) gaps.push({ a: marks[k - 1], b: marks[k] });
+    gaps.sort((x, y) => (y.b - y.a) - (x.b - x.a));
+    for (const g of gaps) {
+      const span = (g.b - g.a) / 2, target = (g.a + g.b) / 2, win = 0.3 * span;
+      const lo = Math.max(1000, g.a + SPRINT_GAP), hi = Math.min(L - 1500, g.b - SPRINT_GAP);
+      let best = null, bestScore = Infinity;
+      for (let s = lo; s <= hi; s += 50) {
+        // mêmes critères que placeSprints : pente des 300 derniers mètres (3 % au plus), éloignement du milieu de l'intervalle, côtes
+        const rise = Math.abs(at(s) - at(s - 300));
+        if (rise > 9) continue;
+        let score = rise / 3 + Math.abs(s - target) / win;
+        for (const c of climbs || []) {
+          if (s > c.start - 500 && s < c.end + 300) score += 8;
+          else if (s >= c.end + 300 && s < c.end + 1000) score += 3;
+        }
+        for (const z of avoid || []) if (s > z.start - 300 && s < z.end + 300) score += 8;
+        if (score < bestScore) { bestScore = score; best = s; }
+      }
+      if (best !== null && bestScore <= 5) return Math.round(best);
+    }
+    return null;
+  }
+
+  /** Une côte détectée c ({start, end, len}) est-elle déjà posée (t : {start, end}, du pied au sommet, en m) ? */
+  function sameClimb(c, t) {
+    if (Math.abs(t.end - c.end) < 300) return true;
+    const common = Math.min(c.end, t.end) - Math.max(c.start, t.start);
+    return common > 0 && common >= 0.3 * Math.min(c.len, Math.max(1, t.end - t.start));
+  }
+
+  /**
+   * Une côte classée de plus : la plus dure (indice FIETS) des montées détectées et classées qui n'est pas déjà dans la liste
+   * (taken : [{start, end}] en m, du pied au sommet). Renvoie un point de passage {type: 'kom', s, cat, start, len, gain}, ou null.
+   */
+  function nextClimb(ele, step, taken) {
+    const L = step * (ele.length - 1);
+    const free = findClimbs(ele, step).filter((c) => c.cat && !(taken || []).some((t) => sameClimb(c, t)));
+    if (!free.length) return null;
+    const c = free.reduce((a, b) => (b.fiets > a.fiets ? b : a));
+    return { type: 'kom', s: L - c.end < 200 ? L : c.end, cat: c.cat, start: c.start, len: c.len, gain: c.gain };
   }
 
   /**
@@ -340,7 +399,7 @@
 
   PYR.classif = {
     CATS, SPRINT_PTS, FINISH_PTS, MAX_SPRINTS, MAX_PTS,
-    catOf, catFor, cleanPts, defaultScale, findClimbs, placeSprints, build, fromList, toItems, normalize, active,
+    catOf, catFor, cleanPts, defaultScale, findClimbs, placeSprints, nextSprint, nextClimb, build, fromList, toItems, normalize, active,
     shortLabel, longLabel, climbText, pointsFor, standings,
     traceTime, entrySplits, cleanSplits, packSplits,
   };

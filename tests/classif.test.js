@@ -55,6 +55,61 @@ test('points de passage : sprints sur du plat, sommets, arrivée en dernier', ()
   assert.ok(Cl.active(cps));
 });
 
+test('sprints ajoutés un par un : dans le plus grand intervalle libre, sur du plat, sans limite de nombre', () => {
+  const plat = makeProfile([{ len: 60000, grade: 0 }]);
+  const taken = [];
+  for (let k = 0; k < 12; k++) {
+    const s = Cl.nextSprint(plat.ele, plat.step, [], taken, []);
+    assert.ok(s !== null, `sprint n°${k + 1}`);
+    for (const t of [0, plat.length, ...taken]) assert.ok(Math.abs(s - t) >= 2000, `km ${s / 1000} trop près du km ${t / 1000}`);
+    taken.push(s);
+  }
+  assert.ok(Math.abs(taken[0] - 30000) < 100, `premier sprint au milieu : km ${taken[0] / 1000}`);
+  assert.ok(Math.abs(taken[1] - 15000) < 100 || Math.abs(taken[1] - 45000) < 100, `deuxième au quart : km ${taken[1] / 1000}`);
+  // à force, il n'y a plus de place (2 km entre deux sprints)
+  let more = 0;
+  while (Cl.nextSprint(plat.ele, plat.step, [], taken, []) !== null && more < 40) { taken.push(Cl.nextSprint(plat.ele, plat.step, [], taken, [])); more++; }
+  assert.ok(more < 40 && taken.length <= 29, `${taken.length} sprints`);
+  // col au milieu : le sprint évite la côte, et la zone à éviter (ravitaillement)
+  const col = makeProfile([{ len: 8000, grade: 0 }, { len: 5000, grade: 0.07 }, { len: 5000, grade: -0.06 }, { len: 8000, grade: 0 }]);
+  const climbs = Cl.findClimbs(col.ele, col.step);
+  const s1 = Cl.nextSprint(col.ele, col.step, climbs, [], []);
+  assert.ok(s1 < climbs[0].start - 400 || s1 > climbs[0].end + 900, `sprint au km ${s1 / 1000}`);
+  const s2 = Cl.nextSprint(col.ele, col.step, climbs, [], [{ start: s1 - 1000, end: s1 + 1000 }]);
+  assert.ok(Math.abs(s2 - s1) > 1200, `zone évitée : km ${s1 / 1000} puis ${s2 / 1000}`);
+  // parcours accidenté : jamais dans une pente de plus de 3 %, même à force d'en ajouter
+  const hilly = makeProfile([{ len: 5000, grade: 0.05 }, { len: 5000, grade: -0.05 }, { len: 6000, grade: 0 }, { len: 5000, grade: 0.05 }, { len: 5000, grade: -0.05 }]);
+  const hc = Cl.findClimbs(hilly.ele, hilly.step), placed = [];
+  for (let s; (s = Cl.nextSprint(hilly.ele, hilly.step, hc, placed, [])) !== null && placed.length < 20;) placed.push(s);
+  assert.ok(placed.length >= 1 && placed.length < 20, `${placed.length} sprints`);
+  for (const s of placed) assert.ok(s > 10000 && s < 16000, `sprint au km ${s / 1000}, hors du plat`);
+  // trop court
+  assert.equal(Cl.nextSprint(makeProfile([{ len: 3000, grade: 0 }]).ele, 10, [], [], []), null);
+});
+
+test('côtes ajoutées une par une : la plus dure d\'abord, jamais deux fois la même', () => {
+  const p = makeProfile([{ len: 3000, grade: 0 }, { len: 1500, grade: 0.05 }, { len: 3000, grade: 0 }, { len: 10000, grade: 0.07 }, { len: 4000, grade: -0.06 },
+    { len: 3000, grade: 0 }, { len: 3000, grade: 0.06 }, { len: 3000, grade: -0.05 }], { ele0: 1000 });
+  const taken = [];
+  const cats = [];
+  for (;;) {
+    const c = Cl.nextClimb(p.ele, p.step, taken);
+    if (!c) break;
+    cats.push(c.cat);
+    taken.push({ start: c.start, end: c.s });
+    assert.ok(taken.length <= 3, 'au plus trois côtes');
+  }
+  assert.deepEqual(cats, ['1', '2', '4']);
+  // une côte posée à la main un peu décalée compte comme déjà posée
+  const first = Cl.nextClimb(p.ele, p.step, []);
+  const next = Cl.nextClimb(p.ele, p.step, [{ start: first.start + 400, end: first.s - 150 }]);
+  assert.notEqual(next.s, first.s);
+  // arrivée au sommet : la ligne est l'arrivée
+  const summit = makeProfile([{ len: 8000, grade: 0 }, { len: 6000, grade: 0.07 }]);
+  assert.equal(Cl.nextClimb(summit.ele, summit.step, []).s, summit.length);
+  assert.equal(Cl.nextClimb(makeProfile([{ len: 8000, grade: 0 }]).ele, 10, []), null);
+});
+
 test('points de passage reçus : vérifiés, triés, numérotés, idempotents', () => {
   const L = 10000;
   const raw = [

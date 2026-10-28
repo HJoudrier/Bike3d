@@ -601,6 +601,107 @@ body[data-tab="route"] .chart-box.is-zoomed canvas { cursor: crosshair; } /* sur
 .map-legend .bar { height: 8px; width: 160px; border-radius: 4px; margin: 4px 0 2px; }
 .map-legend .ticks { display: flex; justify-content: space-between; color: var(--ink-2); }
 
+/* ---------- Onglet Parcours : en-tête au-dessus de la carte (nom, chiffres clés, fichiers) ---------- */
+.route-head {
+  display: none; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 8px 14px 9px 16px;
+  background: var(--surface); border-bottom: 1px solid var(--border); flex: none;
+}
+body[data-tab="route"] .route-head { display: flex; }
+.rh-main { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.rh-title { margin: 0; }
+.rh-title h2 { font-size: 20px; line-height: 1.25; margin: 0 0 0 -5px; padding: 1px 5px; border-radius: 6px; cursor: text; }
+.rh-title h2:hover { background: var(--surface-2); }
+.rh-title h2.unnamed { color: var(--muted); }
+.rh-title input { font-size: 20px; padding: 2px 6px; max-width: 520px; }
+.rh-stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 22px; }
+.rh-stat { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.rh-label { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.rh-stat strong { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.2px; }
+.rh-stat em { font-style: normal; font-size: 13px; color: var(--ink-2); }
+.rh-stats.empty strong { color: var(--muted); }
+.rh-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.menu-wrap { position: relative; }
+.pop-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 1300; width: 320px; max-width: calc(100vw - 24px);
+  display: flex; flex-direction: column; gap: 2px; padding: 4px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.pop-menu button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left;
+  padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; cursor: pointer;
+}
+.pop-menu button:hover, .pop-menu button:focus-visible { background: var(--surface-2); outline: none; }
+.pop-menu b { font-size: 13px; font-weight: 650; }
+.pop-menu small { font-size: 12px; line-height: 1.35; color: var(--ink-2); }
+.btn .tag {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 0 5px; border-radius: 4px;
+  background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--border);
+}
+.panel h3.first { margin-top: 0; padding-top: 0; border-top: 0; }
+
+/* ---------- Onglet Parcours : outils de tracé posés sur la carte ---------- */
+.route-tools {
+  display: none; position: absolute; top: 10px; left: 54px; right: 62px; z-index: 1001;
+  flex-wrap: wrap; align-items: flex-start; gap: 8px; pointer-events: none;      /* entre les outils, la carte reste cliquable */
+}
+body[data-tab="route"] .route-tools { display: flex; }
+.route-tools > * { pointer-events: auto; }
+.ico { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.search.map-search {
+  flex: 0 1 240px; min-width: 180px; margin: 0; height: 38px; align-items: center; gap: 2px; padding: 0 4px 0 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.map-search .ico { color: var(--ink-2); }
+.map-search input[type="search"] { height: 100%; border: 0; background: transparent; padding: 0 6px; }
+.map-search input[type="search"]:focus-visible { outline: none; }
+.map-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+.map-search .search-results { min-width: 260px; }
+.tool-bar {
+  display: flex; align-items: center; gap: 2px; height: 38px; padding: 3px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.tool {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 30px; min-width: 30px; padding: 0 7px;
+  border: 0; border-radius: 7px; background: transparent; color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+.tool:hover:not(:disabled) { background: var(--surface-2); }
+.tool:disabled { opacity: 0.35; cursor: default; }
+.tool.danger { color: var(--danger); }
+.tool-sep { width: 1px; align-self: stretch; margin: 4px 3px; background: var(--border); }
+.tool-seg { display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--surface-2); }
+.tool-seg .tool { height: 26px; padding: 0 9px; font-size: 12px; color: var(--ink-2); }
+.tool-seg .tool:hover { background: transparent; color: var(--ink); }
+.tool-seg .tool[aria-checked="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
+.tool-select { display: none; }
+/* tracé vide : par où commencer */
+.map-hint {
+  position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%); z-index: 1001; width: min(460px, calc(100% - 24px));
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 14px;
+  background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); font-size: 13px; text-align: center;
+}
+body:not([data-tab="route"]) .map-hint { display: none; }
+.map-hint p { margin: 0; }
+.map-hint-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+body[data-tab="route"] .map-status { top: auto; bottom: 34px; }
+@media (max-width: 1180px) {
+  .tool > span { display: none; }      /* Boucler, Inverser : l'icône seule (le nom reste dans l'infobulle) */
+}
+@media (max-width: 900px) {
+  .route-head { padding: 8px max(14px, env(safe-area-inset-right)) 9px max(14px, env(safe-area-inset-left)); }
+  .rh-main { flex-basis: 100%; }
+  .rh-stats { gap: 2px 18px; }
+  body[data-tab="route"] .leaflet-control-zoom { display: none; }      /* on zoome en pinçant : la place va aux outils de tracé */
+  .route-tools { left: 8px; right: 8px; gap: 6px; }
+  .search.map-search { flex: 1 1 calc(100% - 46px); min-width: 0; margin-right: 46px; }      /* à droite : le choix du fond de carte */
+  .tool-bar { gap: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .tool-seg { display: none; }
+  select.tool-select { display: block; width: auto; height: 32px; padding: 0 6px; border: 0; border-radius: 7px; background: var(--surface-2); font-weight: 600; }
+  .tool { min-width: 34px; height: 32px; padding: 0 6px; }
+  .tool-sep { margin: 4px 1px; }
+  .tool-seg .tool { height: 28px; padding: 0 7px; }
+  .map-hint { bottom: 64px; }
+}
+
 /* ---------- Classement en direct (HUD du jeu) : rang, écart en temps et en distance avec toi ---------- */
 #game-classif { margin-bottom: 8px; }
 .classif-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0 6px; border-bottom: 1px solid var(--border); }
@@ -989,6 +1090,15 @@ details.manual[open] summary { margin-bottom: 6px; }
     height: calc(100dvh - var(--top-h)); min-height: 240px;
   }
   .map-wrap, body[data-tab="game"] .map-wrap { height: auto; min-height: 0; }
+  body[data-tab="route"] .stage { grid-template-rows: auto minmax(0, 1fr) auto; }
+  .route-head { padding-top: 4px; padding-bottom: 4px; gap: 4px 12px; }
+  .rh-main { flex: 1 1 auto; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 2px 16px; }
+  .rh-actions .btn { min-height: 32px; padding: 4px 10px; }
+  .route-tools { top: 6px; right: 54px; }
+  .search.map-search { flex: 0 1 240px; margin-right: 0; }      /* recherche et outils sur une seule ligne */
+  .search.map-search, .tool-bar { height: 34px; }
+  .rh-title h2, .rh-title input { font-size: 16px; }
+  .rh-stat strong { font-size: 15px; }
   .bottom, body[data-tab="game"] .bottom { height: 130px; }
   body[data-tab="route"][data-rbottom="weather"] .bottom { height: 150px; }
   /* Performance : la carte remplit l'écran, les graphiques sont dessous (la colonne défile) */

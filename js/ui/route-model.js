@@ -7,7 +7,8 @@
   const STEP = 10;          // pas du profil (m)
   const MAX_HISTORY = 40;
 
-  const history = [];
+  const history = [];      // états d'avant chaque modification (Annuler)
+  const future = [];       // états annulés (Rétablir), vidés à la modification suivante
   let pending = 0;
   let status = { text: '', error: false };
 
@@ -19,9 +20,22 @@
     store.emit('route-status', status);
   }
 
+  const current = () => ({ waypoints: route().waypoints.slice(), legs: route().legs.slice(), fixed: route().fixed || null, name: route().name });
+
   function snapshot() {
-    history.push({ waypoints: route().waypoints.slice(), legs: route().legs.slice(), fixed: route().fixed || null });
+    history.push(current());
     if (history.length > MAX_HISTORY) history.shift();
+    future.length = 0;
+  }
+
+  /** Revient à l'état h (annuler ou rétablir) ; un parcours effacé retrouve aussi son nom. */
+  function restoreState(h) {
+    route().waypoints = h.waypoints;
+    route().legs = h.legs;
+    route().fixed = h.fixed || null;
+    if (!route().name && h.name) route().name = h.name;
+    computeMissing();
+    changed();
   }
 
   /** Remplace le tracé par une suite de points [lat, lng, ele] (géométrie conservée, points de passage simplifiés). */
@@ -222,12 +236,19 @@
     undo() {
       const h = history.pop();
       if (!h) { PYR.dom.toast('Rien à annuler'); return; }
-      route().waypoints = h.waypoints;
-      route().legs = h.legs;
-      route().fixed = h.fixed || null;
-      computeMissing();
-      changed();
+      future.push(current());
+      restoreState(h);
     },
+
+    redo() {
+      const h = future.pop();
+      if (!h) { PYR.dom.toast('Rien à rétablir'); return; }
+      history.push(current());
+      restoreState(h);
+    },
+
+    get canUndo() { return history.length > 0; },
+    get canRedo() { return future.length > 0; },
 
     loop() {
       const wps = route().waypoints;

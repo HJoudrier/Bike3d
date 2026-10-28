@@ -289,6 +289,7 @@
       });
     }
     window.addEventListener('beforeunload', () => store.saveNow());
+    D.flushFlash();      // message laissé avant un rechargement (import d'un parcours complet)
   }
 
   PYR.app = { showTab, init, refreshBindings, url, go, back, PAGES, get racePage() { return racePage(); } };
