@@ -316,6 +316,11 @@
     const v0 = st.v, s0 = st.s, t0 = st.t;
     c.raw = r.measured;
     const P = r.driven ? Sim.drive(ctx, st, r.drive, c) : Sim.step(ctx, st, Pcmd, c);
+    // peloton en 2D : on ne traverse personne, on ne finit pas la seconde dans la roue de celui de devant (contrainte stricte)
+    if (r.lat) {
+      const hit = Pel.resolve(race, r, view);
+      if (hit && r.human && hit.dv > 1.2 && race.onEvent) race.onEvent({ t: st.t, id: r.id, name: r.name, type: 'bump', other: hit.id });
+    }
     crossings(race, r, s0, t0);
     // ligne du sprint ou du sommet franchie : l'effort s'arrête là
     if (r.tac.target !== null && r.tac.target !== undefined && st.s >= r.tac.target) Tac.afterLine(r, st.t);

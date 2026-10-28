@@ -49,6 +49,7 @@
   const NUDGE_S = 3;      // s : décalage demandé par le joueur (← →), avant que le placement automatique reprenne
   const ROW = 2.2;        // m : écart entre deux rangs de la grille de départ
   const OVERLAP = 0.2;    // m : deux coureurs dont les positions sont à moins de BIKE + 0,2 m se chevauchent (côte à côte)
+  const GAP_MIN = 0.05;   // m : écart minimal entre la roue arrière de celui de devant et notre roue avant (contrainte stricte, resolve)
   const ROAM_FROM = 30;   // s : les coureurs virtuels commencent à remonter le groupe après le départ
   const CENTER_DRIFT = 0.1; // m/s : dérive vers le milieu de la route de celui qui n'est dans aucun sillage
   const LAYER_MODES = ['follow', 'cover', 'relay'];
@@ -690,6 +691,43 @@
   }
 
   /**
+   * Contrainte stricte, comme dans Bike3D (stepRider, juste après le pas de simulation ; les coureurs avancent d'avant en arrière) :
+   * deux coureurs ne se chevauchent jamais. Celui qui finirait la seconde dans la roue — ou à travers — d'un coureur qui le précédait
+   * dans sa voie (écart latéral de moins de MIN_DY, d'après les places de la seconde) est ramené juste derrière lui, à sa vitesse :
+   * il a dû freiner. Le garde-fou (guard) l'évite presque toujours en levant le pied à temps ; ceci rattrape ce qu'il laisse passer
+   * (coureur qui arrive trop vite, rabattement). Ceux de devant ont déjà avancé ; un autre joueur en direct est prolongé d'une seconde
+   * à sa vitesse. On ne recule jamais (la trace reste croissante). Un cycliste sur la vraie route (position mesurée) n'est jamais
+   * retenu : ce sont les autres qui l'évitent. Renvoie {id, dv} (le coureur qui nous a retenu, vitesse perdue) ou null.
+   */
+  function resolve(race, r, view) {
+    const L = r.lat, st = r.st;
+    if (!L || r.incident || r.driven || st.finished) return null;
+    const local = race.pelLocal, s0 = r.prevS, y = L.y;
+    let sMax = Infinity, vMax = 0, by = null;
+    for (const o of view.field) {
+      if (o.id === r.id || o.stopped || o.finished) continue;
+      if (!(o.s > s0 || (o.s === s0 && idLess(o.id, r.id)))) continue; // il était devant nous au début de la seconde
+      const rr = local && local.get(o.id);
+      let sE, vE, yE;
+      if (rr) {
+        if (rr.st.t !== st.t || rr.finished || rr.incident) continue; // pas encore avancé (donc derrière nous), arrivé ou arrêté
+        sE = rr.st.s; vE = rr.st.v; yE = rr.lat ? rr.lat.y : 0;
+      } else {
+        sE = o.s + (o.v || 0); vE = o.v || 0;
+        yE = race.pelY && race.pelY.has(o.id) ? race.pelY.get(o.id) : Number.isFinite(o.y) ? o.y : 0;
+      }
+      if (Math.abs(yE - y) >= MIN_DY - 0.02) continue; // à côté : on roule côte à côte
+      const lim = sE - BIKE - GAP_MIN;
+      if (lim < sMax) { sMax = lim; vMax = vE; by = o.id; }
+    }
+    if (!(st.s > sMax + 1e-9)) return null;
+    const dv = st.v - Math.min(st.v, vMax);
+    st.s = Math.max(s0, sMax);
+    st.v = Math.min(st.v, vMax);
+    return { id: by, dv };
+  }
+
+  /**
    * Roue à suivre en deux dimensions (tactics.wheelToFollow) : la plus proche devant, pénalisée par l'écart latéral entre son
    * sillage et la voie visée (pénalité forte quand on a peu besoin d'abri : on garde sa voie, groupe large ; faible quand
    * l'allure monte : on se range dans les roues), et par une place déjà prise. On garde sa roue sauf pour une nettement
@@ -790,7 +828,7 @@
 
   PYR.peloton = {
     RIDER_W, LANE, MIN_DY, EDGE, MAX_R, RELAY_FRONT, ROW,
-    halfWidth, halfAhead, yaw, pair, field, state, setY, steer, guard, pickWheel, nudge, lanes, grid, place,
+    halfWidth, halfAhead, yaw, pair, field, state, setY, steer, guard, resolve, pickWheel, nudge, lanes, grid, place,
     lineWeights, cornerAhead, pathFactor, applyLine,
   };
 })(globalThis.PYR = globalThis.PYR || {});

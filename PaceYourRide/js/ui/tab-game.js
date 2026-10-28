@@ -378,7 +378,9 @@
       if (!r) return;
       const on = [r.events && 'incidents', r.form && 'forme du jour', r.fuel && 'alimentation', r.physio && 'modèle physiologique', r.peloton && 'peloton en 2D'].filter(Boolean);
       const cl = CV.cpsText(G.cps);
-      note.textContent = `${G.mode === 'live' ? 'Course en direct : règles fixées par l\'organisateur' : 'Défi : règles fixées par son créateur'} — ${on.length ? on.join(', ') : 'sans incidents, forme ni alimentation'}, ${r.pullSec > 0 ? `relais de ${r.pullSec} s` : 'relais sans limite de durée'}, ${cl ? 'classements : ' + cl : 'sans classements annexes'}. Pas de coureurs virtuels.`;
+      // défi ou course d'une ancienne version, sans peloton en 2D : ses règles sont figées, les coureurs y roulent en file
+      const file = r.peloton ? '' : ' Coureurs en file (règle d\'une ancienne version) : ils peuvent s\'y chevaucher.';
+      note.textContent = `${G.mode === 'live' ? 'Course en direct : règles fixées par l\'organisateur' : 'Défi : règles fixées par son créateur'} — ${on.length ? on.join(', ') : 'sans incidents, forme ni alimentation'}, ${r.pullSec > 0 ? `relais de ${r.pullSec} s` : 'relais sans limite de durée'}, ${cl ? 'classements : ' + cl : 'sans classements annexes'}. Pas de coureurs virtuels.${file}`;
     },
 
     /** Points de passage du parcours (sous les options de course). */
@@ -829,6 +831,16 @@
         D.toast(`Musette saisie : ${bits.join(', ')}. Tu lèves le pied quelques secondes.`);
       } else if (ev.type === 'feedmiss' && me) D.toast('Zone de ravitaillement manquée !', 'error');
       else if (ev.type === 'attack' && !me) D.toast(ev.kom ? `${ev.name} attaque pour les points du sommet !` : `${ev.name} attaque !`);
+      else if (ev.type === 'bump' && me) {
+        // on arrivait trop vite dans la roue de quelqu'un (on ne le traverse pas) : on a dû freiner
+        const now = performance.now();
+        if (now - (G.lastBump || 0) > 6000) {
+          G.lastBump = now;
+          const o = G.race && G.race.riders.find((x) => x.id === ev.other);
+          const live = !o && PYR.live && String(ev.other).startsWith('live-') ? PYR.live.opponents().find((x) => 'live-' + x.id === ev.other) : null;
+          D.toast(`Attention à la roue de ${o ? o.name : live ? live.name : 'ton voisin'} : coup de frein !`);
+        }
+      }
     },
 
     /** Positions des autres (fantômes, coureurs virtuels, joueurs en direct) au temps de course t. */

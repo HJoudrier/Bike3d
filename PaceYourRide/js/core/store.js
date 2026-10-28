@@ -52,7 +52,7 @@
       trainerSim: true,        // home-trainer FTMS : il reçoit la pente, le vent et l'abri du peloton
       northUp: false,          // carte : nord en haut (boussole) ; sinon elle suit l'orientation du cycliste, comme la page Sortie
       showTte: true,           // HUD : afficher la durée tenable (« Tenable », TTE) ; décoché, elle est masquée
-      peloton: true,           // peloton en deux dimensions : coureurs côte à côte sur la largeur de la route, éventails (peloton.js)
+      peloton: true,           // peloton en deux dimensions : coureurs côte à côte sur la largeur de la route, éventails (peloton.js) ; toujours vrai
       physio: true,            // modèle physiologique (avec l'alimentation) : glycogène par fibres, glycémie, chaleur, eau, fatigue, caféine
       fx: true,                // animations météo sur la carte (pluie, battement des manches à air)
       // limites en « Dans les roues » / « Suivre les attaques » (en %) : on se laisse décrocher plutôt que de passer sous ce W′ (0 : aucune limite)
@@ -268,6 +268,8 @@
   /** Instantané météo relu de la sauvegarde ou d'un projet importé : vérifié, sinon abandonné. */
   function sanitize(state) {
     state.ui.chartH = cleanChartH(state.ui.chartH);
+    // le mode jeu roule toujours en peloton 2D : deux coureurs ne s'y chevauchent jamais (l'ancienne option « en file » les superposait)
+    state.game.peloton = true;
     if (state.perf.formRef !== 'form') state.perf.formRef = 'athlete';
     syncAge(state.rider);
     state.checkpoints = cleanCheckpoints(state.checkpoints);

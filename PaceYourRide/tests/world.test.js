@@ -248,3 +248,68 @@ test('revêtements : portions effectives (la dernière l\'emporte), largeur, reg
   assert.notEqual(plain.key, msg.key);
   assert.equal(plain.seed, msg.seed);
 });
+
+test('peloton 2D : aucun coureur n\'en chevauche un autre, même dans un gros peloton qui remonte et relaie', () => {
+  const { race, setup, athlete } = newRace(makeProfile([{ len: 8000, grade: 0 }, { len: 3000, grade: 0.05, turn: 40 }]), { peloton: true, events: true });
+  const me = Race.addRider(race, { id: 'me', name: 'Moi', human: true, setup, athlete });
+  me.tac.cmd = 230;
+  Race.addBots(race, { n: 40, level: 'mixed', rider: { weight: 72, ftp: 250, records: {} }, bike: {} });
+  PYR.peloton.grid(race);
+  const BIKE = PYR.draft.BIKE, DY = PYR.peloton.MIN_DY - 0.02;
+  let worst = 0;
+  for (let t = 0; t < 1500 && race.riders.some((r) => !r.finished); t++) {
+    Race.step(race);
+    const rs = race.riders.filter((r) => !r.finished && !r.incident);
+    for (let a = 0; a < rs.length; a++) for (let b = a + 1; b < rs.length; b++) {
+      const ds = Math.abs(rs[a].st.s - rs[b].st.s), dy = Math.abs(rs[a].lat.y - rs[b].lat.y);
+      if (ds < BIKE && dy < DY) worst = Math.max(worst, BIKE - ds);
+    }
+  }
+  assert.equal(worst, 0, `chevauchement de ${worst.toFixed(2)} m`);
+});
+
+test('peloton 2D : arrivé trop vite dans la roue de quelqu\'un, on freine derrière lui ; décalé d\'une voie, on le double', () => {
+  for (const dy of [0, 0.6]) {
+    const { race, setup, athlete } = newRace(makeProfile([{ len: 3000, grade: 0 }]), { peloton: true });
+    const slow = Race.addRider(race, { id: 'a', name: 'Lent', human: true, setup, athlete, v0: 3 });
+    const fast = Race.addRider(race, { id: 'b', name: 'Rapide', human: true, setup, athlete, v0: 15 });
+    slow.st.s = 104; slow.prevS = 104; fast.st.s = 100; fast.prevS = 100;
+    PYR.peloton.setY(slow, 0); PYR.peloton.setY(fast, dy);
+    slow.tac.cmd = 60; fast.tac.cmd = 600;
+    const bumps = [];
+    race.onEvent = (ev) => { if (ev.type === 'bump') bumps.push(ev); };
+    Race.step(race);
+    if (dy === 0) {
+      assert.ok(fast.st.s <= slow.st.s - PYR.draft.BIKE - 0.04, `retenu derrière : ${fast.st.s.toFixed(2)} / ${slow.st.s.toFixed(2)}`);
+      assert.ok(fast.st.v <= slow.st.v + 1e-9, 'à sa vitesse');
+      assert.equal(bumps.length, 1, 'le joueur est prévenu');
+      assert.equal(bumps[0].other, 'a');
+    } else {
+      assert.ok(fast.st.s > slow.st.s, 'une voie à côté : il passe');
+      assert.equal(bumps.length, 0);
+    }
+  }
+});
+
+test('peloton 2D : un cycliste sur la vraie route n\'est jamais retenu, les autres l\'évitent', () => {
+  const { race, setup, athlete } = newRace(makeProfile([{ len: 3000, grade: 0 }]), { peloton: true });
+  const real = Race.addRider(race, { id: 'r', name: 'Réel', human: true, driven: true, setup, athlete, v0: 3 });
+  const bot = Race.addRider(race, { id: 'b', name: 'Virtuel', human: true, setup, athlete, v0: 15 });
+  real.st.s = 104; real.prevS = 104; bot.st.s = 100; bot.prevS = 100;
+  PYR.peloton.setY(real, 0); PYR.peloton.setY(bot, 0);
+  bot.tac.cmd = 600;
+  real.drive = { s: 107, v: 3, P: 100 };
+  Race.step(race);
+  assert.equal(real.st.s, 107, 'la position mesurée est gardée');
+  assert.ok(bot.st.s <= 107 - PYR.draft.BIKE - 0.04, 'le coureur virtuel reste derrière lui');
+  // un cycliste réel qui rattrape un coureur virtuel le traverse (il roule pour de vrai) : c'est au virtuel de s'écarter
+  const r2 = newRace(makeProfile([{ len: 3000, grade: 0 }]), { peloton: true });
+  const ahead = Race.addRider(r2.race, { id: 'v', name: 'Virtuel', human: true, setup: r2.setup, athlete: r2.athlete, v0: 3 });
+  const behind = Race.addRider(r2.race, { id: 'r', name: 'Réel', human: true, driven: true, setup: r2.setup, athlete: r2.athlete, v0: 8 });
+  ahead.st.s = 104; ahead.prevS = 104; behind.st.s = 100; behind.prevS = 100;
+  PYR.peloton.setY(ahead, 0); PYR.peloton.setY(behind, 0);
+  ahead.tac.cmd = 60;
+  behind.drive = { s: 108, v: 8, P: 250 };
+  Race.step(r2.race);
+  assert.equal(behind.st.s, 108);
+});
