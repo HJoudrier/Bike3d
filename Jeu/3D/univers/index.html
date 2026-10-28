@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bike3D — cyclisme cartoon sur ton parcours GPX</title>
+  <meta name="description" content="Importe un tracé GPX, génère un paysage 3D cartoon aléatoire et roule dessus avec ton cycliste.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <!-- ============ Accueil / import GPX ============ -->
+  <section id="screen-menu" class="screen">
+    <div class="card menu-card">
+      <h1 class="logo">Bike<span>3D</span></h1>
+      <p class="tagline">Ton parcours GPX transformé en paysage cartoon… et c'est toi qui pédales&nbsp;!</p>
+
+      <label id="dropzone" class="dropzone">
+        <input type="file" id="gpx-input" accept=".gpx,application/gpx+xml,application/xml,text/xml">
+        <span class="dz-icon">🗺️</span>
+        <span class="dz-text"><b>Importer un fichier GPX</b><small>Clique ici ou glisse ton fichier</small></span>
+      </label>
+      <div class="demo-row">
+        <span>…ou essaie un parcours de démo&nbsp;:</span>
+        <div id="demo-buttons"></div>
+      </div>
+      <div id="menu-error" class="error hidden"></div>
+
+      <div id="route-info" class="route-info hidden">
+        <h2 id="route-name"></h2>
+        <div class="stats" id="route-stats"></div>
+        <canvas id="route-profile" width="760" height="160"></canvas>
+        <div class="climbs" id="route-climbs"></div>
+        <div class="options">
+          <div class="opt">
+            <span class="opt-label">Maillot</span>
+            <div class="chips" id="opt-jersey"></div>
+          </div>
+          <div class="opt">
+            <span class="opt-label">Coureurs</span>
+            <div class="chips" id="opt-riders">
+              <button class="chip" data-n="0">Seul</button>
+              <button class="chip" data-n="5">5</button>
+              <button class="chip" data-n="10">10</button>
+              <button class="chip" data-n="20">20</button>
+              <button class="chip" data-n="40">40</button>
+            </div>
+          </div>
+          <div class="opt">
+            <span class="opt-label">Qualité</span>
+            <div class="chips" id="opt-quality">
+              <button class="chip" data-q="low">Rapide</button>
+              <button class="chip" data-q="medium">Normale</button>
+              <button class="chip" data-q="high">Belle</button>
+            </div>
+          </div>
+        </div>
+        <button id="btn-model" class="btn big primary">🏔️ Modéliser en 3D</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Aperçu du paysage ============ -->
+  <section id="screen-preview" class="screen hidden">
+    <div class="preview-panel card">
+      <div class="seed">Paysage n°<b id="seed-label"></b></div>
+      <h2 id="preview-title">Ton paysage</h2>
+      <ul id="landscape-desc" class="desc"></ul>
+      <div class="btn-col">
+        <button id="btn-remodel" class="btn primary">🎲 Modéliser en 3D<small>un nouveau paysage aléatoire</small></button>
+        <button id="btn-validate" class="btn success big">✅ Valider ce paysage</button>
+        <button id="btn-vr" class="btn vr hidden">🥽 Rouler en réalité virtuelle<small>avec un casque (Meta Quest…)</small></button>
+        <button id="btn-back" class="btn ghost">← Changer de GPX</button>
+      </div>
+    </div>
+    <div class="preview-bar card">
+      <button id="btn-flyover" class="btn icon" title="Survol automatique">⏸</button>
+      <input type="range" id="preview-pos" min="0" max="1000" value="0" aria-label="Position sur le parcours">
+      <span id="preview-km">0 km</span>
+    </div>
+    <div class="sky-card card"><div class="sky-host" data-open="1"></div></div>
+    <div class="hint">🖱️ Glisser pour tourner autour · molette pour zoomer · curseur pour se déplacer sur le parcours</div>
+  </section>
+
+  <!-- ============ HUD ============ -->
+  <section id="hud" class="hidden">
+    <div id="speedlines"></div>
+    <div class="hud-tl">
+      <div class="hud-speed"><span id="hud-speed">0</span><small>km/h</small></div>
+      <div class="hud-row">
+        <div class="pill" id="hud-grade-box"><span id="hud-grade">0 %</span></div>
+        <div class="pill light">⛰️ <span id="hud-alt">0 m</span></div>
+      </div>
+      <div class="hud-row">
+        <div class="pill light" id="hud-clock">🕐 12:00</div>
+        <div class="pill light" id="hud-wind" title="Vent"><span class="wind-arr" id="hud-wind-arr">↑</span><span id="hud-wind-txt">0 km/h</span></div>
+      </div>
+    </div>
+    <div class="hud-tr">
+      <div class="pill big light">⏱️ <span id="hud-time">0:00</span></div>
+      <div class="pill light">🚴 <span id="hud-dist">0 km</span> <small id="hud-remain"></small></div>
+      <div class="pill light hidden" id="hud-pos"></div>
+      <div class="pill light hidden" id="hud-next"></div>
+      <div class="pill tiny hidden" id="hud-points"></div>
+      <div class="hud-row small">
+        <span class="pill tiny" id="hud-timescale">⏩ x1</span>
+        <span class="pill tiny" id="hud-cam">Caméra</span>
+      </div>
+    </div>
+    <div id="hud-climb" class="hud-climb hidden"></div>
+    <div class="hud-gauge" id="hud-gauge">
+      <div class="g-draft hidden" id="g-draft">🌀 Aspiration</div>
+      <div class="g-head"><b id="g-watts">0</b> W<small id="g-wkg">0,0 W/kg</small></div>
+      <div class="g-track" id="g-track" title="Puissance : fais glisser la jauge, molette, Z/S ou touches 1 à 0">
+        <div class="g-inner"><div class="g-fill" id="g-fill"></div></div>
+        <div class="g-cp" id="g-cp"><span>seuil</span></div>
+        <div class="g-target" id="g-target"><span id="g-target-w">250</span></div>
+      </div>
+      <div class="g-reserve" id="g-reserve-box" title="Réserve d'énergie"><div id="g-reserve"></div></div>
+      <div class="g-label">🔋 réserve</div>
+    </div>
+    <div class="hud-bottom">
+      <canvas id="hud-profile" width="900" height="90"></canvas>
+    </div>
+    <canvas id="hud-map" width="180" height="180"></canvas>
+    <div class="hud-help">
+      <kbd>←</kbd><kbd>→</kbd> se déplacer · <kbd>Z</kbd><kbd>S</kbd> / molette / <kbd>1</kbd>…<kbd>0</kbd> puissance · <kbd>Espace</kbd> freiner · <kbd>C</kbd> caméra · <kbd>T</kbd> temps · <kbd>M</kbd> son · <kbd>Échap</kbd> pause
+    </div>
+    <div class="touch-pad" id="touch-pad">
+      <div class="tp-left">
+        <button data-k="left">◀</button><button data-k="right">▶</button>
+      </div>
+      <div class="tp-right">
+        <button data-k="brake" class="brake">🛑</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Écrans superposés ============ -->
+  <section id="screen-loading" class="screen hidden">
+    <div class="card loading-card">
+      <div class="wheel-spinner"><div></div></div>
+      <p id="loading-text">Génération du paysage…</p>
+      <div class="progress"><div id="loading-bar"></div></div>
+    </div>
+  </section>
+
+  <section id="screen-countdown" class="screen hidden passthrough">
+    <div id="countdown-text" class="countdown">3</div>
+  </section>
+
+  <section id="screen-pause" class="screen hidden">
+    <div class="card small-card">
+      <h2>Pause</h2>
+      <div class="btn-col">
+        <button id="btn-resume" class="btn primary big">▶ Reprendre</button>
+        <div class="sky-host"></div>
+        <button id="btn-pause-vr" class="btn vr hidden">🥽 Passer en réalité virtuelle</button>
+        <button id="btn-restart" class="btn">↺ Recommencer</button>
+        <button id="btn-pause-landscape" class="btn">🎲 Changer de paysage</button>
+        <button id="btn-pause-menu" class="btn ghost">⌂ Menu principal</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-finish" class="screen hidden">
+    <div class="card small-card finish-card">
+      <div class="trophy">🏆</div>
+      <h2>Arrivée&nbsp;!</h2>
+      <div id="finish-stats" class="finish-stats"></div>
+      <div id="finish-best" class="finish-best"></div>
+      <div id="finish-ranking" class="finish-ranking hidden"></div>
+      <div class="btn-col">
+        <button id="btn-again" class="btn primary big">↺ Rejouer ce parcours</button>
+        <button id="btn-finish-landscape" class="btn">🎲 Nouveau paysage</button>
+        <button id="btn-finish-menu" class="btn ghost">⌂ Autre GPX</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="vendor/three.min.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/gpx.js"></script>
+  <script src="js/route.js"></script>
+  <script src="js/demo-routes.js"></script>
+  <script src="js/ambiances.js"></script>
+  <script src="js/toon.js"></script>
+  <script src="js/props.js"></script>
+  <script src="js/landscape.js"></script>
+  <script src="js/tiles.js"></script>
+  <script src="js/water.js"></script>
+  <script src="js/road.js"></script>
+  <script src="js/race.js"></script>
+  <script src="js/peloton.js"></script>
+  <script src="js/convoy.js"></script>
+  <script src="js/hccrowd.js"></script>
+  <script src="js/dust.js"></script>
+  <script src="js/village.js"></script>
+  <script src="js/fauna.js"></script>
+  <script src="js/sky.js"></script>
+  <script src="js/atmosphere.js"></script>
+  <script src="js/cyclist.js"></script>
+  <script src="js/hud.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/confetti.js"></script>
+  <script src="js/vr.js"></script>
+  <script src="js/bridge.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

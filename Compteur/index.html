@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<!-- author : Hugo Joudrier-Faure -->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="strict-origin-when-cross-origin"> <!-- requis par la politique d'usage des tuiles OSM -->
+  <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
+  <title>Compteur — PaceYourRide</title>
+  <meta name="description" content="Le compteur de ta vraie sortie : puissance à tenir, avance ou retard sur le plan, ravitaillements, recalcul en route.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a78d6'/%3E%3Cpath d='M10 44 L24 26 L32 36 L42 20 L54 44 Z' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/game-mobile.css">
+  <link rel="stylesheet" href="../css/ride.css">
+</head>
+<body data-page="ride" data-tab="ride">
+  <header class="topbar">
+    <a class="brand" href="../index.html" title="Retour à l'accueil">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor"/><path d="M10 44 L24 26 L32 36 L42 20 L54 44 Z" fill="#fff"/></svg>
+      <span>PaceYourRide</span>
+    </a>
+    <nav class="tabs" aria-label="Sections">
+      <a href="../parcours.html">Parcours</a>
+      <a href="../athlete.html">Athlète</a>
+      <a href="../equipement.html">Équipements</a>
+      <a href="../pacing.html">Pacing optimal</a>
+      <a href="../Jeu/index.html">Jeu</a>
+      <a href="../Compteur/index.html" aria-current="page">Compteur</a>
+    </nav>
+    <button class="btn ghost menu-btn" id="btn-menu" type="button" aria-expanded="false" aria-controls="top-actions" aria-label="Menu du projet">⋯</button>
+    <div class="top-actions" id="top-actions">
+      <a class="btn ghost" href="../documentation.html" target="_blank" rel="noopener" title="Guide d'utilisation, modèles mécanique et physiologique, simulation et algorithmes d'optimisation">Documentation</a>
+      <button class="btn ghost" id="btn-export-project" title="Enregistrer tout le projet dans un fichier">Exporter</button>
+      <label class="btn ghost" title="Ouvrir un projet enregistré">Importer<input type="file" id="input-import-project" accept=".json,application/json" hidden></label>
+      <button class="btn ghost" id="btn-reset" title="Tout effacer et repartir des valeurs par défaut">Réinitialiser</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="map-wrap">
+        <div id="map" aria-label="Carte"></div>
+
+        <!-- alerte de course (incident, fringale, arrivée…) : seul élément du jeu qui reste sur la carte -->
+        <div class="hud-banner" id="hud-banner" hidden></div>
+        <!-- mode jeu : décompte avant le départ (réglage « Décompte avant le départ »), au centre de l'écran de course -->
+        <div class="game-countdown" id="game-countdown" role="status" aria-live="polite" hidden></div>
+
+        <div class="map-status" id="map-status" hidden></div>
+        <!-- course en direct : demandes d'accès à valider (organisateur) -->
+        <div class="live-requests" id="live-requests" hidden aria-live="polite"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="credit">Réalisée par <a href="mailto:hugo.joudrier@gmail.com">Hugo Joudrier-Faure</a></footer>
+  <!-- compteur : plein écran, par-dessus le reste (js/ui/tab-ride.js) -->
+  <div class="ride" id="ride" aria-label="Compteur"></div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <!-- scripts de l'application (une seule liste pour toutes les pages) puis démarrage de cette page : js/boot.js, js/app.js -->
+  <script src="../js/boot.js"></script>
+</body>
+</html>

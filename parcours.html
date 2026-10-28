@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<!-- author : Hugo Joudrier-Faure -->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="strict-origin-when-cross-origin"> <!-- requis par la politique d'usage des tuiles OSM -->
+  <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
+  <title>Parcours — PaceYourRide</title>
+  <meta name="description" content="Trace ton parcours, ses portions de revêtement et de vent, ses points de passage, et la météo du jour de départ.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a78d6'/%3E%3Cpath d='M10 44 L24 26 L32 36 L42 20 L54 44 Z' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/game-mobile.css">
+  <link rel="stylesheet" href="css/ride.css">
+</head>
+<body data-page="route" data-tab="route">
+  <header class="topbar">
+    <a class="brand" href="index.html" title="Retour à l'accueil">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor"/><path d="M10 44 L24 26 L32 36 L42 20 L54 44 Z" fill="#fff"/></svg>
+      <span>PaceYourRide</span>
+    </a>
+    <nav class="tabs" aria-label="Sections">
+      <a href="parcours.html" aria-current="page">Parcours</a>
+      <a href="athlete.html">Athlète</a>
+      <a href="equipement.html">Équipements</a>
+      <a href="pacing.html">Pacing optimal</a>
+      <a href="Jeu/index.html">Jeu</a>
+      <a href="Compteur/index.html">Compteur</a>
+    </nav>
+    <button class="btn ghost menu-btn" id="btn-menu" type="button" aria-expanded="false" aria-controls="top-actions" aria-label="Menu du projet">⋯</button>
+    <div class="top-actions" id="top-actions">
+      <a class="btn ghost" href="documentation.html" target="_blank" rel="noopener" title="Guide d'utilisation, modèles mécanique et physiologique, simulation et algorithmes d'optimisation">Documentation</a>
+      <button class="btn ghost" id="btn-export-project" title="Enregistrer tout le projet dans un fichier">Exporter</button>
+      <label class="btn ghost" title="Ouvrir un projet enregistré">Importer<input type="file" id="input-import-project" accept=".json,application/json" hidden></label>
+      <button class="btn ghost" id="btn-reset" title="Tout effacer et repartir des valeurs par défaut">Réinitialiser</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="map-wrap">
+        <div id="map" aria-label="Carte"></div>
+
+        <!-- alerte de course (incident, fringale, arrivée…) : seul élément du jeu qui reste sur la carte -->
+        <div class="hud-banner" id="hud-banner" hidden></div>
+        <!-- mode jeu : décompte avant le départ (réglage « Décompte avant le départ »), au centre de l'écran de course -->
+        <div class="game-countdown" id="game-countdown" role="status" aria-live="polite" hidden></div>
+
+        <div class="map-status" id="map-status" hidden></div>
+        <!-- course en direct : demandes d'accès à valider (organisateur) -->
+        <div class="live-requests" id="live-requests" hidden aria-live="polite"></div>
+      </div>
+
+      <div class="bottom" id="bottom">
+        <div class="bottom-view" data-view="route">
+          <div class="chart-head">
+            <h3>Profil altimétrique</h3>
+            <div class="legend" id="profile-legend"></div>
+            <div class="seg-control" role="radiogroup" aria-label="Graphique du bas">
+              <button type="button" data-rbottom="profile" aria-pressed="true">Altitude</button>
+              <button type="button" data-rbottom="weather" aria-pressed="false">Météo</button>
+            </div>
+          </div>
+          <div class="chart-box" id="profile-chart"></div>
+          <div class="selection-bar" id="selection-bar" hidden>
+            <span id="selection-text"></span>
+            <button class="btn small" id="sel-add-surface">+ Portion revêtement</button>
+            <button class="btn small" id="sel-add-wind">+ Portion vent</button>
+            <button class="btn small" id="sel-add-sprint" title="Sprint intermédiaire à la fin de la zone">+ Sprint</button>
+            <button class="btn small" id="sel-add-kom" title="Côte classée : pied au début de la zone, sommet à la fin">+ Côte classée</button>
+            <button class="btn small" id="sel-add-feed" title="Zone de ravitaillement sur la zone sélectionnée">+ Ravitaillement</button>
+            <button class="btn small ghost" id="sel-cancel">Annuler</button>
+          </div>
+        </div>
+        <div class="bottom-view" data-view="weather">
+          <div class="chart-head">
+            <h3>Météo le long du parcours</h3>
+            <span class="hint">Vent à 10 m, lu à l'heure estimée de passage (celle de la stratégie si elle est calculée, sinon 30 km/h).</span>
+            <div class="seg-control" role="radiogroup" aria-label="Graphique du bas">
+              <button type="button" data-rbottom="profile" aria-pressed="false">Altitude</button>
+              <button type="button" data-rbottom="weather" aria-pressed="true">Météo</button>
+            </div>
+          </div>
+          <div class="chart-box tall" id="weather-chart"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side" id="side">
+      <!-- ============ PARCOURS ============ -->
+      <section class="panel" data-panel="route">
+        <!-- le nom du parcours tient lieu de titre ; le crayon le rend modifiable -->
+        <div class="title-edit">
+          <h2 id="route-title">Tracé du parcours</h2>
+          <input type="text" id="route-name" maxlength="60" aria-label="Nom du parcours" placeholder="Pour le retrouver dans ta bibliothèque" autocomplete="off" hidden>
+          <button class="btn icon ghost" type="button" id="btn-rename-route" title="Modifier le nom du parcours" aria-label="Modifier le nom du parcours">✎</button>
+        </div>
+        <p class="hint">Clique sur la carte pour ajouter des points de passage. Glisse un point pour le déplacer, clic droit (ou appui long) pour le supprimer, clique sur le tracé pour insérer un point.</p>
+
+        <form class="search" id="search-form" autocomplete="off">
+          <input type="search" id="search-input" placeholder="Rechercher un lieu (ville, col…)" aria-label="Rechercher un lieu">
+          <button class="btn" type="submit">Aller</button>
+          <ul class="search-results" id="search-results" hidden></ul>
+        </form>
+
+        <div class="field">
+          <label for="routing-mode">Mode de tracé des nouveaux tronçons</label>
+          <select id="routing-mode"></select>
+        </div>
+
+        <div class="toolbar">
+          <button class="btn" id="btn-undo" title="Annuler la dernière modification">↶ Annuler</button>
+          <button class="btn" id="btn-loop" title="Revenir au point de départ">Boucler</button>
+          <button class="btn" id="btn-reverse" title="Inverser le sens du parcours">Inverser</button>
+          <button class="btn" id="btn-fit" title="Centrer la carte sur le parcours">Centrer</button>
+          <button class="btn danger" id="btn-clear" title="Effacer le parcours">Effacer</button>
+        </div>
+        <div class="toolbar">
+          <label class="btn">Importer un GPX<input type="file" id="input-gpx" accept=".gpx,application/gpx+xml" hidden></label>
+          <button class="btn" id="btn-export-gpx">Exporter en GPX</button>
+          <button class="btn" id="btn-save-lib" title="Enregistrer ce parcours dans la bibliothèque sous son nom (page d'accueil › Sélectionner un parcours)">Enregistrer</button>
+          <button class="btn ghost" id="btn-demo" title="Charger un parcours d'exemple (sans connexion)">Parcours d'exemple</button>
+        </div>
+        <div class="status-line" id="route-status" role="status" aria-live="polite"></div>
+
+        <h3>Dénivelé</h3>
+        <div class="stats" id="route-stats"></div>
+
+        <h3>Points en jeu — sprints &amp; grimpeurs</h3>
+        <p class="hint">Sprints intermédiaires (classement par points, maillot vert) et côtes classées (grand prix de la montagne, maillot à pois) : sélectionne une zone sur le profil puis « + Sprint » ou « + Côte classée » (pied → sommet), ou ajoute un point puis saisis ses kilomètres. Chaque point a sa catégorie (côtes) et ses points distribués. Ils servent au mode jeu, aux défis et aux courses en direct, et sont enregistrés avec le parcours.</p>
+        <div class="toolbar">
+          <button class="btn" id="btn-add-sprint">+ Sprint intermédiaire</button>
+          <button class="btn" id="btn-add-kom">+ Côte classée</button>
+        </div>
+        <div class="toolbar">
+          <button class="btn ghost" id="btn-auto-kom" title="Repère les côtes du parcours et les classe de la 4ᵉ catégorie à hors catégorie">Ajouter les côtes automatiquement</button>
+          <button class="btn ghost" id="btn-auto-sprint" title="Place des sprints sur les portions les plus plates, loin des côtes">Placer automatiquement</button>
+          <select id="auto-sprints" aria-label="Nombre de sprints à placer"><option value="1">1 sprint</option><option value="2">2 sprints</option><option value="3">3 sprints</option></select>
+        </div>
+        <div class="portion-list" id="cp-list"></div>
+
+        <h3>Zones de ravitaillement</h3>
+        <p class="hint">Sur une zone, on peut saisir sa musette une fois (bidons pleins, gels et barres, au prix d'un court ralentissement). Sélectionne une zone sur le profil puis « + Ravitaillement », ou ajoute une zone puis saisis ses kilomètres. Les zones servent au mode jeu avec l'option « Alimentation et hydratation », aux défis et aux courses en direct, et sont enregistrées avec le parcours.</p>
+        <div class="toolbar">
+          <button class="btn" id="btn-add-feed">+ Zone de ravitaillement</button>
+          <button class="btn ghost" id="btn-auto-feed" title="Une zone tous les 50 km environ sur du plat, à partir de 75 km de parcours">Ajouter automatiquement</button>
+        </div>
+        <div class="portion-list" id="feed-list"></div>
+
+        <h3>Portions — revêtement &amp; friction</h3>
+        <p class="hint">Cliquer-glisser sur le profil pour sélectionner une zone, ou ajoute une portion puis saisis ses kilomètres. Le coefficient multiplie le Crr des pneus. La largeur de route place le peloton du mode jeu (coureurs côte à côte, éventails) : chaque revêtement a la sienne (pavés 4 m, pavés difficiles 3 m, gravier 3 à 3,5 m, chemin 2,5 m…), qu'une portion peut changer ; ailleurs, la largeur par défaut s'applique.</p>
+        <div class="grid2">
+          <div class="field"><label for="r-road-w">Largeur de route par défaut (m)</label><input type="number" id="r-road-w" min="1.5" max="20" step="0.5" data-bind="road.width"></div>
+        </div>
+        <div class="toolbar"><button class="btn" id="btn-add-surface">+ Ajouter une portion</button></div>
+        <div class="portion-list" id="surface-list"></div>
+
+        <h3>Portions — vent</h3>
+        <p class="hint">Provenance = direction <em>d'où vient</em> le vent (comme la météo). En rafales, la vitesse oscille entre des accalmies et la valeur de rafale. Avec la météo personnalisée (plus bas), ces portions en sont la partie vent ; les prévisions Open-Meteo, quand elles sont utilisées, les remplacent.</p>
+        <div class="toolbar">
+          <button class="btn" id="btn-add-wind">+ Ajouter une portion</button>
+          <button class="btn ghost" id="btn-add-wind-all">Vent sur tout le parcours</button>
+        </div>
+        <div class="portion-list" id="wind-list"></div>
+
+        <h3>Météo personnalisée</h3>
+        <p class="hint">Décris toi-même la météo par portions du parcours : température et pluie ici, vent dans les portions ci-dessus. Elle est constante dans le temps. Les prévisions Open-Meteo se récupèrent sur les pages Pacing optimal et Jeu ; utiliser l'une remplace l'autre.</p>
+        <label class="check"><input type="checkbox" id="w-custom-on"> Utiliser la météo personnalisée dans la simulation (remplace le vent saisi et la température)</label>
+        <div class="status-line" id="wcustom-status" role="status" aria-live="polite"></div>
+        <div class="stats" id="wcustom-stats"></div>
+        <div class="grid2">
+          <div class="field"><label for="w-base-t">Température hors portions (°C)</label><input type="number" id="w-base-t" min="-20" max="45" step="1"></div>
+        </div>
+        <h3>Portions — température</h3>
+        <div class="toolbar"><button class="btn" id="btn-add-wtemp" type="button">+ Portion de température</button></div>
+        <div class="portion-list" id="wtemp-list"></div>
+
+        <h3>Portions — pluie</h3>
+        <p class="hint">Intensité en mm/h : 0,5 bruine · 1 à 2 pluie faible · 4 modérée · 10 forte. La route mouillée augmente le risque de chute et de crevaison et réduit l'adhérence.</p>
+        <div class="toolbar"><button class="btn" id="btn-add-wrain" type="button">+ Portion de pluie</button></div>
+        <div class="portion-list" id="wrain-list"></div>
+
+      </section>
+    </aside>
+  </main>
+
+  <footer class="credit">Réalisée par <a href="mailto:hugo.joudrier@gmail.com">Hugo Joudrier-Faure</a></footer>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <!-- scripts de l'application (une seule liste pour toutes les pages) puis démarrage de cette page : js/boot.js, js/app.js -->
+  <script src="js/boot.js"></script>
+</body>
+</html>

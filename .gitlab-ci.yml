@@ -1,0 +1,18 @@
+# The Docker image that will be used to build your app
+image: busybox:latest
+create-pages:
+  stage: deploy
+  script:
+    - mkdir -p public
+    # Le site tel quel, depuis sa racine : l'accueil (index.html), une page par section, les dossiers Jeu (configuration, écrans de
+    # course Map2D et 3D, univers 3D de Bike3D) et Compteur, la documentation et le rapport du modèle physiologique
+    - cp -r index.html parcours.html athlete.html equipement.html pacing.html documentation.html DocModelePhysioCycliste.html css js vendor img Jeu Compteur public/
+    # sources de développement de l'univers 3D, inutiles en ligne
+    - rm -rf public/Jeu/3D/univers/tools
+  pages:
+    # The folder that contains the files to be exposed at the Page URL
+    publish: public
+  rules:
+    # This ensures that only pushes to the default branch will trigger
+    # a pages deploy
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
