@@ -66,6 +66,22 @@
   }
 
   /**
+   * Aspect d'une portion de revêtement dans la vue : les revêtements de physics.SURFACES, et pour un coefficient personnalisé, le
+   * revêtement dont le roulement s'en approche (lisse, dégradé, gravier, terre, herbe).
+   */
+  function surfaceKind(run) {
+    if (run.surface !== 'custom') return run.surface;
+    const f = Number(run.factor) || 1;
+    return f < 0.95 ? 'smooth' : f < 1.2 ? 'asphalt' : f < 1.7 ? 'rough' : f < 2.6 ? 'gravel_hard' : f < 4.5 ? 'dirt' : 'grass';
+  }
+
+  /** Portions de revêtement pour la vue : [{s, end, kind, w (largeur, m)}] (course.surfaceRuns). */
+  function surfacesOf(course) {
+    const runs = PYR.course && PYR.course.surfaceRuns ? PYR.course.surfaceRuns(course) : [];
+    return runs.map((r) => ({ s: Math.round(r.s * 10) / 10, end: Math.round(r.end * 10) / 10, kind: surfaceKind(r), w: Math.round(r.width * 100) / 100 }));
+  }
+
+  /**
    * Message « course » pour Bike3D : points du parcours (degrés arrondis au millionième, altitude au décimètre), points de passage,
    * zones de ravitaillement, joueur. La graine du paysage est tirée de l'empreinte : même parcours, même monde pour tous.
    */
@@ -77,16 +93,24 @@
       lng[i] = Math.round(course.lng[i] * 1e6) / 1e6;
       ele[i] = Math.round(course.ele[i] * 10) / 10;
     }
-    const key = courseKey(course);
+    // la graine vient du tracé seul : changer une portion ou un point de passage redessine la route, pas le paysage
+    const geo = courseKey(course);
     let seed = 0;
-    for (let i = 0; i < key.length; i++) seed = (Math.imul(seed, 31) + key.charCodeAt(i)) >>> 0;
-    return {
-      type: 'course', key, seed: seed % 1000000, name: (PYR.store && st().route && st().route.name) || 'Parcours PaceYourRide',
+    for (let i = 0; i < geo.length; i++) seed = (Math.imul(seed, 31) + geo.charCodeAt(i)) >>> 0;
+    const msg = {
+      type: 'course', seed: seed % 1000000, name: (PYR.store && st().route && st().route.name) || 'Parcours PaceYourRide',
       lat, lng, ele, length: course.length,
       cps: (cps || []).map((c) => ({ type: c.type, s: c.s, start: c.start, cat: c.cat })),
       feed: (feed || []).map((z) => ({ s: z.s, end: z.end })),
+      surfaces: surfacesOf(course), roadW: course.roadWidth,
       me: { name: me.name, color: me.color || ME_COLOR }, cp: me.cp,
     };
+    // empreinte complète (la vue ne se reconstruit que si elle change) : tracé, revêtements, points de passage, ravitaillements
+    let x = 2166136261;
+    const extra = JSON.stringify([msg.surfaces, msg.roadW, msg.cps, msg.feed]);
+    for (let i = 0; i < extra.length; i++) { x ^= extra.charCodeAt(i); x = Math.imul(x, 16777619) >>> 0; }
+    msg.key = geo + '.' + (x >>> 0).toString(36);
+    return msg;
   }
 
   /* ---------- météo à la position et à l'heure du joueur ---------- */
@@ -253,5 +277,5 @@
 
   if (typeof window !== 'undefined') window.addEventListener('message', onMessage);
 
-  PYR.view3d = { V, courseKey, courseMessage, frameMessage, envAt, publish, buttons, setStage, toggle, openWindow, command, get on() { return on(); } };
+  PYR.view3d = { V, courseKey, courseMessage, surfaceKind, surfacesOf, frameMessage, envAt, publish, buttons, setStage, toggle, openWindow, command, get on() { return on(); } };
 })(globalThis.PYR = globalThis.PYR || {});

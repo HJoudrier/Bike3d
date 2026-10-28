@@ -164,10 +164,13 @@ test('vue 3D : message du parcours (empreinte stable, même graine pour tous) et
   const { course } = setupFor(makeProfile([{ len: 4000, grade: 0.02 }]));
   const cps = PYR.classif.normalize([{ type: 'sprint', s: 1500 }, { type: 'kom', s: 3800, cat: '3', start: 2000 }], course.length);
   const a = V3.courseMessage(course, cps, [{ s: 2500, end: 3000 }], { name: 'Hugo', color: '#eb6834', cp: 260 });
-  const b = V3.courseMessage(course, cps, [], { name: 'Chloé' });
+  const b = V3.courseMessage(course, cps, [{ s: 2500, end: 3000 }], { name: 'Chloé' });
   assert.equal(a.type, 'course');
   assert.equal(a.key, b.key, 'même parcours, même empreinte');
   assert.equal(a.seed, b.seed, 'même graine de paysage pour tous les joueurs');
+  const noFeed = V3.courseMessage(course, cps, [], { name: 'Chloé' });
+  assert.notEqual(noFeed.key, a.key, 'autres ravitaillements : la vue se reconstruit…');
+  assert.equal(noFeed.seed, a.seed, '… dans le même paysage');
   assert.equal(a.lat.length, course.lat.length);
   assert.equal(a.cps.find((c) => c.type === 'kom').start, 2000);
   assert.deepEqual(a.feed, [{ s: 2500, end: 3000 }]);
@@ -208,4 +211,40 @@ test('vue 3D : météo à la position et à l\'heure du joueur (heure locale du 
   assert.ok(Math.abs(e0.wd - 270) < 0.01);
   const e1 = V3.envAt(course, 100, 1800);
   assert.ok(Math.abs(e1.hour - 9.5) < 1e-6 && Math.abs(e1.rain - 3) < 0.01, `une demi-heure plus tard : ${e1.hour} h, ${e1.rain} mm/h`);
+});
+
+test('revêtements : portions effectives (la dernière l\'emporte), largeur, regroupement des cellules', () => {
+  const profile = makeProfile([{ len: 5000, grade: 0 }]);
+  const surfaces = [
+    { startKm: 1, endKm: 2, surface: 'cobbles' },
+    { startKm: 1.5, endKm: 2.5, surface: 'gravel_loose', width: 2.5 },
+    { startKm: 3, endKm: 3.4, surface: 'custom', factor: 3.2 },
+    { startKm: 4, endKm: 4.5, surface: 'asphalt', width: 8 },
+  ];
+  const { course } = setupFor(profile, { surfaces }, { temperature: 20, roadWidth: 5 });
+  const runs = PYR.course.surfaceRuns(course);
+  assert.deepEqual(runs.map((r) => r.surface), ['cobbles', 'gravel_loose', 'custom', 'asphalt']);
+  const near = (x, y) => Math.abs(x - y) <= course.step + 1e-6;
+  assert.ok(near(runs[0].s, 1000) && near(runs[0].end, 1500), `pavés ${runs[0].s}–${runs[0].end}`);
+  assert.ok(near(runs[1].s, 1500) && near(runs[1].end, 2500), 'le gravier recouvre la fin des pavés');
+  assert.equal(runs[0].width, 4, 'largeur du revêtement (pavés : 4 m)');
+  assert.equal(runs[1].width, 2.5, 'largeur saisie sur la portion');
+  assert.equal(runs[3].width, 8);
+  assert.ok(Math.abs(runs[2].factor - 3.2) < 1e-6);
+  assert.equal(course.roadWidth, 5);
+  assert.deepEqual(PYR.course.surfaceRuns(setupFor(profile).course), [], 'sans portion : rien');
+
+  // dans le message de la vue : aspect de chaque portion (un coefficient personnalisé prend l'aspect le plus proche), largeur par défaut
+  const msg = V3.courseMessage(course, [], [], { name: 'Hugo' });
+  assert.deepEqual(msg.surfaces.map((x) => x.kind), ['cobbles', 'gravel_loose', 'dirt', 'asphalt']);
+  assert.equal(msg.surfaces[1].w, 2.5);
+  assert.equal(msg.roadW, 5);
+  assert.equal(V3.surfaceKind({ surface: 'custom', factor: 0.9 }), 'smooth');
+  assert.equal(V3.surfaceKind({ surface: 'custom', factor: 1.4 }), 'rough');
+  assert.equal(V3.surfaceKind({ surface: 'custom', factor: 2 }), 'gravel_hard');
+  assert.equal(V3.surfaceKind({ surface: 'custom', factor: 9 }), 'grass');
+  // une portion de plus : la route se redessine, dans le même paysage
+  const plain = V3.courseMessage(setupFor(profile, {}, { temperature: 20, roadWidth: 5 }).course, [], [], { name: 'Hugo' });
+  assert.notEqual(plain.key, msg.key);
+  assert.equal(plain.seed, msg.seed);
 });

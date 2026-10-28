@@ -1002,7 +1002,9 @@
       cyc.root.position.set(q.x + q.rx * R.lat, y, q.z + q.rz * R.lat);
       const lean = clamp(-Math.atan(R.v * R.v * q.curv / PHYS.g) + R.latV * 0.07 + (R.latV - prevLatV) * 0.3, -0.6, 0.6);
       R.lean = lerp(R.lean || 0, lean, 1 - Math.exp(-dtReal * 6));
-      const bump = offRoad ? Math.sin(R.time * 37) * 0.025 * Math.min(1, R.v / 5) : 0;
+      // secousses : bas-côté, ou revêtement de la route (pavés, chemins, imposés par PaceYourRide)
+      const shake = this._shake = offRoad ? 1 : L.surf ? B3D.road.shakeOf(L.surf[q.i]) : 0;
+      const bump = shake ? Math.sin(R.time * 37) * 0.025 * shake * Math.min(1, R.v / 5) : 0;
       cyc.root.rotation.set(-Math.atan(q.grade) + bump, heading, R.lean, 'YXZ');
       cyc.update(dt, {
         speed: R.v, pedaling: R.effort > 25 && R.v > 0.3 && !R.tuck, standing: R.standing, tuck: R.tuck, steer: -steer
@@ -1217,6 +1219,8 @@
         const k = (R.v - 15) * 0.0015;
         cam.position.x += (Math.random() - 0.5) * k; cam.position.y += (Math.random() - 0.5) * k;
       }
+      // sur les pavés, la vue tremble (surtout la vue cycliste)
+      if (!mode.tv && this._shake > 0.3 && R.v > 2) cam.position.y += (Math.random() - 0.5) * this._shake * (mode.fpv ? 0.05 : 0.02) * Math.min(1, R.v / 8);
       cam.lookAt(mode.tv ? look : cs.look);
       const targetFov = mode.tv ? 40 : 60 + clamp((R.v - 12) * 0.6, 0, 12);
       if (Math.abs(cam.fov - targetFov) > 0.05) {

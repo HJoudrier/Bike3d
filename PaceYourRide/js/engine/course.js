@@ -33,6 +33,7 @@
     const sinRelS = new Float32Array(n); // sinus signé du vent relatif : > 0, vent venant de la droite du coureur
     const roadW = Ph.roadWidth(env.roadWidth);
     const width = new Float32Array(n).fill(roadW); // largeur praticable (m), pour le peloton du mode jeu
+    const surf = new Uint8Array(n); // revêtement de chaque cellule : rang dans Ph.SURFACES + 1 (0 : route par défaut, hors portions)
     const windDir = new Float32Array(n).fill(NaN);
     const vLim = new Float32Array(n);
 
@@ -70,8 +71,9 @@
       const f = Ph.surfaceFactor(p);
       const risk = Ph.surfaceRisk(p);
       const w = Ph.surfaceWidth(p, roadW);
+      const sid = Ph.SURFACES.indexOf(Ph.byId(Ph.SURFACES, p.surface, 1)) + 1;
       const [a, b] = cellRange(p);
-      for (let i = a; i < b; i++) { crrF[i] = f; crashR[i] = risk.crash; punctR[i] = risk.punct; width[i] = w; }
+      for (let i = a; i < b; i++) { crrF[i] = f; crashR[i] = risk.crash; punctR[i] = risk.punct; width[i] = w; surf[i] = sid; }
     }
 
     // Vent
@@ -144,7 +146,7 @@
 
     return {
       n, step, length: L,
-      grade, sinT, cosT, bear, bearS, crrF, rho, wMean, wAmp, cosRel, sinRel, sinRelS, windDir, vLim, radius, kappa, crashR, punctR, width, roadWidth: roadW,
+      grade, sinT, cosT, bear, bearS, crrF, rho, wMean, wAmp, cosRel, sinRel, sinRelS, windDir, vLim, radius, kappa, crashR, punctR, width, surf, roadWidth: roadW,
       ele, lat, lng,
       hasGusts, hasWind, aBrake, temperature: t0, weather,
     };
@@ -166,5 +168,24 @@
     return [course.lat[i] * (1 - f) + course.lat[i + 1] * f, course.lng[i] * (1 - f) + course.lng[i + 1] * f];
   }
 
-  PYR.course = { buildCourse, eleAt, latLngAt };
+  /**
+   * Portions de revêtement effectives (celles que la simulation applique : la dernière portion définie l'emporte là où elles se
+   * chevauchent), de proche en proche : [{s, end (m), surface (id de Ph.SURFACES), factor (multiplicateur du Crr), width (m)}].
+   * Hors portions, la route par défaut (course.roadWidth) n'y figure pas.
+   */
+  function surfaceRuns(course) {
+    const out = [], n = course.n, step = course.step;
+    if (!course.surf) return out;
+    let a = 0;
+    for (let i = 1; i <= n; i++) {
+      if (i < n && course.surf[i] === course.surf[a] && course.width[i] === course.width[a] && course.crrF[i] === course.crrF[a]) continue;
+      if (course.surf[a] > 0) {
+        out.push({ s: a * step, end: Math.min(course.length, i * step), surface: Ph.SURFACES[course.surf[a] - 1].id, factor: course.crrF[a], width: course.width[a] });
+      }
+      a = i;
+    }
+    return out;
+  }
+
+  PYR.course = { buildCourse, eleAt, latLngAt, surfaceRuns };
 })(globalThis.PYR = globalThis.PYR || {});

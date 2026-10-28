@@ -8,7 +8,9 @@
      course : { key (empreinte : on ne reconstruit que si elle change), name, seed (même graine pour tous les joueurs
                 d'une course en direct : même paysage), lat[], lng[], ele[] (points du parcours, m), length (m),
                 cps : [{type: 'sprint' | 'kom' | 'finish', s, start (pied d'une côte), cat ('hc', '1'…'4')}],
-                feed : [{s, end}] (zones de ravitaillement), me : {name, color} }
+                feed : [{s, end}] (zones de ravitaillement), me : {name, color},
+                surfaces : [{s, end, kind ('smooth' | 'asphalt' | 'rough' | 'cobbles' | 'cobbles_hard' | 'gravel_hard' |
+                'gravel_loose' | 'dirt' | 'wet' | 'grass'), w (largeur, m)}] (portions de revêtement), roadW (largeur hors portions, m) }
      frame  : { t (temps de course, s), k (secondes de course par seconde réelle : ×1 … ×50), run (la course avance),
                 me (identifiant du joueur), riders : [{id, name, color, kind ('avatar' | 'trainer' | 'road' | 'bot' | 'ghost'),
                 s (m depuis le départ), y (m, + à droite ; absent : file unique), v (m/s), P (W), w (W′ restant, 0–1),
@@ -36,22 +38,25 @@
   function wanted() { return /[?&]pyr(=|&|$)/.test(location.search); }
 
   // Voies pour les coureurs dont la simulation ne donne pas la position latérale : chacun garde la sienne tant qu'elle
-  // est libre, sinon prend la plus proche où personne ne roule à moins de 1,9 m devant ou derrière.
-  function assignLanes(list, half) {
+  // est libre, sinon prend la plus proche où personne ne roule à moins de 1,9 m devant ou derrière, sur la largeur de la
+  // chaussée là où il est (o.half) ; sur un chemin trop étroit, on roule en file au milieu.
+  function assignLanes(list) {
     const placed = [];
     list.sort((a, b) => b.sT - a.sT);
     for (const o of list) {
       const cur = o.laneT === undefined ? 0 : o.laneT;
-      let best = cur, bestC = Infinity;
+      const lim = Math.max(0, o.half - 0.4);
+      let best = null, bestC = Infinity, any = 0, anyC = Infinity;
       for (const ln of LANES) {
-        if (Math.abs(ln) > half - 0.4) continue;
+        if (Math.abs(ln) > lim) continue;
+        const c = Math.abs(ln - cur) + Math.abs(ln) * 0.15;
+        if (c < anyC) { anyC = c; any = ln; }
         let busy = false;
         for (const p of placed) if (Math.abs(p.sT - o.sT) < 1.9 && Math.abs(p.laneT - ln) < 0.6) { busy = true; break; }
         if (busy) continue;
-        const c = Math.abs(ln - cur) + Math.abs(ln) * 0.15;
         if (c < bestC) { bestC = c; best = ln; }
       }
-      o.laneT = best;
+      o.laneT = best === null ? any : best;
       placed.push(o);
     }
   }
@@ -207,6 +212,30 @@
         koms: cps.filter((c) => c && c.type === 'kom').map((c) => ({ s0: this.toS(num(c.start, num(c.s, 0) - 1000)), s1: this.toS(num(c.s, 0)), cat: cat(c.cat) })),
         feeds: (Array.isArray(m.feed) ? m.feed : []).filter((z) => z && z.end > z.s).map((z) => ({ s0: this.toS(z.s), s1: this.toS(z.end) }))
       };
+      // revêtements (portions de PaceYourRide) : rang du revêtement et demi-largeur de la chaussée à chaque échantillon de la route ;
+      // la plateforme garde sa largeur (6 m), une chaussée plus étroite a des bas-côtés, une plus large est dessinée à 6 m
+      const route = this.game.route, n = route.n, sp = route.spacing, ids = B3D.road.SURFACE_IDS;
+      const hw = (w, d) => clamp(num(w, d * 2) / 2, 0.9, L.roadHalf);
+      const def = hw(m.roadW, L.roadHalf);
+      L.surf = new Uint8Array(n);
+      L.surfHalf = new Float32Array(n).fill(def);
+      for (const p of Array.isArray(m.surfaces) ? m.surfaces : []) {
+        const k = p ? ids.indexOf(p.kind) : -1;
+        if (k < 0 || !(num(p.end, 0) > num(p.s, 0))) continue;
+        const a = this.toS(p.s), b = this.toS(p.end), h = hw(p.w, def);
+        for (let i = Math.max(0, Math.floor(a / sp) - 1); i < n && (i + 0.5) * sp < b; i++) {
+          if ((i + 0.5) * sp < a) continue;
+          L.surf[i] = k; L.surfHalf[i] = h;
+        }
+      }
+    },
+
+    // demi-largeur de la chaussée à l'abscisse s (Bike3D)
+    halfAt(s) {
+      const g = this.game, L = g.L, route = g.route;
+      if (!L || !L.surfHalf) return L ? L.roadHalf : 3;
+      const i = clamp(Math.round(s / route.spacing), 0, route.n - 1);
+      return L.bridgeMask[i] ? L.roadHalf : L.surfHalf[i];
     },
 
     onWorldReady() {
@@ -226,6 +255,7 @@
       if (g.atmo) { g.atmo.setFlow(0); this.baseHour = g.atmo.hour; g.atmo.setWeather(g.atmo.state); }
       this.finished = false;
       this.envSet = false;
+      this.sector = null;
       this.ready = true;
       g.state = 'pyr';
       this.hud.classList.toggle('hidden', !this.hudOn);
@@ -259,7 +289,7 @@
     drive(dtReal, dt) {
       const F = this.fr, g = this.game, R = g.ride;
       if (!F || !R) return;
-      const route = g.route, half = g.L.roadHalf;
+      const route = g.route;
       const ext = Math.min(MAX_AGE, (performance.now() - this.frAt) / 1000) * this.timeK;
       const meO = F.riders.find((o) => o.id === F.me) || null;
       const others = F.riders.filter((o) => o !== meO);
@@ -274,7 +304,8 @@
         R.effort = Math.max(0, num(meO.P, 0));
         R.draft = clamp(num(meO.dr, 0), 0, 0.7);
         R.time = num(F.t, 0);
-        if (Number.isFinite(meO.y)) R.laneT = clamp(meO.y, -(half - 0.35), half - 0.35);
+        R.half = this.halfAt(R.sT);
+        if (Number.isFinite(meO.y)) R.laneT = clamp(meO.y, -(R.half - 0.35), R.half - 0.35);
         else lanes.push(R);
         if (meO.fin && !this.finished) this.onFinish();
       }
@@ -290,11 +321,12 @@
           r.power = Number.isFinite(o.P) ? o.P : r.v > 1 ? 180 : 0;
           r.done = !!o.fin;
           r.state = o.st ? 'flat' : 'follow';
-          if (Number.isFinite(o.y)) r.laneT = clamp(o.y, -(half - 0.35), half - 0.35);
+          r.half = this.halfAt(r.sT);
+          if (Number.isFinite(o.y)) r.laneT = clamp(o.y, -(r.half - 0.35), r.half - 0.35);
           else lanes.push(r);
         });
       }
-      if (lanes.length) assignLanes(lanes, half);
+      if (lanes.length) assignLanes(lanes);
       // déplacement latéral lissé ; latV (m par seconde de course) sert au braquage et à l'inclinaison
       const side = (a) => {
         const tgt = a.laneT === undefined ? 0 : a.laneT;
@@ -310,6 +342,7 @@
       const cp = this.cpW();
       R.standing = R.effort > cp * 0.95 && q.grade > 0.06 && R.v < 8.5;
       R.tuck = R.effort < 40 && R.v > 14 && q.grade < -0.02;
+      this.sectorCheck(R.s);
       const X = g.playerProxy;
       X.s = R.s; X.lat = R.lat; X.v = R.v;
       if (P) {
@@ -318,6 +351,18 @@
         P.sortList();
         this.groups(P);
       }
+    },
+
+    // entrée dans un secteur pavé ou un chemin : annonce, comme les villages
+    sectorCheck(s) {
+      const g = this.game, list = B3D.road.sectors(g.route, g.L);
+      const cur = list.find((x) => s >= x.s0 && s < x.s1) || null;
+      if (cur === this.sector) return;
+      this.sector = cur;
+      if (!cur || !this.timeK) return;
+      const S = B3D.road.SURFACES[cur.k], info = S.sector;
+      const km = ((cur.s1 - cur.s0) / 1000).toFixed(1).replace('.', ',');
+      g.toast(info.icon + ' ' + info.title.charAt(0) + info.title.slice(1).toLowerCase() + ' n°' + cur.n + '<small>' + S.name + ' · ' + km + ' km · ' + '★'.repeat(info.stars) + '☆'.repeat(5 - info.stars) + '</small>', 2800);
     },
 
     // puissance critique approchée du joueur (danseuse), d'après sa vitesse et ses watts habituels
@@ -429,6 +474,7 @@
         '<div class="ph-row"><span id="ph-power">0 W</span><span id="ph-grade">0 %</span></div>' +
         '<div class="ph-row"><span id="ph-time">0:00</span><span id="ph-dist">0 km</span></div>' +
         '<div class="ph-row"><span id="ph-rank"></span><span id="ph-wbal"></span></div>' +
+        '<div class="ph-row"><span id="ph-surf"></span></div>' +
         '<div class="ph-btns"><button id="ph-cam" title="Changer de caméra (C)">🎥</button><button id="ph-sound" title="Son">🔇</button></div>';
       document.body.appendChild(h);
       h.querySelector('#ph-cam').addEventListener('click', () => this.camera());
@@ -456,6 +502,9 @@
         set('ph-rank', racers.length > 1 ? (ahead + 1) + 'ᵉ / ' + racers.length : (KIND_LABEL[meO.kind] || ''));
         set('ph-wbal', Number.isFinite(meO.w) ? '🔋 ' + Math.round(clamp(meO.w, 0, 1) * 100) + ' %' : '');
       }
+      // revêtement sous les roues (hors asphalte ordinaire)
+      const L = this.game.L, k = L && L.surf && q ? L.surf[q.i] : 0;
+      set('ph-surf', k ? B3D.road.SURFACES[k].name : '');
       $('ph-sound').textContent = this.soundOn ? '🔊' : '🔇';
     }
   };

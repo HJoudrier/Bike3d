@@ -80,65 +80,302 @@
     }
   }
 
-  function buildSurface(route, L, group) {
-    const half = L.roadHalf;
-    const n = route.n;
-    const roadMat = new THREE.MeshToonMaterial({
-      map: roadTexture(), gradientMap: B3D.toon.gradientMap(),
-      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4
-    });
-    // chaussée mouillée : bitume plus sombre et flaques qui reflètent le ciel (couleur du brouillard)
-    roadMat.onBeforeCompile = (shader) => {
+  // ------------------------------------------------------------------ revêtements
+  // Revêtements de la route (portions de PaceYourRide ; sans elles, tout le parcours est en asphalte standard). len : longueur couverte
+  // par la texture (m) ; wid : largeur couverte (m) quand le motif garde sa taille (pavés), sinon la texture s'étire sur la chaussée ;
+  // paved : flaques et marquages possibles ; wetMin : chaussée toujours mouillée ; shake : secousses du vélo ; sector : panneau à l'entrée.
+  const SURFACES = [
+    { id: 'asphalt', name: 'Asphalte', len: TEX_LEN, paved: true, shake: 0 },
+    { id: 'smooth', name: 'Enrobé neuf', len: TEX_LEN, paved: true, shake: 0 },
+    { id: 'rough', name: 'Asphalte dégradé', len: TEX_LEN, paved: true, shake: 0.35 },
+    { id: 'cobbles', name: 'Pavés', len: 8, wid: 4, paved: false, shake: 1, sector: { title: 'SECTEUR PAVÉ', stars: 3, icon: '🧱' } },
+    { id: 'cobbles_hard', name: 'Pavés difficiles', len: 8, wid: 4, paved: false, shake: 1.6, sector: { title: 'SECTEUR PAVÉ', stars: 5, icon: '🧱' } },
+    { id: 'gravel_hard', name: 'Chemin blanc', len: TEX_LEN, paved: false, shake: 0.4, sector: { title: 'CHEMIN BLANC', stars: 2, icon: '🪨' } },
+    { id: 'gravel_loose', name: 'Gravier', len: TEX_LEN, paved: false, shake: 0.7, sector: { title: 'GRAVIER', stars: 4, icon: '🪨' } },
+    { id: 'dirt', name: 'Chemin de terre', len: TEX_LEN, paved: false, shake: 0.6, sector: { title: 'CHEMIN DE TERRE', stars: 3, icon: '🟫' } },
+    { id: 'wet', name: 'Route mouillée', len: TEX_LEN, paved: true, wetMin: 1, shake: 0 },
+    { id: 'grass', name: 'Herbe', len: TEX_LEN, paved: false, shake: 0.5, sector: { title: 'HERBE ET SABLE', stars: 4, icon: '🌾' } }
+  ];
+  const SURFACE_IDS = SURFACES.map((x) => x.id);
+
+  // Motifs dessinés une fois (256 × 512 px) ; « paint » reçoit le contexte, la taille et un tirage pseudo-aléatoire.
+  const PAINT = {
+    smooth(ctx, w, h, rnd) {
+      ctx.fillStyle = '#3e4350'; ctx.fillRect(0, 0, w, h);
+      for (let k = 0; k < 2500; k++) { ctx.fillStyle = rnd() < 0.5 ? 'rgba(25,28,36,0.2)' : 'rgba(120,126,140,0.12)'; ctx.fillRect(rnd() * w, rnd() * h, 1 + rnd(), 1 + rnd()); }
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(w * 0.045, 0, w * 0.035, h); ctx.fillRect(w * 0.92, 0, w * 0.035, h);
+      ctx.fillRect(w * 0.485, 0, w * 0.03, h * 0.3);
+    },
+    rough(ctx, w, h, rnd) {
+      ctx.fillStyle = '#737680'; ctx.fillRect(0, 0, w, h);
+      for (let k = 0; k < 5000; k++) { ctx.fillStyle = rnd() < 0.5 ? 'rgba(40,42,50,0.22)' : 'rgba(180,182,190,0.2)'; ctx.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 2.5, 1 + rnd() * 2.5); }
+      // rustines plus sombres
+      for (let k = 0; k < 7; k++) {
+        const x = rnd() * w * 0.8, y = rnd() * h, pw = 30 + rnd() * 70, ph = 20 + rnd() * 60;
+        ctx.fillStyle = 'rgba(70,72,82,0.75)'; ctx.fillRect(x, y, pw, ph);
+        ctx.strokeStyle = 'rgba(40,40,46,0.6)'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, pw, ph);
+      }
+      // fissures
+      ctx.strokeStyle = 'rgba(30,30,36,0.75)'; ctx.lineWidth = 1.6;
+      for (let k = 0; k < 16; k++) {
+        let x = rnd() * w, y = rnd() * h;
+        ctx.beginPath(); ctx.moveTo(x, y);
+        for (let j = 0; j < 6; j++) { x += (rnd() - 0.5) * 30; y += 6 + rnd() * 14; ctx.lineTo(x, y); }
+        ctx.stroke();
+      }
+      // bords effacés
+      ctx.fillStyle = 'rgba(240,240,232,0.45)';
+      for (let y = 0; y < h; y += 8) if (rnd() < 0.7) { ctx.fillRect(w * 0.045, y, w * 0.03, 6); ctx.fillRect(w * 0.925, y, w * 0.03, 6); }
+    },
+    cobbles(ctx, w, h, rnd) { cobbleRows(ctx, w, h, rnd, 12, 40, 0.1, ['#a59c8d', '#958d80', '#b3a998', '#8b8479', '#9f9789'], '#57524b', 0); },
+    cobbles_hard(ctx, w, h, rnd) { cobbleRows(ctx, w, h, rnd, 9, 28, 0.32, ['#9b9282', '#857d70', '#a89c88', '#7a7366', '#938a7b'], '#4a4136', 0.35); },
+    gravel_hard(ctx, w, h, rnd) {
+      ctx.fillStyle = '#d2bc90'; ctx.fillRect(0, 0, w, h);
+      // traces des roues, plus tassées
+      for (const c of [0.3, 0.7]) {
+        const g = ctx.createLinearGradient(w * (c - 0.12), 0, w * (c + 0.12), 0);
+        g.addColorStop(0, 'rgba(176,150,108,0)'); g.addColorStop(0.5, 'rgba(176,150,108,0.65)'); g.addColorStop(1, 'rgba(176,150,108,0)');
+        ctx.fillStyle = g; ctx.fillRect(w * (c - 0.12), 0, w * 0.24, h);
+      }
+      for (let k = 0; k < 6000; k++) {
+        const v = rnd();
+        ctx.fillStyle = v < 0.4 ? 'rgba(120,100,70,0.35)' : v < 0.8 ? 'rgba(245,236,214,0.5)' : 'rgba(150,146,140,0.5)';
+        ctx.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 2, 1 + rnd() * 2);
+      }
+    },
+    gravel_loose(ctx, w, h, rnd) {
+      ctx.fillStyle = '#ddcca6'; ctx.fillRect(0, 0, w, h);
+      for (const c of [0.28, 0.72]) {
+        const g = ctx.createLinearGradient(w * (c - 0.1), 0, w * (c + 0.1), 0);
+        g.addColorStop(0, 'rgba(165,140,100,0)'); g.addColorStop(0.5, 'rgba(165,140,100,0.55)'); g.addColorStop(1, 'rgba(165,140,100,0)');
+        ctx.fillStyle = g; ctx.fillRect(w * (c - 0.1), 0, w * 0.2, h);
+      }
+      // cailloux : petits galets gris et beiges, en bourrelets au milieu et sur les bords
+      for (let k = 0; k < 2600; k++) {
+        let x = rnd() * w;
+        if (rnd() < 0.45) { const c = [0.04, 0.5, 0.96][Math.floor(rnd() * 3)]; x = (c + (rnd() - 0.5) * 0.12) * w; }
+        const y = rnd() * h, r = 1 + rnd() * 2.6;
+        ctx.fillStyle = ['#a39f98', '#c4bdae', '#8f8a80', '#e6dcc4', '#b8a888'][Math.floor(rnd() * 5)];
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x - r * 0.5, y - r * 0.6, r * 0.6, r * 0.4);
+      }
+    },
+    dirt(ctx, w, h, rnd) {
+      ctx.fillStyle = '#a57d55'; ctx.fillRect(0, 0, w, h);
+      for (let k = 0; k < 4000; k++) { ctx.fillStyle = rnd() < 0.5 ? 'rgba(90,60,35,0.25)' : 'rgba(200,170,130,0.25)'; ctx.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 3, 1 + rnd() * 3); }
+      // ornières plus sombres
+      for (const c of [0.27, 0.73]) {
+        const g = ctx.createLinearGradient(w * (c - 0.11), 0, w * (c + 0.11), 0);
+        g.addColorStop(0, 'rgba(110,76,45,0)'); g.addColorStop(0.5, 'rgba(110,76,45,0.75)'); g.addColorStop(1, 'rgba(110,76,45,0)');
+        ctx.fillStyle = g; ctx.fillRect(w * (c - 0.11), 0, w * 0.22, h);
+      }
+      grassTufts(ctx, w, h, rnd, [0.5], 0.09, 260);
+      grassTufts(ctx, w, h, rnd, [0.02, 0.98], 0.05, 200);
+    },
+    grass(ctx, w, h, rnd) {
+      ctx.fillStyle = '#7fbe4e'; ctx.fillRect(0, 0, w, h);
+      for (let k = 0; k < 3000; k++) { ctx.fillStyle = rnd() < 0.5 ? 'rgba(60,120,40,0.35)' : 'rgba(170,220,110,0.35)'; ctx.fillRect(rnd() * w, rnd() * h, 1, 2 + rnd() * 4); }
+      // deux traces de sable usées par les passages
+      for (const c of [0.3, 0.7]) {
+        const g = ctx.createLinearGradient(w * (c - 0.12), 0, w * (c + 0.12), 0);
+        g.addColorStop(0, 'rgba(206,182,128,0)'); g.addColorStop(0.35, 'rgba(206,182,128,0.85)'); g.addColorStop(0.65, 'rgba(206,182,128,0.85)'); g.addColorStop(1, 'rgba(206,182,128,0)');
+        ctx.fillStyle = g; ctx.fillRect(w * (c - 0.12), 0, w * 0.24, h);
+      }
+      grassTufts(ctx, w, h, rnd, [0.5], 0.12, 300);
+    }
+  };
+
+  // Rangées de pavés : cols × rows pierres (motif raccordable), décalées d'une demi-pierre une rangée sur deux. jit : irrégularité ;
+  // grass : part des joints où pousse de l'herbe (pavés difficiles), avec quelques trous de boue.
+  function cobbleRows(ctx, w, h, rnd, cols, rows, jit, colors, joint, grass) {
+    ctx.fillStyle = joint; ctx.fillRect(0, 0, w, h);
+    const cw = w / cols, rh = h / rows;
+    for (let r = 0; r < rows; r++) {
+      const off = (r & 1) ? cw / 2 : 0;
+      for (let c = -1; c <= cols; c++) {
+        if (grass && rnd() < 0.025) continue; // pavé arraché : trou de boue
+        const sw = cw * (0.84 - jit * 0.25 * rnd()), sh = rh * (0.8 - jit * 0.3 * rnd());
+        const x = c * cw + off + (cw - sw) / 2 + (rnd() - 0.5) * jit * cw * 0.3, y = r * rh + (rh - sh) / 2 + (rnd() - 0.5) * jit * rh * 0.3;
+        const col = colors[Math.floor(rnd() * colors.length)];
+        for (const dx of [0, -w, w]) {
+          if (x + dx > w || x + dx + sw < 0) continue;
+          const rr = Math.min(sw, sh) * (0.25 + jit * 0.3);
+          ctx.fillStyle = col;
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(x + dx, y, sw, sh, rr); else ctx.rect(x + dx, y, sw, sh);
+          ctx.fill();
+          // lumière sur le dessus, ombre au pied : la pierre bombe
+          ctx.fillStyle = 'rgba(255,255,255,0.22)'; ctx.fillRect(x + dx + rr * 0.5, y + 1, sw - rr, Math.max(1.5, sh * 0.22));
+          ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(x + dx + rr * 0.5, y + sh - Math.max(1.5, sh * 0.2), sw - rr, Math.max(1.5, sh * 0.2));
+        }
+      }
+    }
+    if (grass) {
+      // herbe entre les pavés
+      for (let k = 0; k < 900 * grass; k++) {
+        ctx.fillStyle = rnd() < 0.5 ? 'rgba(92,140,52,0.85)' : 'rgba(120,165,70,0.8)';
+        ctx.fillRect(rnd() * w, Math.floor(rnd() * rows) * rh - 1, 1.5, 3);
+      }
+    }
+  }
+
+  // Touffes d'herbe le long des fractions de largeur `at` (bande de demi-largeur spread), count brins.
+  function grassTufts(ctx, w, h, rnd, at, spread, count) {
+    for (let k = 0; k < count; k++) {
+      const c = at[Math.floor(rnd() * at.length)];
+      const x = (c + (rnd() - 0.5) * 2 * spread) * w, y = rnd() * h;
+      ctx.strokeStyle = rnd() < 0.5 ? '#6aa83f' : '#88c457';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (rnd() - 0.5) * 4, y - 3 - rnd() * 5); ctx.stroke();
+    }
+  }
+
+  const surfTex = {};
+  function surfaceTexture(k) {
+    const S = SURFACES[k];
+    if (S.id === 'asphalt' || S.id === 'wet') return roadTexture();
+    if (surfTex[S.id]) return surfTex[S.id];
+    const t = textTexture((ctx, w, h) => PAINT[S.id](ctx, w, h, mulberry32(7 + k * 101)), 256, 512);
+    t.wrapS = S.wid ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 8;
+    surfTex[S.id] = t;
+    return t;
+  }
+
+  // Chaussée et bas-côtés : route mouillée (plus sombre, flaques qui reflètent le ciel sur le bitume) et enneigée (bourrelets
+  // blancs sur les bords, voie centrale dégagée par le passage ; les bas-côtés blanchissent entièrement).
+  function wetSnowShader(m, o) {
+    m.onBeforeCompile = (shader) => {
       shader.uniforms.uWet = B3D.toon.shared.uWet;
       shader.uniforms.uSnow = B3D.toon.shared.uSnow;
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vRoadW;')
-        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvRoadW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        .replace('#include <common>', '#include <common>\nvarying vec3 vRoadW;' + (o.verge ? '' : '\nattribute float aLat;\nvarying float vLat;'))
+        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvRoadW = (modelMatrix * vec4(transformed, 1.0)).xyz;' + (o.verge ? '' : '\nvLat = aLat;'));
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', [
           '#include <common>',
           'varying vec3 vRoadW;',
+          o.verge ? '' : 'varying float vLat;',
           'uniform float uWet, uSnow;',
           'float rh21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }',
           'float rnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);',
           '  return mix(mix(rh21(i), rh21(i+vec2(1,0)), f.x), mix(rh21(i+vec2(0,1)), rh21(i+vec2(1,1)), f.x), f.y); }'
         ].join('\n'))
-        .replace('#include <map_fragment>', [
-          '#include <map_fragment>',
-          'if (uWet > 0.01) {',
-          '  diffuseColor.rgb *= 1.0 - 0.32 * uWet;',
-          '  float pud = smoothstep(0.6, 0.66, rnoise(vRoadW.xz * 0.28) * 0.7 + rnoise(vRoadW.xz * 1.1) * 0.3) * uWet;',
-          '  #ifdef USE_FOG',
-          '  diffuseColor.rgb = mix(diffuseColor.rgb, fogColor * 0.75, pud * 0.6);',
-          '  #endif',
+        .replace(o.verge ? '#include <color_fragment>' : '#include <map_fragment>', [
+          o.verge ? '#include <color_fragment>' : '#include <map_fragment>',
+          'float wet = max(uWet, ' + (o.wetMin ? '1.0' : '0.0') + ');',
+          'if (wet > 0.01) {',
+          '  diffuseColor.rgb *= 1.0 - ' + (o.paved ? '0.32' : '0.2') + ' * wet;',
+          o.paved ? [
+            '  float pud = smoothstep(0.6, 0.66, rnoise(vRoadW.xz * 0.28) * 0.7 + rnoise(vRoadW.xz * 1.1) * 0.3) * wet;',
+            '  #ifdef USE_FOG',
+            '  diffuseColor.rgb = mix(diffuseColor.rgb, fogColor * 0.75, pud * 0.6);',
+            '  #endif'
+          ].join('\n') : '',
           '}',
-          // neige sur la chaussée : bourrelets blancs sur les bords, voie centrale dégagée par le passage
           'if (uSnow > 0.01) {',
-          '  float edge = min(vMapUv.x, 1.0 - vMapUv.x);',
           '  float n = rnoise(vRoadW.xz * 0.4) * 0.6 + rnoise(vRoadW.xz * 2.1) * 0.4;',
-          '  float k = 1.0 - smoothstep(0.04, 0.1 + 0.16 * uSnow + 0.08 * n, edge);',
-          '  k = max(k, smoothstep(0.62, 0.7, n) * 0.55);',
+          o.verge ? '  float k = 0.75 + 0.25 * n;' : [
+            '  float edge = min(vLat, 1.0 - vLat);',
+            '  float k = 1.0 - smoothstep(0.04, 0.1 + 0.16 * uSnow + 0.08 * n, edge);',
+            '  k = max(k, smoothstep(0.62, 0.7, n) * 0.55);'
+          ].join('\n'),
           '  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.99), clamp(k * uSnow * 1.2, 0.0, 1.0));',
           '}'
         ].join('\n'));
     };
-    roadMat.customProgramCacheKey = () => 'road-wet-snow';
+    m.customProgramCacheKey = () => 'road-' + (o.verge ? 'verge' : (o.paved ? 'p' : 'u') + (o.wetMin ? 'w' : ''));
+  }
+
+  function surfaceMaterial(k) {
+    const S = SURFACES[k];
+    const m = new THREE.MeshToonMaterial({
+      map: surfaceTexture(k), gradientMap: B3D.toon.gradientMap(),
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4
+    });
+    wetSnowShader(m, { paved: S.paved, wetMin: S.wetMin });
+    return m;
+  }
+
+  // Revêtement (rang dans SURFACES) et demi-largeur de la chaussée à l'échantillon i (portions imposées par PaceYourRide ;
+  // sur un pont, le tablier garde toute sa largeur).
+  const surfAt = (L, i) => (L.surf ? L.surf[i] : 0);
+  const halfAt = (L, i) => (L.bridgeMask[i] || !L.surfHalf ? L.roadHalf : L.surfHalf[i]);
+
+  // Secteurs non goudronnés (pavés, chemins) assez longs pour avoir leur panneau, numérotés à rebours jusqu'à l'arrivée comme
+  // les secteurs pavés de Paris-Roubaix : [{s0, s1, k (rang du revêtement), n}].
+  function sectors(route, L) {
+    if (L.surfSectors) return L.surfSectors;
+    const out = [];
+    if (L.surf) {
+      let a = -1;
+      for (let i = 0; i <= route.n; i++) {
+        const k = i < route.n ? L.surf[i] : -1;
+        if (a >= 0 && k === L.surf[a]) continue;
+        if (a >= 0 && SURFACES[L.surf[a]].sector) {
+          const s0 = a * route.spacing, s1 = i * route.spacing;
+          if (s1 - s0 >= 80 && s1 > route.sStart && s0 < route.sEnd) out.push({ s0, s1, k: L.surf[a] });
+        }
+        a = i;
+      }
+    }
+    out.forEach((x, j) => { x.n = out.length - j; });
+    L.surfSectors = out;
+    return out;
+  }
+
+  function buildSurface(route, L, group) {
+    const half = L.roadHalf;
+    const n = route.n, sp = route.spacing;
+    const mats = [];
+    const matOf = (k) => mats[k] || (mats[k] = surfaceMaterial(k));
+    const vergeMat = new THREE.MeshToonMaterial({
+      vertexColors: true, gradientMap: B3D.toon.gradientMap(),
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4
+    });
+    wetSnowShader(vergeMat, { verge: true });
     const skirtMat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: B3D.toon.gradientMap() });
+    const C = L.col, grassC = C.grass[0].clone().lerp(C.grass[1], 0.4), dirtC = C.dirt.clone().lerp(C.grass[0], 0.3), villC = C.gravel;
+    const inC = new THREE.Color(), outC = new THREE.Color();
     const CH = 160;
     for (let a = 0; a < n - 1; a += CH) {
       const b = Math.min(n - 1, a + CH);
-      const gb = new GB(), sk = new GB();
+      const strips = new Map(), vg = new GB(), sk = new GB();
+      // chaussée : un quadrilatère par intervalle entre deux échantillons, dans le revêtement et à la largeur de son début
+      for (let i = a; i < b; i++) {
+        if (route.dup[i] && route.dup[i + 1]) continue; // portion déjà dessinée (aller-retour)
+        const k = surfAt(L, i), S = SURFACES[k], h = halfAt(L, i);
+        let gb = strips.get(k);
+        if (!gb) { gb = new GB(); gb.lat = []; strips.set(k, gb); }
+        const u = (lat) => (S.wid ? (lat + h) / S.wid : (lat + h) / (2 * h));
+        const P = (j, lat) => [route.x[j] - route.tz[j] * lat, route.y[j] + 0.04, route.z[j] + route.tx[j] * lat];
+        const v0 = (i * sp) / S.len, v1 = ((i + 1) * sp) / S.len;
+        const q = gb.p.length / 3;
+        gb.v(...P(i, -h), 0, 1, 0, u(-h), v0); gb.v(...P(i, h), 0, 1, 0, u(h), v0);
+        gb.v(...P(i + 1, -h), 0, 1, 0, u(-h), v1); gb.v(...P(i + 1, h), 0, 1, 0, u(h), v1);
+        gb.lat.push(0, 1, 0, 1);
+        gb.tri(q, q + 1, q + 2); gb.tri(q + 1, q + 3, q + 2);
+        // bas-côtés peints quand la chaussée est plus étroite que la plateforme : terre au bord, puis herbe (gravillons au village)
+        if (h < half - 0.02) {
+          inC.copy(L.villageW[i] > 0.3 ? villC : dirtC);
+          outC.copy(L.villageW[i] > 0.3 ? villC : grassC);
+          for (const side of [-1, 1]) {
+            const lo = side < 0 ? -half : h, hi = side < 0 ? -h : half;
+            const r = vg.p.length / 3;
+            vg.color.copy(side < 0 ? outC : inC); vg.v(...P(i, lo), 0, 1, 0); 
+            vg.color.copy(side < 0 ? inC : outC); vg.v(...P(i, hi), 0, 1, 0);
+            vg.color.copy(side < 0 ? outC : inC); vg.v(...P(i + 1, lo), 0, 1, 0);
+            vg.color.copy(side < 0 ? inC : outC); vg.v(...P(i + 1, hi), 0, 1, 0);
+            vg.tri(r, r + 1, r + 2); vg.tri(r + 1, r + 3, r + 2);
+          }
+        }
+      }
+      // bords (jupes) de la plateforme : plus épais sur les ponts
       for (let i = a; i <= b; i++) {
         const x = route.x[i], y = route.y[i] + 0.04, z = route.z[i];
         const rx = -route.tz[i], rz = route.tx[i];
-        const v = (i * route.spacing) / TEX_LEN;
-        gb.v(x - rx * half, y, z - rz * half, 0, 1, 0, 0, v);
-        gb.v(x + rx * half, y, z + rz * half, 0, 1, 0, 1, v);
-        if (i > a && !(route.dup[i] && route.dup[i - 1])) {
-          const k = (i - a) * 2;
-          gb.tri(k - 2, k - 1, k); gb.tri(k - 1, k + 1, k);
-        }
-        // bords (jupes) : plus épais sur les ponts
         const bridge = L.bridgeMask[i];
         const depth = bridge ? 1.6 : 0.7;
         sk.color.set(bridge ? '#c9b48f' : '#4d525e');
@@ -155,9 +392,18 @@
           sk.tri(k - 2, k - 1, k + 2); sk.tri(k - 1, k + 3, k + 2);
         }
       }
-      const m = new THREE.Mesh(gb.build(), roadMat);
-      m.receiveShadow = true;
-      group.add(m);
+      for (const [k, gb] of strips) {
+        const g = gb.build();
+        g.setAttribute('aLat', new THREE.Float32BufferAttribute(gb.lat, 1));
+        const m = new THREE.Mesh(g, matOf(k));
+        m.receiveShadow = true;
+        group.add(m);
+      }
+      if (vg.p.length) {
+        const m = new THREE.Mesh(vg.build(), vergeMat);
+        m.receiveShadow = true;
+        group.add(m);
+      }
       const s = new THREE.Mesh(sk.build(), skirtMat);
       s.receiveShadow = true;
       group.add(s);
@@ -450,9 +696,27 @@
       const words = ['ALLEZ !', 'VAS-Y !', 'COURAGE', 'ALLEZ ALLEZ', 'BRAVO !', 'GO GO GO', 'ON LÂCHE RIEN', 'PLUS QUE ' + Math.max(1, Math.round(c.length / 2000)) + ' KM'];
       for (let s = summitS - Math.min(c.length, 3000); s < summitS - 40; s += 90 + rnd() * 120) {
         const w = words[Math.floor(rnd() * words.length)];
-        group.add(roadDecal(route, s, (rnd() - 0.5) * 0.6, 3.6, 5.0, paintTexture(w), false));
+        const lat = (rnd() - 0.5) * 0.6;
+        const i = route.sample(s, {}).i;
+        if (!SURFACES[surfAt(L, i)].paved || halfAt(L, i) < 2.6) continue; // on ne peint ni sur les pavés, ni sur un chemin étroit
+        group.add(roadDecal(route, s, lat, 3.6, 5.0, paintTexture(w), false));
       }
     });
+
+    // Secteurs pavés et chemins (portions de PaceYourRide) : panneau à l'entrée, numéroté à rebours, avec sa longueur et sa difficulté
+    for (const sec of sectors(route, L)) {
+      const S = SURFACES[sec.k], info = S.sector;
+      const km = ((sec.s1 - sec.s0) / 1000).toFixed(1).replace('.', ',');
+      const tex = signTexture([
+        { text: info.title + ' N°' + sec.n, size: info.title.length > 12 ? 38 : 46 },
+        { text: km + ' km', size: 64, color: '#e2463a' },
+        { text: '★'.repeat(info.stars) + '☆'.repeat(5 - info.stars), size: 54, color: '#e0a400' }
+      ], { border: '#1d1a2b' });
+      const g = makeSign(tex, 1.5, 1.1, 1.7);
+      const p = placeOnRoad(route, g, Math.max(route.sStart + 2, sec.s0 - 12), half + 1.6, 0);
+      g.position.y = Math.min(L.heightAt(g.position.x, g.position.z), p.y + 0.5) - 0.1;
+      group.add(g);
+    }
   }
 
   // Groupes de supporters répartis sur le parcours (plus nombreux en montée), parfois avec un camping-car.
@@ -622,6 +886,11 @@
   }
 
   B3D.road = {
+    SURFACES,
+    SURFACE_IDS,
+    sectors,
+    // secousses du vélo sur le revêtement de rang k (0 : aucune)
+    shakeOf(k) { return SURFACES[k] ? SURFACES[k].shake : 0; },
     build(route, L) {
       const group = new THREE.Group();
       group.name = 'road';
