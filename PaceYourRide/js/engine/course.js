@@ -29,6 +29,7 @@
     const grade = new Float32Array(n), sinT = new Float32Array(n), cosT = new Float32Array(n);
     const bear = new Float32Array(n), crrF = new Float32Array(n).fill(1), rho = new Float32Array(n);
     const crashR = new Float32Array(n).fill(1), punctR = new Float32Array(n).fill(1); // risques d'incident
+    const punctT = new Uint8Array(n); // terrain de crevaison (rang dans Ph.PUNCT_TERRAINS : 0 route, 1 pavés, 2 gravier, 3 chemins)
     const wMean = new Float32Array(n), wAmp = new Float32Array(n), cosRel = new Float32Array(n), sinRel = new Float32Array(n);
     const sinRelS = new Float32Array(n); // sinus signé du vent relatif : > 0, vent venant de la droite du coureur
     const roadW = Ph.roadWidth(env.roadWidth);
@@ -73,7 +74,7 @@
       const w = Ph.surfaceWidth(p, roadW);
       const sid = Ph.SURFACES.indexOf(Ph.byId(Ph.SURFACES, p.surface, 1)) + 1;
       const [a, b] = cellRange(p);
-      for (let i = a; i < b; i++) { crrF[i] = f; crashR[i] = risk.crash; punctR[i] = risk.punct; width[i] = w; surf[i] = sid; }
+      for (let i = a; i < b; i++) { crrF[i] = f; crashR[i] = risk.crash; punctR[i] = risk.punct; punctT[i] = risk.terrain; width[i] = w; surf[i] = sid; }
     }
 
     // Vent
@@ -146,7 +147,7 @@
 
     return {
       n, step, length: L,
-      grade, sinT, cosT, bear, bearS, crrF, rho, wMean, wAmp, cosRel, sinRel, sinRelS, windDir, vLim, radius, kappa, crashR, punctR, width, surf, roadWidth: roadW,
+      grade, sinT, cosT, bear, bearS, crrF, rho, wMean, wAmp, cosRel, sinRel, sinRelS, windDir, vLim, radius, kappa, crashR, punctR, punctT, width, surf, roadWidth: roadW,
       ele, lat, lng,
       hasGusts, hasWind, aBrake, temperature: t0, weather,
     };

@@ -83,19 +83,21 @@
   // ------------------------------------------------------------------ revêtements
   // Revêtements de la route (portions de PaceYourRide ; sans elles, tout le parcours est en asphalte standard). len : longueur couverte
   // par la texture (m) ; wid : largeur couverte (m) quand le motif garde sa taille (pavés), sinon la texture s'étire sur la chaussée ;
-  // paved : flaques et marquages possibles ; wetMin : chaussée toujours mouillée ; shake : secousses du vélo ; sector : panneau à l'entrée.
+  // paved : flaques et marquages possibles ; wetMin : chaussée toujours mouillée ; shake : secousses du vélo ; sector : panneau à l'entrée ;
+  // dust : poussière soulevée par les roues (0–1, par temps sec) et sa couleur.
   const SURFACES = [
-    { id: 'asphalt', name: 'Asphalte', len: TEX_LEN, paved: true, shake: 0 },
-    { id: 'smooth', name: 'Enrobé neuf', len: TEX_LEN, paved: true, shake: 0 },
-    { id: 'rough', name: 'Asphalte dégradé', len: TEX_LEN, paved: true, shake: 0.35 },
-    { id: 'cobbles', name: 'Pavés', len: 8, wid: 4, paved: false, shake: 1, sector: { title: 'SECTEUR PAVÉ', stars: 3, icon: '🧱' } },
-    { id: 'cobbles_hard', name: 'Pavés difficiles', len: 8, wid: 4, paved: false, shake: 1.6, sector: { title: 'SECTEUR PAVÉ', stars: 5, icon: '🧱' } },
-    { id: 'gravel_hard', name: 'Chemin blanc', len: TEX_LEN, paved: false, shake: 0.4, sector: { title: 'CHEMIN BLANC', stars: 2, icon: '🪨' } },
-    { id: 'gravel_loose', name: 'Gravier', len: TEX_LEN, paved: false, shake: 0.7, sector: { title: 'GRAVIER', stars: 4, icon: '🪨' } },
-    { id: 'dirt', name: 'Chemin de terre', len: TEX_LEN, paved: false, shake: 0.6, sector: { title: 'CHEMIN DE TERRE', stars: 3, icon: '🟫' } },
-    { id: 'wet', name: 'Route mouillée', len: TEX_LEN, paved: true, wetMin: 1, shake: 0 },
-    { id: 'grass', name: 'Herbe', len: TEX_LEN, paved: false, shake: 0.5, sector: { title: 'HERBE ET SABLE', stars: 4, icon: '🌾' } }
+    { id: 'asphalt', name: 'Asphalte', len: TEX_LEN, paved: true, shake: 0, dust: 0 },
+    { id: 'smooth', name: 'Enrobé neuf', len: TEX_LEN, paved: true, shake: 0, dust: 0 },
+    { id: 'rough', name: 'Asphalte dégradé', len: TEX_LEN, paved: true, shake: 0.35, dust: 0 },
+    { id: 'cobbles', name: 'Pavés', len: 8, wid: 4, paved: false, shake: 1, dust: 0.12, dustColor: '#cfc3ad', sector: { title: 'SECTEUR PAVÉ', stars: 3, icon: '🧱' } },
+    { id: 'cobbles_hard', name: 'Pavés difficiles', len: 8, wid: 4, paved: false, shake: 1.6, dust: 0.3, dustColor: '#d6c6a6', sector: { title: 'SECTEUR PAVÉ', stars: 5, icon: '🧱' } },
+    { id: 'gravel_hard', name: 'Chemin blanc', len: TEX_LEN, paved: false, shake: 0.4, dust: 1, dustColor: '#efe7d4', sector: { title: 'CHEMIN BLANC', stars: 2, icon: '🪨' } },
+    { id: 'gravel_loose', name: 'Gravier', len: TEX_LEN, paved: false, shake: 0.7, dust: 0.8, dustColor: '#e6d8b8', sector: { title: 'GRAVIER', stars: 4, icon: '🪨' } },
+    { id: 'dirt', name: 'Chemin de terre', len: TEX_LEN, paved: false, shake: 0.6, dust: 0.55, dustColor: '#c9a67c', sector: { title: 'CHEMIN DE TERRE', stars: 3, icon: '🟫' } },
+    { id: 'wet', name: 'Route mouillée', len: TEX_LEN, paved: true, wetMin: 1, shake: 0, dust: 0 },
+    { id: 'grass', name: 'Herbe', len: TEX_LEN, paved: false, shake: 0.5, dust: 0.2, dustColor: '#dcc690', sector: { title: 'HERBE ET SABLE', stars: 4, icon: '🌾' } }
   ];
+  const SHOULDER_DUST = 0.35; // bas-côté en terre
   const SURFACE_IDS = SURFACES.map((x) => x.id);
 
   // Motifs dessinés une fois (256 × 512 px) ; « paint » reçoit le contexte, la taille et un tirage pseudo-aléatoire.
@@ -891,6 +893,12 @@
     sectors,
     // secousses du vélo sur le revêtement de rang k (0 : aucune)
     shakeOf(k) { return SURFACES[k] ? SURFACES[k].shake : 0; },
+    // poussière à l'échantillon i, à la distance lat de l'axe : {k (0–1), color} ; sur le bas-côté, celle de la terre
+    dustAt(L, i, lat) {
+      if (Math.abs(lat) > halfAt(L, i) + 0.1 && !L.bridgeMask[i]) return { k: SHOULDER_DUST, color: '#' + L.col.dirt.getHexString() };
+      const S = SURFACES[surfAt(L, i)];
+      return S.dust ? { k: S.dust, color: S.dustColor } : null;
+    },
     build(route, L) {
       const group = new THREE.Group();
       group.name = 'road';

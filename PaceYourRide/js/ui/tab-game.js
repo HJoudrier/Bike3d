@@ -464,7 +464,7 @@
       // une voie tirée de l'identifiant (les autres joueurs envoient la leur)
       if (rules.peloton) { if (isLive) Pel.place(race, G.me); else Pel.grid(race); }
       race.onEvent = (ev) => T.onRaceEvent(ev);
-      G.acc = 0; G.renderS = 0; G.pHist = []; G.savedHist = []; G.tteKey = null;
+      G.acc = 0; G.renderS = 0; G.pHist = []; G.savedHist = []; G.tteKey = null; G.surfKey = undefined;
       G.boostT = 0;
       G.best = new Float64Array(CURVE_MAX); G.lastCurve = 0;
       G.slowUntil = 0; G.holdUntil = 0; G.zoneSeen = new Set(); G.zoneNow = null; G.slowed = false;
@@ -753,6 +753,27 @@
       const dmax = tt < CURVE_MAX ? tt : CURVE_MAX, best = G.best;
       for (let d = 1; d <= dmax; d++) { const a = (Hh[tt] - Hh[tt - d]) / d; if (a > best[d - 1]) best[d - 1] = a; }
       T.updateSlow();
+      T.watchSurface();
+    },
+
+    /**
+     * Portion de revêtement où l'on entre : avec les incidents, on annonce le risque de crevaison qu'elle fait courir à tes pneus
+     * (pavés, gravier, chemins), quand il dépasse deux fois celui de l'asphalte.
+     */
+    watchSurface() {
+      const me = G.me, C = G.ctx && G.ctx.course;
+      if (!me || !C || !C.surf || !G.rules || !G.rules.events || me.driven) return;
+      const i = Math.min(C.n - 1, Math.max(0, Math.floor(me.st.s / C.step)));
+      const key = C.surf[i] + ':' + C.punctT[i];
+      if (key === G.surfKey) return;
+      const first = G.surfKey === undefined;
+      G.surfKey = key;
+      if (first || !C.surf[i]) return;
+      const k = Race.punctureRisk(C, i, me.setup);
+      if (k < 2) return;
+      const surface = PYR.physics.SURFACES[C.surf[i] - 1], tire = PYR.physics.byId(PYR.physics.TIRES, me.setup.tire, 2); // pneus imposés en armes égales
+      const every = Math.round(Race.PUNCTURE_KM / k);
+      D.toast(`${surface.label} : risque de crevaison ×${U.fmt(k, 1)} avec tes pneus (${tire.label.toLowerCase()}), une tous les ${every} km en moyenne${me.setup.sealant ? ', dont 60 % colmatées par le liquide' : ''}.`);
     },
 
     /* ---------- retour à ×1 aux évènements ---------- */

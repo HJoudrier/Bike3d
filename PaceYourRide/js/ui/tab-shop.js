@@ -59,7 +59,9 @@
       case 'wheels': return `${U.fmt(it.mass, 2)} kg la paire · ${dcdaText(Ph.byId(Ph.WHEELS, it.bike.wheels).dcda)}`;
       case 'tires': {
         const t = Ph.byId(Ph.TIRES, it.bike.tire);
-        return `Crr ${U.fmt(t.crr, 4)} · crevaisons ×${U.fmt(t.puncture, 1)}${t.sealant ? ' · préventif' : ''} · ${U.fmt(it.mass * 1000, 0)} g`;
+        // risque de crevaison par terrain (route, pavés, gravier, chemins), par rapport au pneu route standard
+        const pt = Ph.PUNCT_TERRAINS.map((x, k) => `${x.label} ×${U.fmt(t.pt[k], 2)}`).join(', ');
+        return `Crr ${U.fmt(t.crr, 4)} · crevaisons : ${pt}${t.sealant ? ' · préventif' : ''} · ${U.fmt(it.mass * 1000, 0)} g`;
       }
       case 'drivetrain': return `rendement ${U.fmt(Ph.byId(Ph.DRIVETRAINS, it.bike.drivetrain).eff * 100, 1)} %`;
       case 'helmet': return dcdaText(Ph.byId(Ph.HELMETS, it.rider.helmet).dcda);

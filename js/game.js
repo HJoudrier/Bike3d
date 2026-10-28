@@ -110,6 +110,7 @@
       // contour d'environ 1,7 px quelle que soit la taille de l'écran
       B3D.toon.shared.uOutlineScale.value = 1.7 * 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) / h;
       if (this.hcCrowd) this.hcCrowd.setViewHeight(this.renderer.getDrawingBufferSize(new THREE.Vector2()).y);
+      if (this.dust) this.dust.setViewHeight(this.renderer.getDrawingBufferSize(new THREE.Vector2()).y);
       if (this.atmo) this.atmo.setPointScale(this.renderer.getDrawingBufferSize(new THREE.Vector2()).y * 0.5 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2));
     },
 
@@ -334,6 +335,7 @@
       if (on) { this.camState = null; return; }
       this.resize();
       if (this.hcCrowd) this.hcCrowd.setPointScale(null);
+      if (this.dust) this.dust.setPointScale(null);
       this.camState = null;
       // on a retiré le casque en pleine course : pause, pour reprendre à l'écran
       if (this.state === 'ride' || this.state === 'countdown') this.togglePause(true);
@@ -463,6 +465,7 @@
         });
       };
       if (this.tiles) { this.tiles.dispose(); this.tiles = null; }
+      if (this.dust) { this.dust.dispose(); this.dust = null; }
       if (this.roadGroup) { free(this.roadGroup); this.roadGroup = null; }
       if (this.waterGroup) { free(this.waterGroup); this.waterGroup = null; }
       if (this.villageGroup) { free(this.villageGroup); this.villageGroup = null; }
@@ -529,6 +532,8 @@
       await nextFrame();
 
       this.tiles = new B3D.TileManager(this.scene, L, this.settings.quality);
+      this.dust = new B3D.Dust(this.scene, this.settings.quality);
+      this.dust.setViewHeight(this.renderer.getDrawingBufferSize(new THREE.Vector2()).y);
       B3D.road.placeRoadsideInstances(route, L, this.tiles);
       this.setLoading(0.32, 'Construction des villages…');
       this.villageGroup = B3D.villages.build(route, L, this.tiles);
@@ -1299,6 +1304,8 @@
     loop() {
       const raw = this.clock.getDelta();
       const dt = Math.min(0.05, raw);
+      // poussière : en vue pilotée, elle vit au temps réel, comme les positions reçues (même à faible cadence)
+      const dtDust = this.state === 'pyr' ? Math.min(0.25, raw) : dt;
       B3D.toon.shared.uTime.value += dt;
       if (this.state === 'menu' || this.building) return;
       const vr = this.vr && this.vr.presenting;
@@ -1357,7 +1364,9 @@
       if (this.racing()) {
         if (this.peloton) this.peloton.render(dt * this.simK(), this.camera);
         if (this.convoy) this.convoy.update(dt * this.simK(), this.camera);
+        this.emitDust(dtDust);
       }
+      if (this.dust) this.dust.update(dtDust, this.atmo ? this.atmo.wind : null, this.atmo ? 0.3 + 0.7 * this.atmo.dayK : 1, this.camera);
       if (this.hcCrowd) {
         const racing = this.state !== 'preview';
         this.hcCrowd.update(dt, this.camera, this.ridersForCrowd(), racing && this.ride ? this.ride.s : this.preview.s, racing ? dt * this.simK() : dt);
@@ -1427,6 +1436,27 @@
       const W = A.wind;
       const f = W.x * q.tx + W.z * q.tz, r = W.x * q.rx + W.z * q.rz;
       return { clock: A.clock(), icon: A.info().icon, kmh: W.speed * 3.6, angle: Math.atan2(r, f) * 180 / Math.PI };
+    },
+
+    // Poussière au contact des roues arrière (joueur, peloton) et des véhicules de la caravane, sur les revêtements poussiéreux et le
+    // bas-côté, par temps sec ; dtReal : temps réel (les bouffées vivent en temps réel, la caméra les traverse).
+    emitDust(dtReal) {
+      const D = this.dust, L = this.L, route = this.route, A = this.atmo;
+      if (!D || !L || !this.ride || this.simK() <= 0) return;
+      const dry = A ? clamp(1 - 1.6 * A.wet - 2 * A.snowCover, 0, 1) : 1;
+      if (dry <= 0.02) return;
+      const n = route.n, sp = route.spacing;
+      const at = (s) => clamp(Math.round(s / sp), 0, n - 1);
+      const src = (o, pos, s, lat, v, big) => {
+        const i = at(s), d = B3D.road.dustAt(L, i, lat);
+        if (!d) { o.dustAcc = 0; return; }
+        const hx = route.tx[i], hz = route.tz[i], back = big ? 2.2 : 0.5; // roue arrière (ou arrière du véhicule)
+        D.emit(o, pos.x - hx * back, pos.y, pos.z - hz * back, hx, hz, v, d.k * dry, d.color, dtReal, big);
+      };
+      const R = this.ride;
+      if (this.cyclist) src(R, this.cyclist.root.position, R.s, R.lat, R.v, false);
+      if (this.peloton) for (const r of this.peloton.riders) if (r.pos && !r.done && r.state !== 'flat') src(r, r.pos, r.s, r.lat, r.v, false);
+      if (this.convoy && this.convoy.group.visible) for (const veh of this.convoy.all) src(veh, veh.obj.position, veh.s, veh.lat, veh.v, true);
     },
 
     // une course est à l'écran (jouée ici, ou pilotée par PaceYourRide)

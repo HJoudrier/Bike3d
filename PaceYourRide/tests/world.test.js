@@ -313,3 +313,43 @@ test('peloton 2D : un cycliste sur la vraie route n\'est jamais retenu, les autr
   Race.step(r2.race);
   assert.equal(behind.st.s, 108);
 });
+
+test('crevaisons : risque selon le revêtement et la résistance du pneu sur ce terrain', () => {
+  const Ph = PYR.physics;
+  const profile = makeProfile([{ len: 6000, grade: 0 }]);
+  const surfaces = [
+    { startKm: 1, endKm: 2, surface: 'cobbles_hard' }, { startKm: 2, endKm: 3, surface: 'gravel_loose' },
+    { startKm: 3, endKm: 4, surface: 'dirt' }, { startKm: 4, endKm: 5, surface: 'custom', factor: 3 },
+  ];
+  const { course } = setupFor(profile, { surfaces });
+  const cell = (km) => Math.floor(km * 1000 / course.step);
+  const tire = (id) => Ph.buildSetup({ weight: 72, height: 178 }, { tire: id });
+  const risk = (km, id) => Race.punctureRisk(course, cell(km), tire(id));
+  assert.equal(risk(0.5, 'road'), 1, 'pneu route sur l\'asphalte : la référence (une crevaison tous les 250 km)');
+  assert.equal(risk(1.5, 'road'), 8, 'pavés difficiles');
+  assert.equal(risk(2.5, 'road'), 8, 'gravier meuble');
+  assert.equal(risk(3.5, 'road'), 4, 'chemin de terre');
+  assert.equal(risk(4.5, 'road'), 5, 'personnalisé ×3 : terrain gravier');
+  assert.ok(risk(2.5, 'race') > risk(2.5, 'road'), 'le latex se coupe sur le gravier');
+  assert.ok(Math.abs(risk(2.5, 'gravel') - 8 * 0.2) < 1e-9, 'pneu gravel : cinq fois moins');
+  assert.ok(risk(1.5, 'tubeless') < risk(1.5, 'road') * 0.6, 'un tubeless ne pince pas sur les pavés');
+  assert.ok(risk(0.5, 'training') < risk(0.5, 'road') && risk(1.5, 'training') / risk(0.5, 'training') > 8, 'renforcé : très sûr sur la route, mais il pince sur les pavés');
+  for (const t of Ph.TIRES) assert.equal(t.pt.length, Ph.PUNCT_TERRAINS.length);
+  assert.equal(tire('tubeless').sealant, true);
+});
+
+test('crevaisons : en course, bien plus sur le gravier et les pavés, et bien moins avec des pneus gravel', () => {
+  const count = (surface, tireId) => {
+    const prof = makeProfile([{ len: 30000, grade: 0 }]);
+    const { course } = setupFor(prof, surface ? { surfaces: [{ startKm: 0, endKm: 30, surface }] } : {});
+    const race = Race.create({ course, rules: { events: true }, seed: 5, gustSeed: 1 });
+    Race.addBots(race, { n: 12, level: 'equal', rider: { weight: 72, height: 178, ftp: 250, records: {} }, bike: { tire: tireId }, v0: 5 });
+    Race.runToEnd(race);
+    return race.events.filter((e) => e.type === 'puncture' || e.type === 'sealed').length;
+  };
+  const asphalt = count(null, 'road'), cobbles = count('cobbles_hard', 'road');
+  const gravelRoad = count('gravel_loose', 'road'), gravelTires = count('gravel_loose', 'gravel');
+  // 12 coureurs × 30 km = 360 km : ≈ 1,4 crevaison attendue sur l'asphalte, ≈ 11,5 sur les pavés ou le gravier, ≈ 2,3 en pneus gravel
+  assert.ok(cobbles >= 5 && cobbles > 3 * Math.max(1, asphalt), `pavés ${cobbles} / asphalte ${asphalt}`);
+  assert.ok(gravelRoad >= 5 && gravelRoad > 2.5 * Math.max(1, gravelTires), `gravier : pneus route ${gravelRoad} / pneus gravel ${gravelTires}`);
+});

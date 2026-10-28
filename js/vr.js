@@ -527,6 +527,7 @@
           const p5 = eye.projectionMatrix.elements[5];
           B3D.toon.shared.uOutlineScale.value = 1.6 * 2 / (p5 * eye.viewport.w);
           if (g.hcCrowd) g.hcCrowd.setPointScale(eye.viewport.w * 0.5 * p5);
+          if (g.dust) g.dust.setPointScale(eye.viewport.w * 0.5 * p5);
           if (g.atmo) g.atmo.setPointScale(eye.viewport.w * 0.5 * p5);
         }
       }

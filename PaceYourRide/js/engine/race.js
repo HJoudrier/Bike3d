@@ -18,7 +18,7 @@
   const RULES = { events: false, form: false, fuel: false, physio: false, pullSec: 30, sprints: 0, kom: false, draft: true, peloton: false };
   // modèle physiologique : la courbe record ne limite que les efforts de 20 min au plus, la durabilité vient de la couche lente
   const PHYSIO_REC_MAX = 1200;
-  const PUNCTURE_KM = 250;  // une crevaison tous les 250 km en moyenne (asphalte, pneus route)
+  const PUNCTURE_KM = 250;  // une crevaison tous les 250 km en moyenne (asphalte, pneus route) ; revêtement et pneus la modulent
   const CRASH_KM = 600;     // une chute tous les 600 km en moyenne, avant facteurs de risque
   // 89 coureurs virtuels au plus : avec le joueur, un peloton de 90
   const BOT_NAMES = [
@@ -194,12 +194,22 @@
     return ev;
   }
 
+  /**
+   * Risque de crevaison dans la cellule i, par rapport à un pneu route standard sur l'asphalte : celui du revêtement (pavés, gravier,
+   * chemins : 2,5 à 8 fois plus) × la résistance du pneu sur ce terrain (setup.punctT : route, pavés, gravier, chemins).
+   */
+  function punctureRisk(C, i, setup) {
+    const surf = C.punctR ? C.punctR[i] : 1;
+    const tire = setup.punctT ? setup.punctT[C.punctT ? C.punctT[i] : 0] : setup.puncture || 1;
+    return surf * tire;
+  }
+
   /** Tirage des incidents pour la seconde à venir. */
   function maybeIncident(race, r, d) {
     const st = r.st, c = r.cond, C = race.course, i = c.i;
     const km = st.v / 1000;
     if (!(km > 0.0005)) return;
-    const pP = km / PUNCTURE_KM * (C.punctR ? C.punctR[i] : 1) * (r.setup.puncture || 1) * (c.punctK || 1);
+    const pP = km / PUNCTURE_KM * punctureRisk(C, i, r.setup) * (c.punctK || 1);
     let risk = (C.crashR ? C.crashR[i] : 1) * (c.crashK || 1); // route mouillée, rafales, verglas (météo)
     if (st.v > 15) risk *= 2;                                   // plus de 54 km/h
     if (c.vlim < 16 && st.v > c.vlim - 1.5) risk *= 3;          // virage pris à la limite
@@ -434,5 +444,5 @@
     return Cl.standings(race.cps, race.riders.map((r) => ({ id: r.id, splits: r.splits, s: r.st.s })));
   }
 
-  PYR.race = { RULES, takeFeed, BOT_NAMES, MAX_BOTS, palette, normRules, create, addRider, addBots, incident, snapshot, step, runToEnd, results, standings, timeToExhaustion, np };
+  PYR.race = { RULES, PUNCTURE_KM, punctureRisk, takeFeed, BOT_NAMES, MAX_BOTS, palette, normRules, create, addRider, addBots, incident, snapshot, step, runToEnd, results, standings, timeToExhaustion, np };
 })(globalThis.PYR = globalThis.PYR || {});

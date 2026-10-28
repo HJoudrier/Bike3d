@@ -77,15 +77,30 @@
    * Pneus : coefficient de roulement sur asphalte standard, risque relatif de crevaison
    * et liquide préventif (qui colmate une partie des perforations).
    */
-  const TIRES = [
-    { id: 'race', label: 'Course haut de gamme (latex)', crr: 0.0030, puncture: 1.6, sealant: false },
-    { id: 'tubeless', label: 'Tubeless route + liquide préventif', crr: 0.0032, puncture: 0.9, sealant: true },
-    { id: 'road', label: 'Route standard', crr: 0.0038, puncture: 1, sealant: false },
-    { id: 'training', label: 'Entraînement / renforcé anti-crevaison', crr: 0.0048, puncture: 0.35, sealant: false },
-    { id: 'gravel', label: 'Gravel (35–45 mm)', crr: 0.0055, puncture: 0.6, sealant: true },
-    { id: 'mtb', label: 'VTT', crr: 0.0080, puncture: 0.5, sealant: true },
-    { id: 'custom', label: 'Personnalisé', crr: null, puncture: 1, sealant: false },
+  /**
+   * Terrains de crevaison : ce qui perce le pneu dépend du revêtement (SURFACES.terrain) — débris et silex sur la route, pincement de la
+   * chambre à air sur l'arête des pavés, cailloux tranchants du gravier, cailloux et épines des chemins — et chaque pneu y résiste à sa façon.
+   */
+  const PUNCT_TERRAINS = [
+    { id: 'road', label: 'route' }, { id: 'cobbles', label: 'pavés' }, { id: 'gravel', label: 'gravier' }, { id: 'offroad', label: 'chemins' },
   ];
+
+  /**
+   * Pneus : roulement (crr), liquide préventif (sealant : colmate 60 % des crevaisons) et, par terrain de crevaison (PUNCT_TERRAINS, dans
+   * l'ordre route, pavés, gravier, chemins), le risque par rapport au pneu route standard. Un latex étroit pince sur les pavés et se coupe
+   * sur le gravier ; un tubeless ne pince pas ; un pneu de gravel ou de VTT, large et à carcasse épaisse, est fait pour les chemins.
+   * puncture : risque sur la route (le premier terrain).
+   */
+  const TIRES = [
+    { id: 'race', label: 'Course haut de gamme (latex)', crr: 0.0030, pt: [1.6, 1.5, 1.8, 1.6], sealant: false },
+    { id: 'tubeless', label: 'Tubeless route + liquide préventif', crr: 0.0032, pt: [0.9, 0.5, 0.8, 0.7], sealant: true },
+    { id: 'road', label: 'Route standard', crr: 0.0038, pt: [1, 1, 1, 1], sealant: false },
+    { id: 'training', label: 'Entraînement / renforcé anti-crevaison', crr: 0.0048, pt: [0.35, 0.6, 0.5, 0.45], sealant: false },
+    { id: 'gravel', label: 'Gravel (35–45 mm)', crr: 0.0055, pt: [0.6, 0.25, 0.2, 0.25], sealant: true },
+    { id: 'mtb', label: 'VTT', crr: 0.0080, pt: [0.5, 0.2, 0.15, 0.15], sealant: true },
+    { id: 'custom', label: 'Personnalisé', crr: null, pt: [1, 1, 1, 1], sealant: false },
+  ];
+  for (const t of TIRES) t.puncture = t.pt[0];
 
   /** Chaussures : part de la puissance transmise (rigidité de la semelle), masse, aérodynamisme. */
   const SHOES = [
@@ -108,21 +123,23 @@
 
   /**
    * Revêtements : multiplicateur du Crr des pneus (friction de la route),
-   * et risques relatifs de chute (crash) et de crevaison (punct) pour les incidents de course ;
+   * et risques relatifs de chute (crash) et de crevaison (punct, avec un pneu route standard : une crevaison tous les 250 km sur l'asphalte,
+   * tous les 30 km sur des pavés difficiles ou du gravier meuble) pour les incidents de course ; terrain : terrain de crevaison
+   * (PUNCT_TERRAINS), qui décide comment le pneu y résiste ;
    * w : largeur praticable typique (m) pour le peloton du mode jeu, null = largeur par défaut du parcours (route standard).
    */
   const SURFACES = [
-    { id: 'smooth', label: 'Enrobé neuf, très lisse', f: 0.85, crash: 1, punct: 0.8, w: null },
-    { id: 'asphalt', label: 'Asphalte standard', f: 1.0, crash: 1, punct: 1, w: null },
-    { id: 'rough', label: 'Asphalte granuleux / dégradé', f: 1.35, crash: 1.2, punct: 1.5, w: 4.5 },
-    { id: 'cobbles', label: 'Pavés réguliers', f: 2.2, crash: 2.5, punct: 3, w: 4 },
-    { id: 'cobbles_hard', label: 'Pavés difficiles (type Roubaix)', f: 3.5, crash: 3.5, punct: 4, w: 3 },
-    { id: 'gravel_hard', label: 'Gravier compact / piste', f: 2.0, crash: 2, punct: 3, w: 3.5 },
-    { id: 'gravel_loose', label: 'Gravier meuble', f: 3.5, crash: 3, punct: 4, w: 3 },
-    { id: 'dirt', label: 'Terre / chemin', f: 3.0, crash: 2, punct: 2.5, w: 2.5 },
-    { id: 'wet', label: 'Route mouillée', f: 1.15, crash: 3, punct: 1.3, w: null },
-    { id: 'grass', label: 'Herbe / sable', f: 6.0, crash: 2, punct: 1.5, w: 2 },
-    { id: 'custom', label: 'Personnalisé', f: null, crash: 1.5, punct: 1.5, w: null },
+    { id: 'smooth', label: 'Enrobé neuf, très lisse', f: 0.85, crash: 1, punct: 0.8, terrain: 'road', w: null },
+    { id: 'asphalt', label: 'Asphalte standard', f: 1.0, crash: 1, punct: 1, terrain: 'road', w: null },
+    { id: 'rough', label: 'Asphalte granuleux / dégradé', f: 1.35, crash: 1.2, punct: 1.5, terrain: 'road', w: 4.5 },
+    { id: 'cobbles', label: 'Pavés réguliers', f: 2.2, crash: 2.5, punct: 5, terrain: 'cobbles', w: 4 },
+    { id: 'cobbles_hard', label: 'Pavés difficiles (type Roubaix)', f: 3.5, crash: 3.5, punct: 8, terrain: 'cobbles', w: 3 },
+    { id: 'gravel_hard', label: 'Gravier compact / piste', f: 2.0, crash: 2, punct: 5, terrain: 'gravel', w: 3.5 },
+    { id: 'gravel_loose', label: 'Gravier meuble', f: 3.5, crash: 3, punct: 8, terrain: 'gravel', w: 3 },
+    { id: 'dirt', label: 'Terre / chemin', f: 3.0, crash: 2, punct: 4, terrain: 'offroad', w: 2.5 },
+    { id: 'wet', label: 'Route mouillée', f: 1.15, crash: 3, punct: 1.3, terrain: 'road', w: null },
+    { id: 'grass', label: 'Herbe / sable', f: 6.0, crash: 2, punct: 2.5, terrain: 'offroad', w: 2 },
+    { id: 'custom', label: 'Personnalisé', f: null, crash: 1.5, punct: null, terrain: null, w: null },
   ];
   const ROAD_W = 6;                        // m : largeur par défaut d'une route (hors portions)
   const ROAD_W_MIN = 1.5, ROAD_W_MAX = 20; // m : bornes de la largeur saisie
@@ -161,10 +178,16 @@
     return s.f;
   }
 
-  /** Risques relatifs de chute et de crevaison d'une portion de revêtement. */
+  /**
+   * Risques relatifs de chute et de crevaison d'une portion de revêtement, et son terrain de crevaison (rang dans PUNCT_TERRAINS).
+   * Revêtement personnalisé : d'après son coefficient de roulement (route jusqu'à ×1,7, puis gravier jusqu'à ×4,5, puis chemin).
+   */
   function surfaceRisk(portion) {
     const s = byId(SURFACES, portion.surface, 1);
-    return { crash: s.crash, punct: s.punct };
+    if (s.terrain) return { crash: s.crash, punct: s.punct, terrain: PUNCT_TERRAINS.findIndex((x) => x.id === s.terrain) };
+    const f = surfaceFactor(portion);
+    const k = f < 1.7 ? 0 : f < 4.5 ? 2 : 3;
+    return { crash: s.crash, punct: [1.5, 0, 5, 3][k], terrain: k };
   }
 
   /** Largeur par défaut du parcours (m) : celle saisie (env.roadWidth), sinon ROAD_W. */
@@ -230,7 +253,7 @@
     return {
       mRider, mBike, mass: mass + shoes.mass, massEff: massEff + shoes.mass, wheelMass,
       aRef, cda, cdaEstimated, cdaOverride, cdaParts: parts,
-      crr, eta, puncture: tire.puncture, sealant: !!tire.sealant,
+      crr, eta, tire: tire.id, puncture: tire.puncture, punctT: tire.pt.slice(), sealant: !!tire.sealant,
       fMax: Math.max(200, 0.45 * mRider * G), // force max à la roue au démarrage (couple limité)
       vSpin: (Number(bike.spinMaxKmh) > 0 ? Number(bike.spinMaxKmh) : 65) / 3.6,
     };
@@ -256,7 +279,7 @@
   }
 
   PYR.physics = {
-    G, POSITIONS, HELMETS, CLOTHING, GLASSES, SOCKS, SHAVE, FRAMES, WHEELS, TIRES, SHOES, DRIVETRAINS, SURFACES, ROAD_W, ROAD_W_MIN, ROAD_W_MAX,
+    G, POSITIONS, HELMETS, CLOTHING, GLASSES, SOCKS, SHAVE, FRAMES, WHEELS, TIRES, PUNCT_TERRAINS, SHOES, DRIVETRAINS, SURFACES, ROAD_W, ROAD_W_MIN, ROAD_W_MAX,
     byId, frontalRef, airDensity, airDensityHumid, surfaceFactor, surfaceRisk, roadWidth, surfaceWidth, buildSetup, steadyPower, steadySpeed,
   };
 })(globalThis.PYR = globalThis.PYR || {});
