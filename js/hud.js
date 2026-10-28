@@ -101,12 +101,22 @@
         dist: document.getElementById('hud-dist'),
         remain: document.getElementById('hud-remain'),
         time: document.getElementById('hud-time'),
-        power: document.getElementById('hud-power-bar'),
+
         timeScale: document.getElementById('hud-timescale'),
         cam: document.getElementById('hud-cam'),
         climb: document.getElementById('hud-climb'),
         next: document.getElementById('hud-next'),
-        boost: document.getElementById('hud-boost'),
+        pos: document.getElementById('hud-pos'),
+        gTrack: document.getElementById('g-track'),
+        gFill: document.getElementById('g-fill'),
+        gTarget: document.getElementById('g-target'),
+        gTargetW: document.getElementById('g-target-w'),
+        gCp: document.getElementById('g-cp'),
+        gWatts: document.getElementById('g-watts'),
+        gWkg: document.getElementById('g-wkg'),
+        gReserve: document.getElementById('g-reserve'),
+        gReserveBox: document.getElementById('g-reserve-box'),
+        gDraft: document.getElementById('g-draft'),
         points: document.getElementById('hud-points'),
         profile: document.getElementById('hud-profile'),
         map: document.getElementById('hud-map'),
@@ -115,9 +125,19 @@
       this.lastDom = 0;
     }
 
-    setup(route, L) {
+    setup(route, L, phys) {
       this.route = route;
       this.L = L;
+      // zones de la jauge (en % de la puissance max) : endurance < 75 % du seuil < tempo < seuil < 130 % du seuil < rouge
+      if (phys) {
+        const z = (w) => (w / phys.pMax * 100).toFixed(1) + '%';
+        const tr = this.el.gTrack;
+        tr.style.setProperty('--z1', z(phys.cp * 0.75));
+        tr.style.setProperty('--z2', z(phys.cp));
+        tr.style.setProperty('--z3', z(phys.cp * 1.3));
+        this.el.gCp.style.bottom = z(phys.cp);
+        this.pMax = phys.pMax;
+      }
       // profil
       const pc = this.el.profile;
       this.profileBg = document.createElement('canvas');
@@ -201,10 +221,18 @@
       }
       this._sl = sl;
 
+      // jauge de puissance : à chaque image (on la manipule à la souris)
+      const e = this.el;
+      if (st.target !== undefined) {
+        const tp = clamp(st.target, 0, 1) * 100;
+        e.gTarget.style.bottom = tp.toFixed(1) + '%';
+        e.gTargetW.textContent = Math.round(st.target * this.pMax) + ' W';
+        e.gFill.style.height = clamp(st.watts / this.pMax, 0, 1) * 100 + '%';
+      }
+
       // DOM à ~12 Hz
       if (now - this.lastDom < 80) return;
       this.lastDom = now;
-      const e = this.el;
       e.speed.textContent = Math.round(st.speed * 3.6);
       const gp = st.grade * 100;
       e.grade.textContent = (gp >= 0 ? '+' : '') + gp.toFixed(1).replace('.', ',') + ' %';
@@ -214,8 +242,16 @@
       e.dist.textContent = (Math.max(0, st.d) / 1000).toFixed(2).replace('.', ',') + ' km';
       e.remain.textContent = 'reste ' + (Math.max(0, this.route.length - st.d) / 1000).toFixed(1).replace('.', ',') + ' km';
       e.time.textContent = formatTime(st.time);
-      e.power.style.width = clamp(st.effort * 100, 0, 100) + '%';
-      e.power.style.background = st.braking ? '#e2463a' : st.effort > 0.85 ? '#f39a2b' : '#5cc85a';
+      if (st.target !== undefined) {
+        e.gWatts.textContent = Math.round(st.watts);
+        e.gWkg.textContent = st.wkg.toFixed(1).replace('.', ',') + ' W/kg' + (st.braking ? ' · frein' : '');
+        e.gReserve.style.width = clamp(st.reserve, 0, 1) * 100 + '%';
+        e.gReserve.style.background = st.reserve > 0.5 ? '#5cc85a' : st.reserve > 0.2 ? '#f39a2b' : '#e2463a';
+        e.gReserveBox.classList.toggle('bonk', !!st.bonk);
+        const dr = st.draft || 0;
+        e.gDraft.classList.toggle('hidden', dr < 0.03);
+        if (dr >= 0.03) e.gDraft.textContent = '🌀 Aspiration −' + Math.round(dr * 100) + ' %';
+      }
       e.timeScale.textContent = '⏩ x' + st.timeScale;
       e.timeScale.classList.toggle('dim', st.timeScale === 1);
       e.cam.textContent = st.camName;
@@ -225,8 +261,14 @@
         const html = st.next.icon + ' ' + st.next.label + ' <small>dans ' + st.next.dist + '</small>';
         if (e.next.innerHTML !== html) e.next.innerHTML = html;
       } else e.next.classList.add('hidden');
-      e.boost.classList.toggle('hidden', !(st.boost > 0));
-      if (st.boost > 0) e.boost.lastChild.textContent = Math.ceil(st.boost) + ' s';
+      // position dans la course
+      if (st.race) {
+        const rc = st.race;
+        e.pos.classList.remove('hidden');
+        const grp = rc.groupSize > 1 ? 'groupe de ' + rc.groupSize : 'seul';
+        const gap = rc.position === 1 ? 'en tête' : rc.inHead ? 'groupe de tête' : 'tête à ' + formatTime(rc.gapHead);
+        e.pos.innerHTML = '🏁 ' + rc.position + '<small>/' + rc.total + '</small> <small>· ' + grp + ' · ' + gap + '</small>';
+      } else e.pos.classList.add('hidden');
       const r = this.L.race;
       if (r && (r.sprints.length || r.koms.length)) {
         e.points.classList.remove('hidden');

@@ -62,6 +62,28 @@
     return turtle(s, { lat: 45.06, lon: 6.42, ele: 1320, heading: 20 });
   }
 
+  // Grand col hors catégorie : onze lacets à plus de 9 %, comme les montées mythiques du Tour.
+  function colHorsCategorie() {
+    const s = [];
+    s.push({ len: 700, turn: 15, grade: 0.01 });
+    s.push({ len: 600, turn: -25, grade: 0.02 });
+    s.push({ len: 500, turn: 20, grade: 0.07 });
+    s.push({ len: 400, turn: -15, grade: 0.08 });
+    let dir = 1;
+    for (let k = 0; k < 11; k++) {
+      s.push({ len: 560 + (k % 3) * 40, turn: (k % 2 ? -6 : 8), grade: 0.095 });
+      s.push({ len: 150, turn: 180 * dir, grade: 0.07 }); // épingles larges : les lacets s'étagent sur le versant
+      dir = -dir;
+    }
+    s.push({ len: 600, turn: 30, grade: 0.09 });
+    s.push({ len: 400, turn: -20, grade: 0.08 });
+    s.push({ len: 300, turn: 10, grade: 0.1 });
+    s.push({ len: 250, turn: 0, grade: 0.0 });
+    s.push({ len: 500, turn: -35, grade: -0.06 });
+    s.push({ len: 600, turn: 40, grade: -0.05 });
+    return turtle(s, { lat: 45.12, lon: 6.05, ele: 720, heading: 60 });
+  }
+
   // Balade vallonnée en campagne.
   function balade() {
     const s = [];
@@ -77,7 +99,8 @@
 
   const list = [
     { id: 'col', name: 'Col des Marmottes (démo)', make: colDesMarmottes, desc: 'Vallée, 6 lacets et descente — environ 8 km' },
-    { id: 'campagne', name: 'Balade en campagne (démo)', make: balade, desc: 'Champs, collines et lacs — environ 8 km' }
+    { id: 'campagne', name: 'Balade en campagne (démo)', make: balade, desc: 'Champs, collines et lacs — environ 8 km' },
+    { id: 'hc', name: 'Col hors catégorie (démo)', make: colHorsCategorie, desc: '11 lacets à 9 % et sa foule — environ 13 km' }
   ];
 
   B3D.demoRoutes = {

@@ -19,14 +19,16 @@
     'mat3 b3dRotY(float a){ float c = cos(a), s = sin(a); return mat3(c,0.0,-s, 0.0,1.0,0.0, s,0.0,c); }',
     'mat3 b3dRotZ(float a){ float c = cos(a), s = sin(a); return mat3(c,s,0.0, -s,c,0.0, 0.0,0.0,1.0); }'
   ].join('\n');
-  const PEOPLE_SETUP = [
+  // phaseAttr : la phase vient d'un attribut d'instance (aPhase) au lieu de la position,
+  // pour les spectateurs qui se déplacent (sinon leur geste changerait en marchant).
+  const peopleSetup = (phaseAttr) => [
     'mat3 armM = mat3(1.0);',
     'vec3 armPiv = vec3(0.27 * armSide, 1.42, 0.0);',
     'float jump = 0.0;',
     '#ifdef USE_INSTANCING',
     '{',
     '  vec3 ip = instanceMatrix[3].xyz;',
-    '  float ph = ip.x * 0.37 + ip.z * 0.23;',
+    phaseAttr ? '  float ph = aPhase;' : '  float ph = ip.x * 0.37 + ip.z * 0.23;',
     '  float kind = floor(fract(ph * 0.618) * 3.0);',
     '  float ex = 1.0 - smoothstep(10.0, 45.0, distance(ip, uRider));',
     '  float t = uTime * (1.0 + 0.6 * ex) + ph;',
@@ -45,6 +47,8 @@
     '}',
     '#endif'
   ].join('\n');
+  const PEOPLE_SETUP = peopleSetup(false);
+  const PHASE_PARS = 'attribute float aPhase;';
 
   let gradientTex = null;
   function gradientMap() {
@@ -117,6 +121,7 @@
     const sway = opts.sway || 0;
     const bounce = opts.bounce || 0;
     const people = !!opts.people;
+    const phase = !!opts.peoplePhase;
     const flap = opts.flap ? flapGLSL(opts.flap) : null;
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = shared.uTime;
@@ -130,8 +135,8 @@
       }
       if (people) {
         vs = vs
-          .replace('#include <common>', '#include <common>\n' + PEOPLE_PARS)
-          .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + PEOPLE_SETUP + '\nobjectNormal = armM * objectNormal;')
+          .replace('#include <common>', '#include <common>\n' + PEOPLE_PARS + (phase ? '\n' + PHASE_PARS : ''))
+          .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + peopleSetup(phase) + '\nobjectNormal = armM * objectNormal;')
           .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = armPiv + armM * (transformed - armPiv);\ntransformed.y += jump;');
       }
       shader.vertexShader = vs
@@ -149,7 +154,7 @@
         ].join('\n'))
         .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + swayGLSL(sway, bounce));
     };
-    m.customProgramCacheKey = () => 'inst-' + sway + '-' + bounce + '-' + people + '-' + (opts.flap ? JSON.stringify(opts.flap) : '');
+    m.customProgramCacheKey = () => 'inst-' + sway + '-' + bounce + '-' + people + phase + '-' + (opts.flap ? JSON.stringify(opts.flap) : '');
     return m;
   }
 
@@ -179,8 +184,9 @@
     const sway = opts.sway || 0;
     const bounce = opts.bounce || 0;
     const people = !!opts.people;
+    const phase = !!opts.peoplePhase;
     const flap = opts.flap ? flapGLSL(opts.flap) : null;
-    const key = [color, width, sway, bounce, opts.minW, opts.maxW, people, opts.flap ? JSON.stringify(opts.flap) : ''].join('|');
+    const key = [color, width, sway, bounce, opts.minW, opts.maxW, people, phase, opts.flap ? JSON.stringify(opts.flap) : ''].join('|');
     if (outlineCache.has(key)) return outlineCache.get(key);
     const m = new THREE.ShaderMaterial({
       uniforms: {
@@ -201,13 +207,13 @@
         '#include <fog_pars_vertex>',
         'attribute vec3 outlineNormal;',
         'uniform float uWidth, uMinW, uMaxW, uOutlineScale, uTime;',
-        people ? PEOPLE_PARS : '',
+        people ? PEOPLE_PARS + (phase ? '\n' + PHASE_PARS : '') : '',
         flap ? flap.pars : '',
         'void main() {',
         '  vec3 transformed = position;',
         '  vec3 n = outlineNormal;',
         flap ? flap.setup + '\ntransformed = wingPiv + wingM * (transformed - wingPiv);\nn = wingM * n;' : '',
-        people ? PEOPLE_SETUP + '\ntransformed = armPiv + armM * (transformed - armPiv);\ntransformed.y += jump;\nn = armM * n;' : '',
+        people ? peopleSetup(phase) + '\ntransformed = armPiv + armM * (transformed - armPiv);\ntransformed.y += jump;\nn = armM * n;' : '',
         swayGLSL(sway, bounce),
         '  vec4 p = vec4(transformed, 1.0);',
         '  #ifdef USE_INSTANCING',

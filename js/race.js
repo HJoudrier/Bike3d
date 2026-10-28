@@ -16,11 +16,11 @@
   ];
   // puissances (W) des rivaux, du plus lent au plus rapide
   const SPRINT_W = [250, 320, 390, 450, 510, 560, 610];
-  const KOM_W = [240, 300, 360, 420, 480, 540, 600];
+  const KOM_W = [215, 245, 270, 295, 315, 335, 355]; // à tenir sur toute la montée : autour du seuil
   const SPRINT_LEN = 400; // le sprint se joue sur les 400 derniers mètres
   const SPRINT_PTS = [20, 17, 15, 13, 11, 10, 9, 8];
   const KOM_PTS = [[20, 15, 12, 10, 8, 6, 4, 2], [10, 8, 6, 4, 2, 1], [5, 3, 2, 1], [2, 1], [1]];
-  const BOOST = { dur: 45, gain: 0.15 };
+  const MUSETTE_REFILL = 0.5; // une musette recharge la moitié de la réserve d'énergie
   const CAT_LABEL = (c) => (c === 0 ? 'HC' : c + (c === 1 ? 're' : 'e') + ' cat.');
   const CAT_BANNER = (c) => (c === 0 ? 'HC' : 'CAT. ' + c);
 
@@ -427,9 +427,11 @@
 
   // ------------------------------------------------------------------ suivi pendant la course
   class Tracker {
-    constructor(route, L, phys) {
+    // peloton : coureurs virtuels (classement réel aux sprints et aux sommets) ou null (rivaux simulés)
+    constructor(route, L, phys, peloton) {
       this.route = route;
       this.L = L;
+      this.peloton = peloton && peloton.riders.length ? peloton : null;
       const race = this.race = plan(route, L);
       this.phys = phys;
       for (const sp of race.sprints) sp.rivals = sp.rivals || rivalTimes(route, sp.s - SPRINT_LEN, sp.s, SPRINT_W, phys);
@@ -440,7 +442,6 @@
     reset() {
       this.points = { sprint: 0, kom: 0 };
       this.musettes = 0;
-      this.boost = 0;
       this.done = new Set();
       this.start = {};
       this.flying = [];
@@ -450,8 +451,6 @@
         if (so.musette) { so.musette.visible = true; so.musette.position.copy(so.home); so.musette.scale.set(1, 1, 1); }
       }
     }
-
-    get powerFactor() { return this.boost > 0 ? 1 + BOOST.gain : 1; }
 
     // rang face aux rivaux (temps plus courts = plus rapides)
     _rank(time, rivals) {
@@ -463,15 +462,33 @@
       return { rank, ahead, behind };
     }
 
+    // Rang face aux vrais coureurs : ceux qui ont déjà franchi la ligne sont devant.
+    _rankReal(key, lineS, time) {
+      let rank = 1, ahead = null, behind = null;
+      for (const r of this.peloton.riders) {
+        const c = r.cross[key];
+        if (c !== undefined && c <= time) { rank++; if (!ahead || c > ahead.t) ahead = { t: c, name: r.name }; }
+        else if (!r.done && (!behind || r.s > behind.s)) behind = { s: r.s, v: r.v, name: r.name };
+      }
+      return { rank, ahead, behind: behind ? { name: behind.name, gap: (lineS - behind.s) / Math.max(2, behind.v) } : null };
+    }
+
+    // texte « devant X de… » / « à … de Y »
+    _gapText(rank, real, t, rivals, ahead, behind) {
+      const names = this.race.names;
+      if (real) {
+        if (rank === 1) return behind ? 'Devant ' + behind.name + ' de ' + fmtGap(behind.gap) : 'En solitaire !';
+        return 'À ' + fmtGap(t - ahead.t) + ' de ' + ahead.name;
+      }
+      return rank === 1 ? 'Devant ' + names[behind.k] + ' de ' + fmtGap(behind.t - t) : 'À ' + fmtGap(t - ahead.t) + ' de ' + names[ahead.k];
+    }
+
     // R : état de la course (s, lat, time, v) ; dt en temps de course, dtReal en temps réel.
     // Renvoie les messages à afficher.
     update(R, dt, dtReal, riderPos) {
       const out = [];
-      const race = this.race, half = this.L.roadHalf, names = race.names;
-      if (this.boost > 0) {
-        this.boost = Math.max(0, this.boost - dt);
-        if (this.boost === 0) out.push({ toast: '⚡ Fin du coup de boost', dur: 1600 });
-      }
+      const race = this.race, half = this.L.roadHalf;
+      const real = !!this.peloton;
       // sprints
       race.sprints.forEach((sp, k) => {
         const key = 's' + k;
@@ -483,13 +500,11 @@
         if (R.s >= sp.s) {
           this.done.add(key);
           const t = R.time - (this.start[key] !== undefined ? this.start[key] : R.time - SPRINT_LEN / Math.max(1, R.v));
-          const { rank, ahead, behind } = this._rank(t, sp.rivals);
+          const { rank, ahead, behind } = real ? this._rankReal(key, sp.s, R.time) : this._rank(t, sp.rivals);
           const pts = SPRINT_PTS[rank - 1] || 0;
           this.points.sprint += pts;
           this.results.push({ kind: 'sprint', rank, pts, t, rivals: sp.rivals });
-          const sub = rank === 1
-            ? 'Devant ' + names[behind.k] + ' de ' + fmtGap(behind.t - t)
-            : 'À ' + fmtGap(t - ahead.t) + ' de ' + names[ahead.k];
+          const sub = this._gapText(rank, real, real ? R.time : t, sp.rivals, ahead, behind);
           out.push({ toast: (rank === 1 ? '🟢 Sprint gagné ! +' : '🟢 Sprint : ' + ordinal(rank) + ' · +') + ptsLabel(pts) + '<small>' + sub + '</small>', dur: 3400, sound: rank === 1 ? 'win' : 'line' });
         }
       });
@@ -504,7 +519,7 @@
         if (R.s >= c.s1) {
           this.done.add(key);
           const t = R.time - (this.start[key] !== undefined ? this.start[key] : 0);
-          const { rank } = this._rank(t, c.rivals);
+          const { rank } = real ? this._rankReal(key, c.s1, R.time) : this._rank(t, c.rivals);
           const table = KOM_PTS[Math.min(4, c.cat)];
           const pts = table[rank - 1] || 0;
           this.points.kom += pts;
@@ -527,9 +542,8 @@
           if (so.side * R.lat > half - 1.3) {
             so.caught = true;
             this.musettes++;
-            this.boost = BOOST.dur;
             this.flying.push({ m: so.musette, t: 0 });
-            out.push({ toast: '🥤 Musette attrapée !<small>⚡ +' + Math.round(BOOST.gain * 100) + ' % de puissance pendant ' + BOOST.dur + ' s · merci ' + so.team.name + ' !</small>', dur: 2600, sound: 'musette' });
+            out.push({ toast: '🥤 Musette attrapée !<small>🔋 +' + Math.round(MUSETTE_REFILL * 100) + ' % de réserve d\u2019énergie · merci ' + so.team.name + ' !</small>', dur: 2600, sound: 'musette', refill: MUSETTE_REFILL });
           }
         }
       }
@@ -572,5 +586,5 @@
     return bits.join(' · ') || 'aucune';
   }
 
-  B3D.race = { plan, build, Tracker, summary, ptsLabel, BOOST, CAT_LABEL };
+  B3D.race = { plan, build, Tracker, summary, ptsLabel, CAT_LABEL, TEAMS, carParts, personParts, MUSETTE_REFILL };
 })(typeof window !== 'undefined' ? window : globalThis);

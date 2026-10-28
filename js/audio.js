@@ -77,6 +77,34 @@
       this.cicadaGain = ctx.createGain();
       this.cicadaGain.gain.value = 0;
       loop(1.3).connect(bp3); bp3.connect(chop); chop.connect(this.cicadaGain); this.cicadaGain.connect(this.master);
+      // hélicoptère : souffle grave haché par les pales
+      const hlp = ctx.createBiquadFilter();
+      hlp.type = 'lowpass'; hlp.frequency.value = 380; hlp.Q.value = 0.7;
+      const hchop = ctx.createGain();
+      hchop.gain.value = 0.5;
+      const hlfo = ctx.createOscillator();
+      hlfo.type = 'square'; hlfo.frequency.value = 11.5;
+      const hlfoG = ctx.createGain();
+      hlfoG.gain.value = 0.5;
+      hlfo.connect(hlfoG); hlfoG.connect(hchop.gain); hlfo.start();
+      this.heliGain = ctx.createGain();
+      this.heliGain.gain.value = 0;
+      loop(0.6).connect(hlp); hlp.connect(hchop); hchop.connect(this.heliGain); this.heliGain.connect(this.master);
+      // moto : ronronnement du moteur
+      this.motoOsc = ctx.createOscillator();
+      this.motoOsc.type = 'sawtooth'; this.motoOsc.frequency.value = 70;
+      const mv = ctx.createOscillator();
+      mv.frequency.value = 7;
+      const mvG = ctx.createGain();
+      mvG.gain.value = 4;
+      mv.connect(mvG); mvG.connect(this.motoOsc.frequency); mv.start();
+      const mlp = ctx.createBiquadFilter();
+      mlp.type = 'lowpass'; mlp.frequency.value = 650;
+      this.motoGain = ctx.createGain();
+      this.motoGain.gain.value = 0;
+      this.motoOsc.connect(mlp); mlp.connect(this.motoGain); this.motoGain.connect(this.master);
+      this.motoOsc.start();
+      this.bikeClickAcc = 0;
     }
 
     setMuted(m) {
@@ -106,13 +134,13 @@
       return src;
     }
 
-    click() {
+    click(vol, pan) {
       const ctx = this.ctx;
       const t = ctx.currentTime;
       const hp = ctx.createBiquadFilter();
       hp.type = 'highpass'; hp.frequency.value = 3500;
       this._noise(t, 0.03).connect(hp);
-      hp.connect(this._out(0.12, 0, t, 0.002, 0.025));
+      hp.connect(this._out(vol || 0.12, pan || 0, t, 0.002, 0.025));
     }
 
     // Roues carbone : souffle grave et « woum » de la jante haute, à chaque coup de pédale.
@@ -410,7 +438,7 @@
     silence() {
       if (!this.ctx) return;
       const t = this.ctx.currentTime;
-      for (const g of [this.windGain, this.crowdGain, this.rollGain, this.humGain, this.cicadaGain]) g.gain.setTargetAtTime(0, t, 0.1);
+      for (const g of [this.windGain, this.crowdGain, this.rollGain, this.humGain, this.cicadaGain, this.heliGain, this.motoGain]) g.gain.setTargetAtTime(0, t, 0.1);
     }
 
     // niveau des cigales (0..1), avec des phrases qui enflent et retombent
@@ -422,13 +450,27 @@
     }
 
     // speed en m/s ; freewheel = roue libre ; crowd = 0..1 (densité de spectateurs proches)
-    update(dt, speed, freewheel, crowd) {
+    // env : { draft (0..1, abri), bikes (vélos à moins de 12 m), moto, heli (distances en m) }
+    update(dt, speed, freewheel, crowd, env) {
       if (!this.ctx || this.muted) return;
       const t = this.ctx.currentTime;
+      const E = env || {};
       const w = Math.min(1, speed / 22);
-      this.windGain.gain.setTargetAtTime(0.02 + w * w * 0.26, t, 0.2);
-      this.windFilter.frequency.setTargetAtTime(300 + w * 900, t, 0.3);
-      this.rollGain.gain.setTargetAtTime(Math.min(1, speed / 10) * 0.16, t, 0.15);
+      const shelter = 1 - 0.75 * Math.min(1, (E.draft || 0) / 0.45); // moins de vent dans les roues
+      this.windGain.gain.setTargetAtTime((0.02 + w * w * 0.26) * shelter, t, 0.2);
+      this.windFilter.frequency.setTargetAtTime(300 + w * 900 * shelter, t, 0.3);
+      const bikes = Math.min(8, E.bikes || 0);
+      this.rollGain.gain.setTargetAtTime(Math.min(1, speed / 10) * (0.16 + bikes * 0.018), t, 0.15);
+      // roue libre des coureurs autour
+      if (bikes > 0 && speed > 2) {
+        this.bikeClickAcc += dt * bikes * 4;
+        let n = 0;
+        while (this.bikeClickAcc >= 1 && n++ < 4) { this.bikeClickAcc -= 1; if (Math.random() < 0.5) this.click(0.04 + Math.random() * 0.04, (Math.random() - 0.5) * 1.4); }
+      }
+      const fall = (d, r) => { const k = Math.max(0, 1 - d / r); return k * k; };
+      this.heliGain.gain.setTargetAtTime(0.16 * fall(E.heli === undefined ? 1e9 : E.heli, 260), t, 0.3);
+      this.motoGain.gain.setTargetAtTime(0.05 * fall(E.moto === undefined ? 1e9 : E.moto, 70), t, 0.2);
+      this.motoOsc.frequency.setTargetAtTime(62 + speed * 2.2, t, 0.3);
       this.hum.frequency.setTargetAtTime(38 + speed * 4.5, t, 0.2);
       this.humGain.gain.setTargetAtTime(w * w * 0.12, t, 0.2);
       this.crowdGain.gain.setTargetAtTime(crowd * 0.22 * (0.75 + 0.25 * Math.sin(t * 3.1) * Math.sin(t * 1.7)), t, 0.15);

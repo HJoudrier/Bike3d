@@ -5,7 +5,9 @@
   const { clamp, lerp, formatTime, hashString } = B3D.util;
   const $ = (id) => document.getElementById(id);
 
-  const PHYS = { mass: 85, g: 9.81, crr: 0.0045, rho: 1.2, cda: 0.32, cdaTuck: 0.22, cdaStand: 0.4, pMax: 720, brake: 430, vMax: 30 };
+  // cp : puissance critique (tenable longtemps), wp : réserve d'énergie au-dessus de cp (J), riderMass : coureur sans vélo
+  const PHYS = { mass: 85, riderMass: 77, g: 9.81, crr: 0.0045, rho: 1.2, cda: 0.32, cdaTuck: 0.22, cdaStand: 0.4, pMax: 720, cp: 330, wp: 22000, brake: 430, vMax: 30 };
+  const RIDER_COUNTS = [0, 5, 10, 20, 40];
   const CAMS = [
     { name: 'Poursuite', dist: 5.2, height: 2.0, look: 1.1, ahead: 4 },
     { name: 'Large', dist: 11, height: 4.6, look: 1.0, ahead: 7 },
@@ -20,8 +22,8 @@
 
   const Game = {
     state: 'menu',
-    settings: { jersey: 'jaune', quality: 'medium' },
-    input: { left: false, right: false, up: false, down: false },
+    settings: { jersey: 'jaune', quality: 'medium', riders: 10 },
+    input: { left: false, right: false, brake: false, pUp: false, pDown: false },
     camIndex: 0,
     timeScaleIndex: 0,
 
@@ -29,6 +31,7 @@
       try { Object.assign(this.settings, JSON.parse(localStorage.getItem('bike3d-settings') || '{}')); } catch (e) { /* stockage indisponible */ }
       if (!B3D.TileManager.QUALITY[this.settings.quality]) this.settings.quality = 'medium';
       if (!B3D.Cyclist.JERSEYS[this.settings.jersey]) this.settings.jersey = 'jaune';
+      if (!RIDER_COUNTS.includes(this.settings.riders)) this.settings.riders = 10;
 
       const canvas = $('scene');
       let r;
@@ -88,6 +91,7 @@
       this.camera.updateProjectionMatrix();
       // contour d'environ 1,7 px quelle que soit la taille de l'écran
       B3D.toon.shared.uOutlineScale.value = 1.7 * 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) / h;
+      if (this.hcCrowd) this.hcCrowd.setViewHeight(this.renderer.getDrawingBufferSize(new THREE.Vector2()).y);
     },
 
     // ------------------------------------------------------------------ interface
@@ -127,6 +131,9 @@
       }
       document.querySelectorAll('#opt-quality .chip').forEach((b) => {
         b.onclick = () => { this.settings.quality = b.dataset.q; this.saveSettings(); this.refreshChips(); this.applyQuality(); };
+      });
+      document.querySelectorAll('#opt-riders .chip').forEach((b) => {
+        b.onclick = () => { this.settings.riders = +b.dataset.n; this.saveSettings(); this.refreshChips(); };
       });
       this.refreshChips();
 
@@ -170,15 +177,26 @@
     refreshChips() {
       document.querySelectorAll('#opt-jersey .chip').forEach((b) => b.classList.toggle('active', b.dataset.j === this.settings.jersey));
       document.querySelectorAll('#opt-quality .chip').forEach((b) => b.classList.toggle('active', b.dataset.q === this.settings.quality));
+      document.querySelectorAll('#opt-riders .chip').forEach((b) => b.classList.toggle('active', +b.dataset.n === this.settings.riders));
     },
 
+    // Commandes : ←/→ (ou Q/D) pour se déplacer, jauge de puissance (Z/S, molette, chiffres, glisser), Espace pour freiner.
+    // Les codes sont physiques : KeyW/KeyA = Z/Q sur un clavier AZERTY.
     bindInput() {
-      const map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', KeyA: 'left', KeyD: 'right', KeyW: 'up', KeyS: 'down', KeyQ: 'left', KeyZ: 'up' };
+      const map = { ArrowLeft: 'left', ArrowRight: 'right', KeyA: 'left', KeyD: 'right', KeyW: 'pUp', KeyS: 'pDown', Space: 'brake' };
+      const riding = () => this.state === 'ride' || this.state === 'countdown';
       window.addEventListener('keydown', (e) => {
         const k = map[e.code];
-        if (k && (this.state === 'ride' || this.state === 'countdown')) { this.input[k] = true; e.preventDefault(); }
+        if (k && riding()) {
+          e.preventDefault();
+          if (!this.input[k] && (k === 'pUp' || k === 'pDown')) this.setTarget(this.ride.target + (k === 'pUp' ? 10 : -10));
+          this.input[k] = true;
+        }
+        // chiffres : 1 = 10 % … 9 = 90 %, 0 = 100 % de la puissance maximale
+        const dg = /^(Digit|Numpad)([0-9])$/.exec(e.code);
+        if (dg && riding()) { const n = +dg[2]; this.setTarget(PHYS.pMax * (n === 0 ? 1 : n / 10)); }
         if (e.repeat) return;
-        if (this.state === 'ride' || this.state === 'countdown') {
+        if (riding()) {
           if (e.code === 'KeyC') this.cycleCamera();
           if (e.code === 'KeyT') this.timeScaleIndex = (this.timeScaleIndex + 1) % TIME_SCALES.length;
           if (e.code === 'KeyM') this.sound.setMuted(!this.sound.muted);
@@ -192,6 +210,24 @@
         if (k) this.input[k] = false;
       });
       window.addEventListener('blur', () => { for (const k in this.input) this.input[k] = false; });
+      // molette : règle la jauge pendant la course
+      $('scene').addEventListener('wheel', (e) => {
+        if (!riding()) return;
+        e.preventDefault();
+        this.setTarget(this.ride.target - Math.sign(e.deltaY) * 15);
+      }, { passive: false });
+      // jauge : on la saisit et on la fait glisser (souris ou doigt)
+      const gauge = $('g-track');
+      let gDrag = false;
+      const fromY = (e) => {
+        const rc = gauge.getBoundingClientRect();
+        this.setTarget((1 - clamp((e.clientY - rc.top) / rc.height, 0, 1)) * PHYS.pMax);
+      };
+      gauge.addEventListener('pointerdown', (e) => { if (!riding()) return; e.preventDefault(); gDrag = true; gauge.setPointerCapture(e.pointerId); fromY(e); });
+      gauge.addEventListener('pointermove', (e) => { if (gDrag) fromY(e); });
+      const stop = () => { gDrag = false; };
+      gauge.addEventListener('pointerup', stop);
+      gauge.addEventListener('pointercancel', stop);
       // commandes tactiles
       document.querySelectorAll('#touch-pad button').forEach((b) => {
         const k = b.dataset.k;
@@ -322,6 +358,9 @@
       if (this.waterGroup) { free(this.waterGroup); this.waterGroup = null; }
       if (this.villageGroup) { free(this.villageGroup); this.villageGroup = null; }
       if (this.fauna) { this.fauna.dispose(); this.fauna = null; }
+      if (this.peloton) { this.peloton.dispose(); this.peloton = null; }
+      if (this.convoy) { this.convoy.dispose(); this.convoy = null; }
+      if (this.hcCrowd) { this.hcCrowd.dispose(); this.hcCrowd = null; }
       if (this.mooBubble) this.mooBubble.visible = false;
       if (this.sky) { this.sky.dispose(); this.sky = null; }
       if (this.cyclist) { free(this.cyclist.root); this.cyclist = null; }
@@ -385,6 +424,11 @@
       this.villageGroup = B3D.villages.build(route, L, this.tiles);
       this.scene.add(this.villageGroup);
       this.fauna = new B3D.Fauna(this.scene, L, route);
+      this.convoy = new B3D.Convoy(this.scene, route, L);
+      // cols hors catégorie : foule sur la chaussée et fumigènes
+      this.hcCrowd = new B3D.HCCrowd(this.scene, route, L);
+      if (!this.hcCrowd.active) this.hcCrowd = null;
+      else this.hcCrowd.setViewHeight(this.renderer.getDrawingBufferSize(new THREE.Vector2()).y);
       this.cyclist = new B3D.Cyclist({ jersey: this.settings.jersey, bikeColor: ['#e2463a', '#3d7be0', '#1d1a2b', '#4cc35a', '#ff7aa8'][seed % 5] });
       this.scene.add(this.cyclist.root);
       this.placeCyclistAtStart();
@@ -432,6 +476,9 @@
     backToPreview(newOne) {
       this.hide('hud');
       this.sound.silence();
+      // la course est finie : on range les coureurs et la caravane
+      if (this.peloton) { this.peloton.dispose(); this.peloton = null; }
+      if (this.convoy) this.convoy.group.visible = false;
       if (newOne) { this.state = 'preview'; this.newLandscape(); return; }
       this.state = 'preview';
       this.show('screen-preview');
@@ -506,15 +553,28 @@
       this.sound.silence();
       const route = this.route;
       this.ride = {
-        s: route.sStart - 4, lat: 0, latV: 0, v: 0, effort: 0, cruise: 0, braking: false,
+        s: route.sStart - 4, lat: 0, latV: 0, v: 0, effort: 0, target: 250, braking: false,
+        reserve: PHYS.wp, bonk: false, draft: 0, msg: null,
         time: 0, maxV: 0, flamme: false, crowd: 0, standing: false, tuck: false,
         villagesSeen: new Set(), lastStrokes: 0, mooT: 1.5, bellT: 0, cowCheck: 0, cow: null, finishT: 0
       };
       this._rs = route.sample(this.ride.s, {});
-      this.raceT = new B3D.race.Tracker(route, this.L, PHYS);
+      // les autres coureurs (recréés à chaque départ : le nombre a pu changer)
+      if (this.peloton) { this.peloton.dispose(); this.peloton = null; }
+      this.playerProxy = { isPlayer: true, s: this.ride.s, lat: 0, v: 0, done: false, state: 'player', name: 'Toi' };
+      if (this.settings.riders > 0) {
+        this.peloton = new B3D.Peloton(this.scene, route, this.L, {
+          count: this.settings.riders, phys: PHYS, teams: B3D.race.TEAMS,
+          playerColor: B3D.Cyclist.JERSEYS[this.settings.jersey].base
+        });
+        this.peloton.reset(this.playerProxy);
+        this.peloton.render(0, this.camera);
+      }
+      if (this.convoy) this.convoy.reset(this.peloton, this.playerProxy);
+      this.raceT = new B3D.race.Tracker(route, this.L, PHYS, this.peloton);
       this._toastQ = [];
       this.timeScaleIndex = 0;
-      this.hud.setup(route, this.L);
+      this.hud.setup(route, this.L, PHYS);
       this.camState = null;
       this.placeCyclistAtStart();
       this.state = 'countdown';
@@ -698,66 +758,83 @@
       return null;
     },
 
+    // Un pas de physique du joueur (h en secondes de course) : puissance de la jauge, réserve, aspiration,
+    // pente, roulement, air ; puis le peloton avance du même pas et règle les contacts.
+    stepPlayer(h) {
+      const R = this.ride, route = this.route, L = this.L, inp = this.input;
+      const half = L.roadHalf;
+      const p = route.sample(R.s, this._rs || (this._rs = {}));
+      const grade = p.grade, v = R.v;
+      const offRoad = Math.abs(R.lat) > half - 0.2;
+      const crr = PHYS.crr * (offRoad ? 3.5 : 1);
+      const cda = R.tuck ? PHYS.cdaTuck : R.standing ? PHYS.cdaStand : PHYS.cda;
+      // aspiration derrière les autres coureurs
+      let draft = 0;
+      if (this.peloton) {
+        const sh = this.peloton.shelterFor(this.playerProxy);
+        draft = sh.f;
+        this.peloton.playerDraft = draft;
+        this.peloton.playerDraftSrc = sh.src;
+      }
+      R.draft = draft;
+      // réserve d'énergie : elle se vide au-dessus de la puissance critique, se recharge en dessous
+      if (R.reserve <= 0 && !R.bonk) { R.bonk = true; R.msg = 'bonk'; }
+      if (R.bonk && R.reserve > PHYS.wp * 0.3) { R.bonk = false; R.msg = 'recover'; }
+      const cap = R.bonk ? PHYS.cp * 0.9 : PHYS.pMax;
+      R.braking = inp.brake && v > 0.05;
+      const want = R.braking ? 0 : Math.min(R.target, cap);
+      R.effort += clamp(want - R.effort, -3000 * h, 1500 * h);
+      R.reserve = clamp(R.reserve + (PHYS.cp - R.effort) * h * (R.effort < PHYS.cp ? 0.6 : 1), 0, PHYS.wp);
+      const drive = R.effort / Math.max(v, 1.6);
+      const sinA = grade / Math.sqrt(1 + grade * grade);
+      const fg = PHYS.mass * PHYS.g * sinA;
+      const fr = v > 0.05 ? crr * PHYS.mass * PHYS.g : 0;
+      const fa = 0.5 * PHYS.rho * cda * (1 - draft) * v * v;
+      const fb = R.braking ? PHYS.brake : 0;
+      let a = (drive - fg - fr - fa - fb) / PHYS.mass;
+      if (v <= 0.01 && a < 0) a = 0; // pas de recul
+      R.v = clamp(v + a * h, 0, PHYS.vMax);
+      if (R.v > R.maxV) R.maxV = R.v;
+      // déplacement latéral : bas-côté praticable, sauf glissière, parapet, foule, barrières, soigneurs… ou un coureur à côté
+      let nl = R.lat + R.latV * h;
+      if (this.peloton) nl = this.peloton.lateralBlock(this.playerProxy, nl);
+      R.lat = nl;
+      const ii = p.i;
+      const crowded = this.crowdNear(ii) || L.villageW[ii] > 0.3;
+      const maxR = (L.railR[ii] || L.bridgeMask[ii] || crowded || L.fenceR[ii]) ? half - 0.35 : half + 1.5;
+      const maxL = (L.railL[ii] || L.bridgeMask[ii] || crowded || L.fenceL[ii]) ? half - 0.35 : half + 1.5;
+      if (R.lat > maxR) { R.lat = Math.max(maxR, R.lat - 4 * h); R.latV = Math.min(0, R.latV); }
+      if (R.lat < -maxL) { R.lat = Math.min(-maxL, R.lat + 4 * h); R.latV = Math.max(0, R.latV); }
+      // avancement
+      R.s += R.v * h;
+      R.time += h;
+      R.standing = R.effort > PHYS.cp * 0.95 && grade > 0.06 && R.v < 8.5;
+      R.tuck = R.effort < 40 && R.v > 14 && grade < -0.02;
+      // le peloton avance du même pas ; un coureur devant peut nous freiner
+      if (this.peloton) {
+        const X = this.playerProxy;
+        X.s = R.s; X.lat = R.lat; X.v = R.v;
+        this.peloton.step(h);
+        R.s = X.s; R.v = X.v;
+      }
+    },
+
     updateRide(dtReal) {
       const R = this.ride, route = this.route, L = this.L, inp = this.input;
       const ts = TIME_SCALES[this.timeScaleIndex];
       const dt = dtReal * ts;
       const half = L.roadHalf;
-      const p = route.sample(R.s, this._rs || (this._rs = {}));
-      const grade = p.grade;
-
-      // --- effort du cycliste (watts) : ↑ accélère, ↓ freine, sinon effort de croisière
-      const v = R.v;
-      const offRoad = Math.abs(R.lat) > half - 0.2;
-      const crr = PHYS.crr * (offRoad ? 3.5 : 1);
-      const cda = R.tuck ? PHYS.cdaTuck : R.standing ? PHYS.cdaStand : PHYS.cda;
-      const flatPower = (vv) => vv * (crr * PHYS.mass * PHYS.g + 0.5 * PHYS.rho * PHYS.cda * vv * vv);
-      const pMax = PHYS.pMax * this.raceT.powerFactor; // musette du ravitaillement : coup de boost
-      if (inp.up) {
-        R.effort = Math.min(pMax, R.effort + 1300 * dt);
-        R.cruise = -1;
-      } else if (inp.down) {
-        R.effort = Math.max(0, R.effort - 2500 * dt);
-        R.cruise = -1;
-      } else {
-        if (R.cruise < 0) R.cruise = v > 0.5 ? Math.min(PHYS.pMax * 0.8, flatPower(v)) : 0;
-        else if (R.cruise > pMax) R.cruise = pMax;
-        R.effort += (R.cruise - R.effort) * (1 - Math.exp(-dt * 3));
-      }
-      R.braking = inp.down && v > 0.05;
-      const drive = R.effort / Math.max(v, 1.6);
-      const sinA = grade / Math.sqrt(1 + grade * grade);
-      const fg = PHYS.mass * PHYS.g * sinA;
-      const fr = v > 0.05 ? crr * PHYS.mass * PHYS.g : 0;
-      const fa = 0.5 * PHYS.rho * cda * v * v;
-      const fb = R.braking ? PHYS.brake : 0;
-      let a = (drive - fg - fr - fa - fb) / PHYS.mass;
-      if (v <= 0.01 && a < 0) a = 0; // pas de recul
-      R.v = clamp(v + a * dt, 0, PHYS.vMax);
-      if (R.v > R.maxV) R.maxV = R.v;
-
-      // --- déplacement latéral
+      // direction (temps réel)
       const targetLatV = ((inp.right ? 1 : 0) - (inp.left ? 1 : 0)) * (2.2 + Math.min(R.v, 12) * 0.12);
       const prevLatV = R.latV;
       R.latV = lerp(R.latV, targetLatV, 1 - Math.exp(-dtReal * 6));
-      R.lat += R.latV * dt;
-      // bas-côté praticable, sauf glissière, parapet de pont, foule, barrières ou soigneurs
-      const dNow = R.s - route.sStart;
-      const ii = p.i;
-      const crowded = this.crowdNear(ii) || L.villageW[ii] > 0.3;
-      const maxR = (L.railR[ii] || L.bridgeMask[ii] || crowded || L.fenceR[ii]) ? half - 0.35 : half + 1.5;
-      const maxL = (L.railL[ii] || L.bridgeMask[ii] || crowded || L.fenceL[ii]) ? half - 0.35 : half + 1.5;
-      if (R.lat > maxR) { R.lat = Math.max(maxR, R.lat - 4 * dt); R.latV = Math.min(0, R.latV); }
-      if (R.lat < -maxL) { R.lat = Math.min(-maxL, R.lat + 4 * dt); R.latV = Math.max(0, R.latV); }
-
-      // --- avancement
-      R.s += R.v * dt;
-      R.time += dt;
-      R.standing = inp.up && grade > 0.06 && R.v < 8.5;
-      R.tuck = !inp.up && R.v > 14 && grade < -0.02;
+      // physique en petits pas (stable même en temps accéléré)
+      const n = Math.max(1, Math.ceil(dt / 0.05)), h = dt / n;
+      for (let k = 0; k < n; k++) this.stepPlayer(h);
 
       // --- placement du cycliste
-      const q = route.sample(R.s, p);
+      const q = route.sample(R.s, this._rs);
+      const offRoad = Math.abs(R.lat) > half - 0.2;
       const cyc = this.cyclist;
       const steer = Math.atan2(R.latV, Math.max(R.v, 2));
       const heading = Math.atan2(q.tx, q.tz) - steer;
@@ -778,12 +855,19 @@
       }
       B3D.toon.shared.uRider.value.copy(cyc.root.position);
 
+      // --- réserve : coup de bambou et récupération
+      if (R.msg === 'bonk') this.toast('💥 Coup de bambou !<small>Réserve vide : tu roules sous ton seuil le temps de récupérer</small>', 3000);
+      else if (R.msg === 'recover') this.toast('🔋 Ça repart !<small>Ta réserve se recharge, tu peux relancer</small>', 2200);
+      R.msg = null;
+
       // --- évènements de parcours : sprints, GPM, ravitaillement
       const d = R.s - route.sStart;
       for (const ev of this.raceT.update(R, dt, dtReal, cyc.root.position)) {
         this.toast(ev.toast, ev.dur);
         if (ev.sound) this.sound.raceCue(ev.sound);
+        if (ev.refill) R.reserve = Math.min(PHYS.wp, R.reserve + ev.refill * PHYS.wp);
       }
+      if (this.peloton) this.handlePelotonEvents(dtReal);
       if (!R.flamme && route.length > 2500 && d >= route.length - 1000) {
         R.flamme = true;
         this.toast('🚩 Flamme rouge !<small>Plus qu\'un kilomètre</small>', 2400);
@@ -795,13 +879,54 @@
           this.toast('🏘️ Bienvenue ' + this.villageWelcome(v.name) + '<small>Les habitants sont sortis t\'encourager !</small>', 3000);
         }
       });
-      // ambiance sonore : foule (selon la densité de spectateurs), vaches
+      // ambiance sonore : foule (selon la densité de spectateurs), vent (moins fort dans l'aspiration), vaches
       R.crowd = lerp(R.crowd, this.crowdDensity(q.i), 1 - Math.exp(-dtReal * 2));
-      this.sound.update(dtReal, R.v, R.effort < 25 && R.v > 1, R.crowd);
+      this.sound.update(dtReal, R.v, R.effort < 25 && R.v > 1, R.crowd, this.soundEnv());
       this.updateCows(dtReal);
       this.updateWildlife(dtReal);
 
       if (d >= route.length) this.finish();
+    },
+
+    // jauge de puissance au clavier : Z/S maintenues (aussi pendant le compte à rebours)
+    updateGaugeKeys(dtReal) {
+      const inp = this.input;
+      const pdir = (inp.pUp ? 1 : 0) - (inp.pDown ? 1 : 0);
+      if (pdir) this.setTarget(this.ride.target + pdir * 320 * dtReal);
+    },
+
+    // jauge de puissance : bornée entre 0 et la puissance maximale
+    setTarget(w) {
+      if (!this.ride) return;
+      this.ride.target = clamp(Math.round(w), 0, PHYS.pMax);
+    },
+
+    // messages du peloton : attaques, relais, crevaisons, frottements
+    handlePelotonEvents(dtReal) {
+      const P = this.peloton, R = this.ride;
+      this._pelMsgT = Math.max(0, (this._pelMsgT || 0) - dtReal);
+      this._bumpT = Math.max(0, (this._bumpT || 0) - dtReal);
+      this._turnT = Math.max(0, (this._turnT || 0) - dtReal);
+      this._relayT = Math.max(0, (this._relayT || 0) - dtReal);
+      for (const ev of P.events) {
+        const r = ev.rider, near = Math.abs(r.s - R.s) < 140;
+        if (ev.type === 'attack' && near) this.toast('⚡ Attaque de ' + r.name + ' !<small>' + r.team.name + ' · à toi de voir si tu prends sa roue</small>', 2600);
+        else if (ev.type === 'relay' && this._relayT <= 0 && (this._relayT = 45)) this.toast('🔄 ' + r.name + ' prend le relais<small>Glisse-toi dans sa roue pour profiter de l’aspiration</small>', 2600);
+        else if (ev.type === 'yourTurn' && this._turnT <= 0) { this._turnT = 40; this.toast('🔄 À toi de prendre le relais !<small>…ou décale-toi pour rester dans les roues</small>', 2600); }
+        else if (ev.type === 'flat') { if (near) this.toast('🔧 Crevaison pour ' + r.name + '<small>La voiture suiveuse s’arrête pour le dépanner</small>', 2600); if (this.convoy) this.convoy.onFlat(r); }
+        else if (ev.type === 'fixed') { if (this.convoy) this.convoy.onFixed(r); }
+        else if (ev.type === 'bump' && this._bumpT <= 0) { this._bumpT = 6; this.toast('😬 Attention à la roue de ' + r.name + ' !', 1400); }
+      }
+      P.events.length = 0;
+    },
+
+    // sons d'ambiance liés à la course : aspiration, vélos autour, moto, hélicoptère
+    soundEnv() {
+      const env = { draft: this.ride.draft || 0, bikes: 0, moto: 1e9, heli: 1e9 };
+      const P = this.cyclist.root.position;
+      if (this.peloton) for (const r of this.peloton.riders) if (r.pos && !r.done && r.pos.distanceTo(P) < 12) env.bikes++;
+      if (this.convoy) { env.moto = this.convoy.nearest('moto', P); env.heli = this.convoy.nearest('heli', P); }
+      return env;
     },
 
     updateRideCamera(dtReal) {
@@ -833,11 +958,21 @@
         desired = new THREE.Vector3(a.x + a.rx * off, a.y + 2.1, a.z + a.rz * off);
         look = new THREE.Vector3(P.x, P.y + 1.0, P.z);
       } else {
-        // caméra de poursuite : se place sur la route derrière le cycliste (ne coupe pas les virages)
-        const b = route.sample(R.s - mode.dist, tmp);
-        desired = new THREE.Vector3(b.x + b.rx * R.lat * 0.6, Math.max(b.y, P.y - mode.dist * 0.15) + mode.height, b.z + b.rz * R.lat * 0.6);
+        // caméra de poursuite : se place sur la route derrière le cycliste (ne coupe pas les virages) ;
+        // au milieu du peloton, elle monte et recule pour voir par-dessus les coureurs de derrière
+        let pack = 0;
+        if (this.peloton && mode.dist < 8) {
+          for (const r of this.peloton.riders) {
+            const ds = R.s - r.s;
+            if (ds > 0.3 && ds < mode.dist + 2 && Math.abs(r.lat - R.lat) < 2.2 && !r.done) pack++;
+          }
+        }
+        cs.pack = lerp(cs.pack || 0, Math.min(1, pack / 2), 1 - Math.exp(-dtReal * 1.5));
+        const dist = mode.dist + 2.2 * cs.pack, hgt = mode.height + 1.9 * cs.pack;
+        const b = route.sample(R.s - dist, tmp);
+        desired = new THREE.Vector3(b.x + b.rx * R.lat * 0.6, Math.max(b.y, P.y - dist * 0.15) + hgt, b.z + b.rz * R.lat * 0.6);
         const a = route.sample(R.s + mode.ahead, tmp);
-        look = new THREE.Vector3(a.x + a.rx * R.lat * 0.5, Math.max(a.y, P.y - 1) + mode.look, a.z + a.rz * R.lat * 0.5);
+        look = new THREE.Vector3(a.x + a.rx * R.lat * 0.5, Math.max(a.y, P.y - 1) + mode.look - 0.3 * cs.pack, a.z + a.rz * R.lat * 0.5);
       }
       if (!cs.pos || mode.fpv || mode.tv) cs.pos = desired.clone();
       else cs.pos.lerp(desired, 1 - Math.exp(-dtReal * 5));
@@ -864,6 +999,8 @@
     finish() {
       const R = this.ride, route = this.route;
       this.state = 'finished';
+      if (this.playerProxy) this.playerProxy.done = true;
+      R.braking = false;
       // confettis tirés depuis les deux piliers de l'arche d'arrivée
       const fp = route.sample(route.sEnd, {});
       const span = this.L.roadHalf + 1.4;
@@ -884,6 +1021,19 @@
       const fb = $('finish-best');
       fb.className = 'finish-best' + (record ? ' record' : '');
       fb.textContent = record ? (best > 0 ? '🎉 Nouveau record ! (ancien : ' + formatTime(best) + ')' : '🎉 Premier temps enregistré !') : 'Record à battre : ' + formatTime(best);
+      // classement de l'étape face aux autres coureurs
+      const rk = $('finish-ranking');
+      if (this.peloton) {
+        const rows = this.peloton.standings(R.time);
+        const me = rows.findIndex((r) => r.player);
+        const first = rows[0].t;
+        const line = (r, i) => '<li class="' + (r.player ? 'me' : '') + '"><span class="pos">' + (i + 1) + '</span><span class="sw" style="background:' + (r.player ? B3D.Cyclist.JERSEYS[this.settings.jersey].base : r.color) + '"></span>' + r.name +
+          '<b>' + (i === 0 ? formatTime(r.t) : r.t === null ? '…' : r.t - first < 1 ? 'm.t.' : '+' + formatTime(r.t - first)) + '</b></li>';
+        let html = rows.slice(0, 5).map(line).join('');
+        if (me >= 5) html += '<li class="dots">⋯</li>' + line(rows[me], me);
+        rk.innerHTML = '<h3>' + (me === 0 ? '🏆 Victoire d’étape !' : 'Classement : ' + (me + 1) + (me === 0 ? 'er' : 'e') + ' sur ' + rows.length) + '</h3><ol>' + html + '</ol>';
+        rk.classList.remove('hidden');
+      } else rk.classList.add('hidden');
       setTimeout(() => { if (this.state === 'finished') this.show('screen-finish'); }, 900);
     },
 
@@ -908,6 +1058,7 @@
         this.updatePreviewCamera(dt);
         this.tiles.update(this.focusX, this.focusZ, 8);
       } else if (this.state === 'countdown') {
+        this.updateGaugeKeys(dt);
         this.countdown -= dt;
         const n = Math.ceil(this.countdown - 0.2);
         const el = $('countdown-text');
@@ -922,16 +1073,20 @@
         this.tiles.update(this.focusX, this.focusZ, 6);
         this.updateHud();
       } else if (this.state === 'ride') {
+        this.updateGaugeKeys(dt);
         this.updateRide(dt);
         this.updateRideCamera(dt);
         this.tiles.update(this.focusX, this.focusZ, 6);
         this.updateHud();
       } else if (this.state === 'finished') {
-        // le cycliste continue sur sa lancée
+        // le cycliste continue sur sa lancée ; les autres finissent leur course
         this.ride.v *= Math.exp(-dt * 0.8);
-        this.input.up = false; this.input.down = false;
         const R = this.ride;
         R.s += R.v * dt;
+        if (this.peloton) {
+          const fdt = dt * TIME_SCALES[this.timeScaleIndex], n = Math.max(1, Math.ceil(fdt / 0.05));
+          for (let k = 0; k < n; k++) this.peloton.step(fdt / n);
+        }
         const q = this.route.sample(R.s, this._rs);
         this.cyclist.root.position.set(q.x + q.rx * R.lat, q.y, q.z + q.rz * R.lat);
         this.cyclist.root.rotation.set(-Math.atan(q.grade), Math.atan2(q.tx, q.tz), 0, 'YXZ');
@@ -942,6 +1097,14 @@
         // ovation de l'arrivée qui s'éteint doucement
         R.finishT += dt;
         this.sound.update(dt, R.v, R.v > 1, Math.max(0, 1 - R.finishT / 7));
+      }
+      if (this.state === 'ride' || this.state === 'countdown' || this.state === 'finished') {
+        if (this.peloton) this.peloton.render(dt * TIME_SCALES[this.timeScaleIndex], this.camera);
+        if (this.convoy) this.convoy.update(dt * TIME_SCALES[this.timeScaleIndex], this.camera);
+      }
+      if (this.hcCrowd) {
+        const racing = this.state !== 'preview';
+        this.hcCrowd.update(dt, this.camera, this.ridersForCrowd(), racing && this.ride ? this.ride.s : this.preview.s, racing ? dt * TIME_SCALES[this.timeScaleIndex] : dt);
       }
       if (this.fauna) this.updateFauna(dt);
       if (this.sky) this.sky.update(this.camera, dt);
@@ -983,8 +1146,24 @@
         speed: R.v, grade: q.grade, alt: q.y, d, time: R.time, x: q.x, z: q.z, hx: q.tx, hz: q.tz,
         effort: R.effort / PHYS.pMax, braking: R.braking, timeScale: TIME_SCALES[this.timeScaleIndex],
         camName: '🎥 ' + CAMS[this.camIndex].name, climb: this.currentClimb(d),
-        next: this.raceT.next(R.s), boost: this.raceT.boost, points: this.raceT.points
+        next: this.raceT.next(R.s), points: this.raceT.points,
+        target: R.target / PHYS.pMax, cp: PHYS.cp / PHYS.pMax, watts: R.effort, wkg: R.effort / PHYS.riderMass,
+        reserve: R.reserve / PHYS.wp, bonk: R.bonk, draft: R.draft,
+        race: this.peloton ? this.peloton.raceInfo() : null
       }, performance.now());
+    },
+
+    // positions des coureurs (pour la foule des cols, qui s'écarte à leur passage)
+    ridersForCrowd() {
+      const out = this._crowdRiders || (this._crowdRiders = []);
+      out.length = 0;
+      if (this.state === 'ride' || this.state === 'countdown' || this.state === 'finished') {
+        out.push(this.ride.s);
+        if (this.peloton) for (const r of this.peloton.riders) out.push(r.s);
+        // les motos et les voitures de la caravane passent aussi dans le couloir
+        if (this.convoy && this.convoy.group.visible) for (const v of this.convoy.all) out.push(v.s + 3);
+      }
+      return out;
     },
 
     render() {

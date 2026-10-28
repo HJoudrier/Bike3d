@@ -255,8 +255,36 @@ html, body {
   gap: 6px;
 }
 .hud-speed small { font-size: 18px; font-weight: 600; }
-.hud-power { height: 14px; border: 3px solid var(--ink); border-radius: 999px; background: rgba(255,255,255,0.85); overflow: hidden; }
-#hud-power-bar { height: 100%; width: 0; background: var(--green); transition: width 0.15s; }
+/* jauge de puissance : zones (endurance, tempo, seuil, rouge), puissance réelle, consigne et réserve */
+.hud-gauge { position: absolute; left: 16px; bottom: 40px; width: 104px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.g-head { background: var(--paper); border: 3px solid var(--ink); border-radius: 12px; padding: 2px 8px 3px; font-weight: 700; font-size: 14px; text-align: center; box-shadow: 0 3px 0 var(--ink); line-height: 1.05; min-width: 86px; }
+.g-head b { font-size: 24px; }
+.g-head small { display: block; font-size: 12px; font-weight: 500; opacity: 0.75; }
+.g-track { --h: 230px; position: relative; width: 50px; height: var(--h); cursor: ns-resize; touch-action: none; pointer-events: auto; }
+.g-inner { position: absolute; inset: 0; border: 4px solid var(--ink); border-radius: 16px; overflow: hidden; box-shadow: 0 5px 0 var(--ink);
+  background: linear-gradient(to top, rgba(92,200,90,0.32) 0 var(--z1), rgba(242,194,48,0.32) var(--z1) var(--z2), rgba(243,154,43,0.32) var(--z2) var(--z3), rgba(226,70,58,0.32) var(--z3)), rgba(255,250,240,0.92); }
+.g-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0;
+  background: linear-gradient(to top, #5cc85a 0 var(--z1), #f2c230 var(--z1) var(--z2), #f39a2b var(--z2) var(--z3), #e2463a var(--z3));
+  background-size: 100% calc(var(--h) - 8px); background-position: bottom; }
+.g-cp { position: absolute; left: 4px; right: 4px; height: 0; border-top: 3px dashed var(--ink); opacity: 0.55; }
+.g-cp span { position: absolute; left: 0; right: 0; top: -15px; text-align: center; font-size: 10px; font-weight: 700; white-space: nowrap; color: var(--ink); text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.g-target { position: absolute; left: -6px; right: -6px; pointer-events: none; height: 8px; margin-bottom: -4px; background: var(--ink); border-radius: 4px; }
+.g-target::after { content: ''; position: absolute; left: 4px; right: 4px; top: 2px; height: 4px; border-radius: 2px; background: #fff; }
+.g-target span { position: absolute; left: 100%; top: -9px; margin-left: 4px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 700; padding: 1px 5px; border-radius: 6px; white-space: nowrap; }
+.g-reserve { width: 86px; height: 16px; border: 3px solid var(--ink); border-radius: 999px; background: rgba(255,255,255,0.9); overflow: hidden; box-shadow: 0 3px 0 var(--ink); }
+#g-reserve { height: 100%; width: 100%; background: var(--green); transition: width 0.2s; }
+.g-reserve.bonk { animation: bonkBlink 0.5s steps(2) infinite; }
+@keyframes bonkBlink { 50% { background: #ffb3ab; } }
+.g-label { font-size: 11px; font-weight: 700; margin-top: -4px; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.g-draft { background: #5df08a; border: 3px solid var(--ink); border-radius: 999px; padding: 1px 8px; font-size: 13px; font-weight: 700; box-shadow: 0 3px 0 var(--ink); white-space: nowrap; }
+.finish-ranking h3 { margin: 0 0 6px; font-size: 18px; }
+.finish-ranking ol { list-style: none; margin: 0 0 12px; padding: 0; text-align: left; font-size: 14px; }
+.finish-ranking li { display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 8px; }
+.finish-ranking li.me { background: var(--yellow); font-weight: 700; }
+.finish-ranking li.dots { justify-content: center; opacity: 0.6; }
+.finish-ranking .pos { width: 22px; font-weight: 700; text-align: right; }
+.finish-ranking .sw { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--ink); }
+.finish-ranking li b { margin-left: auto; }
 .pill {
   background: var(--paper);
   border: 3px solid var(--ink);
@@ -353,6 +381,9 @@ kbd {
   .hud-help { display: none; }
   #hud-map { width: 120px; height: 120px; bottom: auto; top: 150px; }
   .hud-bottom { bottom: 12px; width: calc(100vw - 32px); }
+  .hud-gauge { left: auto; right: 16px; bottom: 214px; }
+  .g-track { --h: 170px; }
+  .touch-pad .brake { font-size: 26px; }
 }
 
 @media (max-width: 760px) {

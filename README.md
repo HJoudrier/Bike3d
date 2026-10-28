@@ -2,7 +2,7 @@
 
 Petit jeu de vélo en 3D, style cartoon avec cel shading, qui tourne entièrement dans le navigateur (HTML, CSS, JavaScript et [three.js](https://threejs.org)).
 
-On importe un tracé **GPX** : une route en 3D est construite à partir du tracé. Ensuite, chaque clic sur **« Modéliser en 3D »** génère un nouveau paysage aléatoire autour de cette route : relief, falaises dans les cols, forêts, prés, champs, vignes, garrigue, rivières avec leurs ponts, lacs et mares, villages, animaux, spectateurs… On recommence jusqu'à trouver un paysage qui plaît, on le **valide**, puis on roule dessus, avec des sprints, des cols classés et un ravitaillement comme sur une vraie course.
+On importe un tracé **GPX** : une route en 3D est construite à partir du tracé. Ensuite, chaque clic sur **« Modéliser en 3D »** génère un nouveau paysage aléatoire autour de cette route : relief, falaises dans les cols, forêts, prés, champs, vignes, garrigue, rivières avec leurs ponts, lacs et mares, villages, animaux, spectateurs… On recommence jusqu'à trouver un paysage qui plaît, on le **valide**, puis on roule dessus, seul ou au milieu d'un peloton, avec des sprints, des cols classés, un ravitaillement et toute la caravane, comme sur une vraie course.
 
 ## Lancer le jeu
 
@@ -20,34 +20,65 @@ Il faut un navigateur récent avec WebGL 2 (Chrome, Edge, Firefox ou Safari réc
 ## Déroulement
 
 1. **Importer un GPX** (clic ou glisser-déposer), ou choisir un parcours de démo. Les fichiers `samples/*.gpx` permettent de tester l'import.
-2. Consulter le profil du parcours (distance, D+, montées détectées et classées), puis choisir le maillot et la qualité graphique.
+2. Consulter le profil du parcours (distance, D+, montées détectées et classées), puis choisir le maillot, le nombre d'autres coureurs (seul, 5, 10, 20 ou 40) et la qualité graphique.
 3. **Modéliser en 3D** : un paysage aléatoire est généré. Un survol automatique le présente : on peut tourner autour à la souris, zoomer à la molette, et se déplacer le long du parcours avec le curseur.
 4. Cliquer à nouveau sur **Modéliser en 3D** pour en obtenir un autre, autant de fois que voulu.
 5. **Valider ce paysage** : 3, 2, 1… partez !
 
 ## Commandes
 
-| Touche | Action |
+| Commande | Action |
 | --- | --- |
-| <kbd>↑</kbd> | accélérer (pédaler plus fort) |
-| <kbd>↓</kbd> | ralentir / freiner |
-| <kbd>←</kbd> <kbd>→</kbd> | se déplacer sur la largeur de la route |
+| jauge de puissance (à gauche) | la saisir et la faire glisser à la souris ou au doigt pour régler les watts |
+| molette | monter / descendre la jauge |
+| <kbd>Z</kbd> / <kbd>S</kbd> (<kbd>W</kbd> / <kbd>S</kbd> en QWERTY) | monter / descendre la jauge (on peut les maintenir) |
+| <kbd>1</kbd> … <kbd>9</kbd>, <kbd>0</kbd> | jauge directement à 10 %… 90 %, 100 % |
+| <kbd>Espace</kbd> | freiner |
+| <kbd>←</kbd> <kbd>→</kbd> (ou <kbd>Q</kbd> <kbd>D</kbd>) | se déplacer sur la largeur de la route |
 | <kbd>C</kbd> | changer de caméra (poursuite, large, TV, vue cycliste, drone) |
 | <kbd>T</kbd> | accélérer le temps (x1, x2, x4, x8) |
 | <kbd>M</kbd> | couper / remettre le son |
 | <kbd>Échap</kbd> ou <kbd>P</kbd> | pause |
 
-Sur écran tactile, des boutons fléchés s'affichent.
+Sur écran tactile, la jauge se règle au doigt, avec des boutons ◀ ▶ pour se déplacer et 🛑 pour freiner.
 
-Quand on relâche les flèches, le cycliste garde le même effort : la vitesse se maintient sur le plat, baisse en montée et augmente en descente. En montée raide il se met en danseuse, en descente rapide il prend la position aérodynamique.
+### La jauge de puissance et la réserve
+
+On ne pédale plus « plus fort » ou « moins fort » avec les flèches : on règle sur la jauge la **puissance** que développe le coureur (de 0 à 720 W). La vitesse en découle : elle se maintient sur le plat, baisse en montée, augmente en descente, et elle est plus élevée dans l'aspiration d'un autre coureur. La jauge affiche la consigne, la puissance réelle, les watts par kilo et les zones d'effort : endurance, tempo, seuil, rouge.
+
+Sous la jauge, la **réserve d'énergie** se vide quand on roule au-dessus du **seuil** (330 W, la ligne pointillée) et se recharge en dessous. Si elle tombe à zéro, c'est le **coup de bambou** : impossible de dépasser le seuil tant qu'on n'a pas récupéré. Il faut donc doser ses efforts, et se cacher dans les roues pour économiser.
+
+En montée raide le coureur se met en danseuse, en descente rapide (jauge à zéro) il prend la position aérodynamique.
+
+## Le peloton
+
+On peut courir seul ou avec 5 à 40 autres coureurs aux noms farfelus (Kévin Watts, Lulu Lagrimpette…), répartis en équipes. Chacun a son profil (rouleur, grimpeur, sprinteur), son poids, sa puissance critique et sa réserve, et roule avec la même physique que le joueur.
+
+- **Aspiration** : derrière un coureur, la résistance de l'air diminue (jusqu'à environ 40 % dans la roue, davantage au cœur du peloton). Le sillage du coureur qui précède est dessiné : des filets d'air et des chevrons sur la route, **gris clair** quand on est à côté, **verts** quand on est dans l'aspiration. Une pastille « 🌀 Aspiration −35 % » l'indique aussi près de la jauge, et on entend moins le vent.
+- **Relais** : le coureur de tête mène un moment puis se décale et se laisse glisser en queue de groupe. Si tu mènes trop longtemps, un coureur vient prendre le relais. Quand c'est ton tour, un message te le signale.
+- **Course** : les groupes se forment et se cassent (bordures, montées, coureurs lâchés qui recollent), il y a des attaques, des contre-attaques, des sprints groupés, et des crevaisons dépannées par la voiture d'assistance.
+- Le HUD donne ta place, la taille de ton groupe et l'écart avec la tête. À l'arrivée, le classement de l'étape s'affiche, avec les écarts.
+
+Quand il y a d'autres coureurs, les sprints et les sommets sont disputés pour de vrai : ce sont eux qu'il faut battre sur la ligne. En solo, on est comparé à des rivaux virtuels.
+
+## La caravane
+
+- **Motos de la télévision** : une devant la tête de course, une avec le groupe du joueur, avec un caméraman assis à l'envers, caméra à l'épaule.
+- **Voitures suiveuses** : la voiture d'assistance jaune et deux voitures d'équipe, avec des vélos de rechange sur le toit. Elles suivent le groupe du joueur. Quand un coureur crève, la voiture d'assistance s'arrête derrière lui et un mécanicien change la roue.
+- **Voiture-balai** : derrière le dernier coureur de la course, avec son balai sur le toit et sa plaque « FIN DE COURSE ».
+- **Hélicoptère** : il tourne au-dessus de la tête de course.
+
+## Les cols hors catégorie
+
+Dans les montées classées HC, une foule dense envahit la route sur les derniers kilomètres. Les spectateurs ne laissent qu'un étroit couloir et s'écartent au dernier moment devant les coureurs et les véhicules, puis se referment derrière eux. Certains agitent des drapeaux, d'autres allument des fumigènes colorés. Le parcours de démo **« Col hors catégorie »** (onze lacets à 9 %) permet de le voir tout de suite.
 
 ## La course
 
 Le parcours est jalonné d'arches, signalées sur le profil en bas de l'écran et par une pastille « prochain évènement » :
 
-- **Sprints intermédiaires** (arche verte) : placés sur du plat, de préférence dans un village, avec barrières, public et panneaux 400 m / 200 m. Le temps des 400 derniers mètres est comparé à celui de sept rivaux virtuels (Kévin Watts, Lulu Lagrimpette…) : il faut appuyer sur ↑ avant la ligne pour gagner. Points : 20, 17, 15…
-- **Grand Prix de la Montagne** : arche à pois au sommet de chaque montée classée (HC, 1re à 4e catégorie) et, pour les grands cols, arche « GPM » au pied qui lance le chrono. Au sommet : classement face aux rivaux, temps de montée, VAM et points du maillot à pois.
-- **Zone de ravitaillement** (arche orange) : des soigneurs tendent des musettes au bord de la route, devant les voitures d'équipe et les tables de bidons. En serrant du bon côté, on attrape une musette au passage : coup de boost de +15 % de puissance pendant 45 s. Panneau « Fin de zone » à la sortie.
+- **Sprints intermédiaires** (arche verte) : placés sur du plat, de préférence dans un village, avec barrières, public et panneaux 400 m / 200 m. Avec d'autres coureurs, c'est l'ordre de passage sur la ligne qui compte. En solo, le temps des 400 derniers mètres est comparé à celui de sept rivaux virtuels : il faut lancer son effort avant la ligne pour gagner. Points : 20, 17, 15…
+- **Grand Prix de la Montagne** : arche à pois au sommet de chaque montée classée (HC, 1re à 4e catégorie) et, pour les grands cols, arche « GPM » au pied qui lance le chrono. Au sommet : classement, temps de montée, VAM et points du maillot à pois.
+- **Zone de ravitaillement** (arche orange) : des soigneurs tendent des musettes au bord de la route, devant les voitures d'équipe et les tables de bidons. En serrant du bon côté, on attrape une musette au passage : elle recharge la moitié de la réserve d'énergie. Panneau « Fin de zone » à la sortie.
 
 Les points sprint, les points montagne et le nombre de musettes s'affichent pendant la course et sur l'écran d'arrivée.
 
@@ -56,7 +87,8 @@ Les points sprint, les points montagne et le nombre de musettes s'affichent pend
 Tous les sons sont synthétisés dans le navigateur (Web Audio), sans fichier audio :
 
 - le « woum » des roues carbone à chaque coup de pédale, le roulement des boyaux et le vrombissement des jantes à haute vitesse ;
-- le cliquetis de la roue libre, le vent ;
+- le cliquetis de la roue libre, le vent (plus discret dans l'aspiration), le roulement et la roue libre des coureurs autour de soi ;
+- le moteur des motos et le battement des pales de l'hélicoptère ;
 - les meuglements des vaches quand on passe près d'un troupeau (avec une bulle « MEUH ! ») et leurs clarines ;
 - les applaudissements, sifflets et la rumeur du public, plus forts là où il y a du monde, et l'ovation de l'arrivée ;
 - les cris des animaux proches : hennissements, bêlements, sifflements d'alerte des marmottes, coin-coin des canards, cri de l'aigle, croassements, cacardements des oies, mouettes, envol des pigeons ;
@@ -89,6 +121,9 @@ Le terrain est découpé en tuiles chargées autour du cycliste, ce qui permet d
 | `js/tiles.js` | tuiles de terrain, végétation et animaux instanciés |
 | `js/road.js` | chaussée, glissières, panneaux, arches, supporters et camping-cars |
 | `js/race.js` | sprints, GPM, ravitaillement : placement, arches, soigneurs, rivaux virtuels et points |
+| `js/peloton.js` | autres coureurs : physique, aspiration, groupes, relais, attaques, rendu instancié, sillage |
+| `js/convoy.js` | caravane : motos TV, voitures suiveuses, voiture-balai, hélicoptère, dépannage |
+| `js/hccrowd.js` | foule des cols hors catégorie, drapeaux et fumigènes |
 | `js/village.js` | villages : maisons, église, commerces, trottoirs, fanions, habitants |
 | `js/fauna.js` | oiseaux en vol et canards animés |
 | `js/water.js`, `js/sky.js` | eau animée, ciel, nuages, montagnes lointaines |

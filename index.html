@@ -41,6 +41,16 @@
             <div class="chips" id="opt-jersey"></div>
           </div>
           <div class="opt">
+            <span class="opt-label">Coureurs</span>
+            <div class="chips" id="opt-riders">
+              <button class="chip" data-n="0">Seul</button>
+              <button class="chip" data-n="5">5</button>
+              <button class="chip" data-n="10">10</button>
+              <button class="chip" data-n="20">20</button>
+              <button class="chip" data-n="40">40</button>
+            </div>
+          </div>
+          <div class="opt">
             <span class="opt-label">Qualité</span>
             <div class="chips" id="opt-quality">
               <button class="chip" data-q="low">Rapide</button>
@@ -79,16 +89,15 @@
     <div id="speedlines"></div>
     <div class="hud-tl">
       <div class="hud-speed"><span id="hud-speed">0</span><small>km/h</small></div>
-      <div class="hud-power"><div id="hud-power-bar"></div></div>
       <div class="hud-row">
         <div class="pill" id="hud-grade-box"><span id="hud-grade">0 %</span></div>
         <div class="pill light">⛰️ <span id="hud-alt">0 m</span></div>
       </div>
-      <div class="pill boost hidden" id="hud-boost">⚡ <span>45 s</span></div>
     </div>
     <div class="hud-tr">
       <div class="pill big light">⏱️ <span id="hud-time">0:00</span></div>
       <div class="pill light">🚴 <span id="hud-dist">0 km</span> <small id="hud-remain"></small></div>
+      <div class="pill light hidden" id="hud-pos"></div>
       <div class="pill light hidden" id="hud-next"></div>
       <div class="pill tiny hidden" id="hud-points"></div>
       <div class="hud-row small">
@@ -97,19 +106,30 @@
       </div>
     </div>
     <div id="hud-climb" class="hud-climb hidden"></div>
+    <div class="hud-gauge" id="hud-gauge">
+      <div class="g-draft hidden" id="g-draft">🌀 Aspiration</div>
+      <div class="g-head"><b id="g-watts">0</b> W<small id="g-wkg">0,0 W/kg</small></div>
+      <div class="g-track" id="g-track" title="Puissance : fais glisser la jauge, molette, Z/S ou touches 1 à 0">
+        <div class="g-inner"><div class="g-fill" id="g-fill"></div></div>
+        <div class="g-cp" id="g-cp"><span>seuil</span></div>
+        <div class="g-target" id="g-target"><span id="g-target-w">250</span></div>
+      </div>
+      <div class="g-reserve" id="g-reserve-box" title="Réserve d'énergie"><div id="g-reserve"></div></div>
+      <div class="g-label">🔋 réserve</div>
+    </div>
     <div class="hud-bottom">
       <canvas id="hud-profile" width="900" height="90"></canvas>
     </div>
     <canvas id="hud-map" width="180" height="180"></canvas>
     <div class="hud-help">
-      <kbd>←</kbd><kbd>→</kbd> se déplacer · <kbd>↑</kbd> accélérer · <kbd>↓</kbd> ralentir · <kbd>C</kbd> caméra · <kbd>T</kbd> temps accéléré · <kbd>M</kbd> son · <kbd>Échap</kbd> pause
+      <kbd>←</kbd><kbd>→</kbd> se déplacer · <kbd>Z</kbd><kbd>S</kbd> / molette / <kbd>1</kbd>…<kbd>0</kbd> puissance · <kbd>Espace</kbd> freiner · <kbd>C</kbd> caméra · <kbd>T</kbd> temps · <kbd>M</kbd> son · <kbd>Échap</kbd> pause
     </div>
     <div class="touch-pad" id="touch-pad">
       <div class="tp-left">
         <button data-k="left">◀</button><button data-k="right">▶</button>
       </div>
       <div class="tp-right">
-        <button data-k="up">▲</button><button data-k="down">▼</button>
+        <button data-k="brake" class="brake">🛑</button>
       </div>
     </div>
   </section>
@@ -145,6 +165,7 @@
       <h2>Arrivée&nbsp;!</h2>
       <div id="finish-stats" class="finish-stats"></div>
       <div id="finish-best" class="finish-best"></div>
+      <div id="finish-ranking" class="finish-ranking hidden"></div>
       <div class="btn-col">
         <button id="btn-again" class="btn primary big">↺ Rejouer ce parcours</button>
         <button id="btn-finish-landscape" class="btn">🎲 Nouveau paysage</button>
@@ -168,6 +189,9 @@
   <script src="js/water.js"></script>
   <script src="js/road.js"></script>
   <script src="js/race.js"></script>
+  <script src="js/peloton.js"></script>
+  <script src="js/convoy.js"></script>
+  <script src="js/hccrowd.js"></script>
   <script src="js/village.js"></script>
   <script src="js/fauna.js"></script>
   <script src="js/sky.js"></script>
