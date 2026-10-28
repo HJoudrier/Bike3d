@@ -66,6 +66,8 @@
         flowers: rnd.range(0.2, 0.7)
       };
       P.snowLine = P.treeLine + rnd.range(450, 800);
+      // hiver : les vaches restent à l'étable (quelques-unes seulement dehors), plus de fleurs
+      if (this.amb.id === 'hiver') { P.cows *= 0.3; P.flowers *= 0.3; }
       const fa = P.fieldAngle;
       this._fc = Math.cos(fa); this._fs = Math.sin(fa);
 

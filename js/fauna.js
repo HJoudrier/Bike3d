@@ -1,5 +1,6 @@
 /* Bike3D — faune animée : aigles qui planent, corbeaux, hirondelles, mouettes, vols d'oies en V,
-   pigeons de village qui s'envolent au passage du coureur, canards sur les mares et les lacs. */
+   pigeons de village qui s'envolent au passage du coureur, canards sur les mares et les lacs ;
+   la nuit, chauves-souris qui virevoltent autour du coureur et chouettes au-dessus des bois. */
 (function (root) {
   'use strict';
   const B3D = root.B3D = root.B3D || {};
@@ -63,6 +64,23 @@
     return g;
   }
 
+  // Chauve-souris : petit corps, oreilles pointues, ailes en membrane festonnée.
+  function bat() {
+    const D = '#2b2430', M = '#3d3240';
+    const parts = [
+      { geo: sph(1, 7, 5), color: D, matrix: tr(0, 0, 0, 0, 0, 0, 0.05, 0.05, 0.09) },
+      { geo: sph(0.045, 6, 4), color: D, matrix: tr(0, 0.02, 0.09) },
+      { geo: new THREE.ConeGeometry(0.018, 0.05, 4), color: D, matrix: tr(0.022, 0.06, 0.09) },
+      { geo: new THREE.ConeGeometry(0.018, 0.05, 4), color: D, matrix: tr(-0.022, 0.06, 0.09) }
+    ];
+    const wl = 0.2, c = 0.16;
+    const outline = [[0, c * 0.5], [wl * 0.5, c * 0.6], [wl, c * 0.15], [wl * 0.86, -c * 0.32], [wl * 0.66, -c * 0.06], [wl * 0.48, -c * 0.38], [wl * 0.28, -c * 0.1], [0, -c * 0.5]];
+    for (const side of [-1, 1]) parts.push({ geo: extrudeWing(side, outline, 0.01), color: M, wing: side, matrix: tr(side * 0.04, 0.01, 0) });
+    const g = merge(parts);
+    g.userData.pivot = 0.04;
+    return g;
+  }
+
   // Canard qui nage (pas d'ailes déployées).
   function duck() {
     return merge([
@@ -85,7 +103,10 @@
     goose: { cap: 16, outline: true, geo: () => bird({ len: 0.8, span: 1.6, body: '#8c8478', belly: '#d8d0c0', head: '#26232f', neck: '#26232f', beak: '#3a3846', wing: '#7d756a', tip: '#4a443d', tipShape: 1 }), flap: { freq: 7.5, amp: 0.55, glide: 0 } },
     pigeon: { cap: 30, outline: true, geo: () => bird({ len: 0.32, span: 0.62, body: '#a2a6ae', head: '#5d6370', belly: '#b0b3ba', throat: '#6f8f80', beak: '#4a4a52', wing: '#a9adb6', tip: '#3a3e48' }), flap: { freq: 18, amp: 0.95, glide: 0 } },
     pigeonGround: { cap: 30, outline: true, geo: () => bird({ len: 0.32, span: 0.13, body: '#a2a6ae', head: '#5d6370', belly: '#b0b3ba', throat: '#6f8f80', beak: '#4a4a52', wing: '#9a9ea8' }) },
-    duck: { cap: 80, outline: true, geo: duck }
+    duck: { cap: 80, outline: true, geo: duck },
+    // la nuit
+    bat: { cap: 24, outline: true, geo: bat, flap: { freq: 26, amp: 1.0, glide: 0 } },
+    owl: { cap: 6, outline: true, geo: () => bird({ len: 0.5, span: 1.15, width: 0.24, body: '#8a6a4a', belly: '#d2bc96', head: '#8a6a4a', beak: '#e8b830', wing: '#7d5f42', tip: '#4f3b2a', tipShape: 1 }), flap: { freq: 5, amp: 0.45, glide: 0.65 } }
   };
 
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ'), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
@@ -127,10 +148,14 @@
       this.pigeons = [];
       this.pigeonVillages = new Set();
       this.ducks = new Map(); // lac -> canards
+      this.bats = [];
+      this.winter = L.amb.id === 'hiver';
+      this.owls = [];
+      this.dayK = 1; // luminosité du jour (donnée par l'atmosphère)
       this.ctxTimer = 0;
       this.time = 0;
       // distances au coureur, pour les cris (mises à jour à chaque image)
-      this.audio = { eagle: 1e9, crow: 1e9, goose: 1e9, duck: 1e9, swallow: 1e9, gull: 1e9, takeoff: 0 };
+      this.audio = { eagle: 1e9, crow: 1e9, goose: 1e9, duck: 1e9, swallow: 1e9, gull: 1e9, owl: 1e9, bat: 1e9, takeoff: 0 };
     }
 
     // ------------------------------------------------------------ peuplement selon le décor
@@ -138,6 +163,19 @@
       const L = this.L, rnd = this.rnd;
       const M = L.base(P.x, P.z, {}).M;
       const mix = tiles ? tiles.coverMix(P.x, P.z) : { meadow: 0.5, alpine: 0 };
+      // la nuit : chauves-souris (près des villages, des prés et de l'eau) et chouettes (près des bois)
+      const nearVil = L.villages.some((v) => Math.hypot(this.route.x[v.ic] - P.x, this.route.z[v.ic] - P.z) < 400);
+      const wantB = this.night ? (nearVil || mix.meadow > 0.2 || mix.wet > 0.05 ? 6 : 3) : 0;
+      while (this.bats.length < wantB) this.bats.push({ p: [rnd() * 6, rnd() * 6, rnd() * 6], w: [1.6 + rnd() * 1.4, 1.3 + rnd() * 1.3, 2.5 + rnd() * 1.5], r: 5 + rnd() * 7, h: 3.5 + rnd() * 3, prev: null });
+      while (this.bats.length > wantB) this.bats.pop();
+      const wantO = this.night && (mix.forest > 0.15 || mix.meadow > 0.3) ? 2 : 0;
+      while (this.owls.length < wantO) {
+        const a = rnd() * Math.PI * 2, d = 40 + rnd() * 110;
+        const cx = P.x + fwd.x * 60 + Math.cos(a) * d, cz = P.z + fwd.z * 60 + Math.sin(a) * d;
+        this.owls.push({ cx, cz, alt: L.heightAt(cx, cz) + 14 + rnd() * 10, a: rnd() * 6.28, r: 18 + rnd() * 20, w: (0.2 + rnd() * 0.12) * (rnd() < 0.5 ? -1 : 1) });
+      }
+      while (this.owls.length > wantO) this.owls.pop();
+      for (let k = 0; k < this.owls.length; k++) if (Math.hypot(this.owls[k].cx - P.x, this.owls[k].cz - P.z) > 300) this.owls.splice(k--, 1);
       // aigles en montagne
       const wantE = M > 0.45 || mix.alpine > 0.25 ? (M > 0.7 ? 3 : 2) : 0;
       while (this.eagles.length < wantE) this.eagles.push(this._newEagle(P, fwd));
@@ -158,7 +196,7 @@
       } else if (!wantC && C.members.length && Math.hypot(C.cx - P.x, C.cz - P.z) > 300) C.members.length = 0;
       // hirondelles dans les prés et les villages
       const nearVillage = L.villages.some((v) => Math.hypot(this.route.x[v.ic] - P.x, this.route.z[v.ic] - P.z) < 300);
-      const wantS = mix.meadow > 0.25 || nearVillage ? 7 : 0;
+      const wantS = !this.winter && (mix.meadow > 0.25 || nearVillage) ? 7 : 0; // en hiver, les hirondelles sont parties
       while (this.swallows.length < wantS) this.swallows.push({ p: [rnd() * 6, rnd() * 6, rnd() * 6], w: [0.9 + rnd() * 0.8, 0.7 + rnd() * 0.8, 1.5 + rnd()], r: 8 + rnd() * 10, prev: null });
       if (!wantS) this.swallows.length = 0;
       // mouettes au-dessus des lacs
@@ -213,14 +251,22 @@
 
     // ------------------------------------------------------------ animation
     // P : position du coureur (ou du point visé en aperçu), fwd : direction de la route.
+    // dk : luminosité du jour (1 plein jour, 0 nuit) ; les oiseaux de jour se posent pour la nuit
+    setDaylight(dk) {
+      this.dayK = dk;
+      this.night = this._nightOn ? dk < 0.42 : dk < 0.28;
+      this._nightOn = this.night;
+    }
+
     update(dt, P, fwd, tiles) {
       this.time += dt;
       const t = this.time, rnd = this.rnd, L = this.L;
       this.ctxTimer -= dt;
       if (this.ctxTimer <= 0) { this.ctxTimer = 1; this._context(P, fwd, tiles); }
-      const out = { eagle: [], crow: [], swallow: [], gull: [], goose: [], pigeon: [], pigeonGround: [], duck: [] };
+      const out = { eagle: [], crow: [], swallow: [], gull: [], goose: [], pigeon: [], pigeonGround: [], duck: [], bat: [], owl: [] };
       const A = this.audio;
-      A.eagle = A.crow = A.goose = A.duck = A.swallow = A.gull = 1e9;
+      A.eagle = A.crow = A.goose = A.duck = A.swallow = A.gull = A.owl = A.bat = 1e9;
+      const day = !this.night;
       const dist = (x, y, z) => Math.hypot(x - P.x, y - P.y, z - P.z);
 
       for (const e of this.eagles) {
@@ -279,7 +325,7 @@
 
       // vol d'oies en V qui traverse le ciel de temps en temps
       this.geeseTimer -= dt;
-      if (!this.geese && this.geeseTimer <= 0) {
+      if (!this.geese && this.geeseTimer <= 0 && day) {
         const a = rnd() * Math.PI * 2;
         const dx = Math.cos(a), dz = Math.sin(a);
         const lat = (rnd() - 0.5) * 160;
@@ -347,6 +393,38 @@
           out.duck.push([x, y, z, Math.atan2(-Math.sin(d.a) * d.w, Math.cos(d.a) * d.w), 0, Math.sin(t * 1.7 + d.ph) * 0.06, 1.3, d.male ? '#2f7a4a' : '#8a6a48']);
           A.duck = Math.min(A.duck, dist(x, y, z));
         }
+      }
+
+      // la nuit, les oiseaux du jour sont posés (on ne les dessine plus) ; en hiver, mares gelées : pas de canards
+      if (!day) {
+        for (const k of ['eagle', 'crow', 'swallow', 'gull', 'goose', 'pigeon', 'pigeonGround', 'duck']) out[k].length = 0;
+        A.eagle = A.crow = A.goose = A.duck = A.swallow = A.gull = 1e9;
+        A.takeoff = 0;
+      }
+      if (this.winter) { out.duck.length = 0; A.duck = 1e9; }
+      // chauves-souris : vol saccadé, en zigzag, autour du coureur (elles chassent les insectes attirés par le phare)
+      const bx = P.x + fwd.x * 6, bz = P.z + fwd.z * 6;
+      for (const b of this.bats) {
+        const x = bx + Math.sin(t * b.w[0] + b.p[0]) * b.r + Math.sin(t * 7.3 + b.p[1]) * 0.8;
+        const z = bz + Math.sin(t * b.w[1] + b.p[1]) * b.r + Math.cos(t * 6.1 + b.p[2]) * 0.8;
+        const y = P.y + b.h + Math.sin(t * b.w[2] + b.p[2]) * 1.5;
+        let yaw = 0, pitch = 0;
+        if (b.prev) {
+          const dx = x - b.prev[0], dz = z - b.prev[2];
+          yaw = Math.atan2(dx, dz);
+          pitch = -Math.atan2(y - b.prev[1], Math.hypot(dx, dz) + 1e-4) * 0.6;
+        }
+        b.prev = [x, y, z];
+        out.bat.push([x, y, z, yaw, pitch, 0, 1.6, null]);
+        A.bat = Math.min(A.bat, dist(x, y, z));
+      }
+      // chouettes : vol lent et silencieux en grands cercles au-dessus des bois et des prés
+      for (const o of this.owls) {
+        o.a += o.w * dt;
+        const x = o.cx + Math.cos(o.a) * o.r, z = o.cz + Math.sin(o.a) * o.r;
+        const y = o.alt + Math.sin(t * 0.4 + o.a) * 2;
+        out.owl.push([x, y, z, Math.atan2(-Math.sin(o.a) * o.w, Math.cos(o.a) * o.w), 0, o.w > 0 ? -0.3 : 0.3, 1.3, null]);
+        A.owl = Math.min(A.owl, dist(x, y, z));
       }
 
       // écriture des matrices d'instance

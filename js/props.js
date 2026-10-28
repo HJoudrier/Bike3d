@@ -340,6 +340,64 @@
     return merge(parts);
   }
 
+  // --- animaux de la nuit (orientés vers +x) ; yeux clairs qui brillent dans la lumière des phares
+  // Sanglier : corps massif, groin, défenses, crête de poils.
+  function boar() {
+    const D = '#2a221e', E = '#fff6c0';
+    const parts = [
+      { geo: sphere(1, 9, 7), color: WHITE, tint: 1, matrix: tr(0, 0.62, 0, 0, 0, 0.08, 0.62, 0.42, 0.3) },
+      { geo: sphere(1, 8, 6), color: WHITE, tint: 1, matrix: tr(0.5, 0.62, 0, 0, 0, -0.35, 0.34, 0.28, 0.24) },
+      { geo: new THREE.CylinderGeometry(0.09, 0.12, 0.2, 7), color: '#5a4038', matrix: tr(0.8, 0.5, 0, 0, 0, Math.PI / 2 + 0.3) },
+      { geo: sphere(0.035, 5, 4), color: E, matrix: tr(0.66, 0.72, 0.12) },
+      { geo: sphere(0.035, 5, 4), color: E, matrix: tr(0.66, 0.72, -0.12) },
+      { geo: new THREE.ConeGeometry(0.06, 0.14, 4), color: D, matrix: tr(0.46, 0.9, 0.12, 0, 0, -0.3) },
+      { geo: new THREE.ConeGeometry(0.06, 0.14, 4), color: D, matrix: tr(0.46, 0.9, -0.12, 0, 0, -0.3) },
+      { geo: new THREE.ConeGeometry(0.02, 0.1, 4), color: '#f4efe4', matrix: tr(0.78, 0.52, 0.09, 0, 0, -0.6) },
+      { geo: new THREE.ConeGeometry(0.02, 0.1, 4), color: '#f4efe4', matrix: tr(0.78, 0.52, -0.09, 0, 0, -0.6) },
+      { geo: new THREE.BoxGeometry(0.6, 0.08, 0.05), color: D, matrix: tr(0.08, 0.98, 0, 0, 0, 0.1) },
+      { geo: new THREE.CylinderGeometry(0.015, 0.01, 0.25, 3), color: D, matrix: tr(-0.62, 0.6, 0, 0, 0, -0.9) }
+    ];
+    for (const [x, z] of [[0.3, 0.14], [0.3, -0.14], [-0.3, 0.14], [-0.3, -0.14]]) parts.push({ geo: new THREE.BoxGeometry(0.09, 0.36, 0.09), color: D, matrix: tr(x, 0.18, z) });
+    return merge(parts);
+  }
+
+  // Renard roux : museau pointu, grandes oreilles, queue touffue à bout blanc.
+  function fox() {
+    const D = '#2d2420', W = '#fbf6ee', E = '#fff6c0';
+    const parts = [
+      { geo: new THREE.CapsuleGeometry(0.13, 0.42, 3, 8), color: WHITE, tint: 1, matrix: tr(0, 0.42, 0, 0, 0, Math.PI / 2) },
+      { geo: sphere(1, 8, 6), color: WHITE, tint: 1, matrix: tr(0.36, 0.56, 0, 0, 0, 0, 0.14, 0.13, 0.13) },
+      { geo: new THREE.ConeGeometry(0.08, 0.24, 6), color: WHITE, tint: 1, matrix: tr(0.54, 0.52, 0, 0, 0, -Math.PI / 2) },
+      { geo: sphere(0.03, 5, 4), color: D, matrix: tr(0.66, 0.52, 0) },
+      { geo: sphere(0.1, 6, 4), color: W, matrix: tr(0.36, 0.45, 0, 0, 0, 0, 1.1, 0.8, 1) },
+      { geo: new THREE.ConeGeometry(0.06, 0.16, 4), color: WHITE, tint: 1, matrix: tr(0.32, 0.72, 0.07) },
+      { geo: new THREE.ConeGeometry(0.06, 0.16, 4), color: WHITE, tint: 1, matrix: tr(0.32, 0.72, -0.07) },
+      { geo: sphere(0.025, 5, 4), color: E, matrix: tr(0.45, 0.6, 0.065) },
+      { geo: sphere(0.025, 5, 4), color: E, matrix: tr(0.45, 0.6, -0.065) },
+      { geo: sphere(1, 7, 5), color: WHITE, tint: 1, matrix: tr(-0.46, 0.4, 0, 0, 0, 0.5, 0.26, 0.09, 0.09) },
+      { geo: sphere(0.07, 6, 4), color: W, matrix: tr(-0.7, 0.28, 0) }
+    ];
+    for (const [x, z] of [[0.2, 0.07], [0.2, -0.07], [-0.2, 0.07], [-0.2, -0.07]]) parts.push({ geo: new THREE.BoxGeometry(0.05, 0.3, 0.05), color: D, matrix: tr(x, 0.15, z) });
+    return merge(parts);
+  }
+
+  // Hérisson : boule de piquants et petit museau.
+  function hedgehog() {
+    const S = '#6e5a48', E = '#1d1a2b';
+    const parts = [
+      { geo: sphere(1, 9, 6), color: S, matrix: tr(0, 0.12, 0, 0, 0, 0, 0.2, 0.14, 0.15) },
+      { geo: new THREE.ConeGeometry(0.06, 0.14, 6), color: '#d9c2a0', matrix: tr(0.22, 0.09, 0, 0, 0, -Math.PI / 2) },
+      { geo: sphere(0.02, 5, 4), color: E, matrix: tr(0.3, 0.09, 0) },
+      { geo: sphere(0.015, 4, 3), color: E, matrix: tr(0.2, 0.13, 0.04) },
+      { geo: sphere(0.015, 4, 3), color: E, matrix: tr(0.2, 0.13, -0.04) }
+    ];
+    for (let k = 0; k < 14; k++) {
+      const a = (k / 14) * Math.PI * 2, b = 0.4 + (k % 3) * 0.3;
+      parts.push({ geo: new THREE.ConeGeometry(0.025, 0.09, 3), color: '#4a3c30', matrix: tr(-0.02 + Math.cos(a) * 0.1, 0.16 + Math.sin(b) * 0.06, Math.sin(a) * 0.1, Math.sin(a) * 0.9, 0, -Math.cos(a) * 0.9 + 0.3) });
+    }
+    return merge(parts);
+  }
+
   // Héron cendré, immobile au bord de l'eau.
   function heron() {
     const G = '#a9b0ba', D = '#2d2a33';
@@ -363,7 +421,7 @@
       this.matrixAttr.setUsage(THREE.DynamicDrawUsage);
       this.colorAttr = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3);
       this.colorAttr.setUsage(THREE.DynamicDrawUsage);
-      const material = instancedMat({ sway: opts.sway || 0, bounce: opts.bounce || 0, people: opts.people });
+      const material = instancedMat({ sway: opts.sway || 0, bounce: opts.bounce || 0, people: opts.people, snow: opts.snow || 0 });
       this.mesh = new THREE.InstancedMesh(geo, material, cap);
       this.mesh.instanceMatrix = this.matrixAttr;
       this.mesh.instanceColor = this.colorAttr;
@@ -382,6 +440,7 @@
         this.outline.visible = false;
         scene.add(this.outline);
       }
+      this.active = true;
       this.used = new Uint8Array(cap);
       this.free = new Int32Array(cap);
       for (let i = 0; i < cap; i++) this.free[i] = cap - 1 - i;
@@ -421,9 +480,20 @@
       this.matrixAttr.needsUpdate = true;
       this.colorAttr.needsUpdate = true;
       this.dirty = false;
-      // pas d'appel de dessin pour un pool vide
-      this.mesh.visible = this.high > 0;
-      if (this.outline) this.outline.visible = this.high > 0;
+      this._applyVisible();
+    }
+
+    // pas d'appel de dessin pour un pool vide, ni pour des animaux qui dorment (actif = false)
+    _applyVisible() {
+      const on = this.high > 0 && this.active;
+      this.mesh.visible = on;
+      if (this.outline) this.outline.visible = on;
+    }
+
+    setActive(on) {
+      if (on === this.active) return;
+      this.active = on;
+      this._applyVisible();
     }
 
     dispose() {
@@ -441,7 +511,8 @@
         grass: grass(), flowers: flowers(), hay: hay(), cow: cow(), spectator: spectator(),
         vine: vine(), cypress: cypress(), olive: olive(), pine: umbrellaPine(), birch: birch(), willow: willow(),
         reeds: reeds(), heather: heather(), lavender: lavenderRow(), sunflower: sunflowerRow(), pumpkin: pumpkin(),
-        horse: horse(), sheep: sheep(), ibex: ibex(), marmot: marmot(), deer: deer(), heron: heron()
+        horse: horse(), sheep: sheep(), ibex: ibex(), marmot: marmot(), deer: deer(), heron: heron(),
+        boar: boar(), fox: fox(), hedgehog: hedgehog()
       };
     }
     return geoCache;

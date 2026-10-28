@@ -90,6 +90,7 @@
     // chaussée mouillée : bitume plus sombre et flaques qui reflètent le ciel (couleur du brouillard)
     roadMat.onBeforeCompile = (shader) => {
       shader.uniforms.uWet = B3D.toon.shared.uWet;
+      shader.uniforms.uSnow = B3D.toon.shared.uSnow;
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nvarying vec3 vRoadW;')
         .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvRoadW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
@@ -97,7 +98,7 @@
         .replace('#include <common>', [
           '#include <common>',
           'varying vec3 vRoadW;',
-          'uniform float uWet;',
+          'uniform float uWet, uSnow;',
           'float rh21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }',
           'float rnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);',
           '  return mix(mix(rh21(i), rh21(i+vec2(1,0)), f.x), mix(rh21(i+vec2(0,1)), rh21(i+vec2(1,1)), f.x), f.y); }'
@@ -110,10 +111,18 @@
           '  #ifdef USE_FOG',
           '  diffuseColor.rgb = mix(diffuseColor.rgb, fogColor * 0.75, pud * 0.6);',
           '  #endif',
+          '}',
+          // neige sur la chaussée : bourrelets blancs sur les bords, voie centrale dégagée par le passage
+          'if (uSnow > 0.01) {',
+          '  float edge = min(vMapUv.x, 1.0 - vMapUv.x);',
+          '  float n = rnoise(vRoadW.xz * 0.4) * 0.6 + rnoise(vRoadW.xz * 2.1) * 0.4;',
+          '  float k = 1.0 - smoothstep(0.04, 0.1 + 0.16 * uSnow + 0.08 * n, edge);',
+          '  k = max(k, smoothstep(0.62, 0.7, n) * 0.55);',
+          '  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.99), clamp(k * uSnow * 1.2, 0.0, 1.0));',
           '}'
         ].join('\n'));
     };
-    roadMat.customProgramCacheKey = () => 'road-wet';
+    roadMat.customProgramCacheKey = () => 'road-wet-snow';
     const skirtMat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: B3D.toon.gradientMap() });
     const CH = 160;
     for (let a = 0; a < n - 1; a += CH) {

@@ -14,6 +14,7 @@
         uKind: { value: kind === 'river' ? 1 : 0 },
         uFoamThr: { value: kind === 'pond' ? 0.95 : 0.86 },
         uSkyTint: B3D.toon.shared.uSkyTint,
+        uIce: { value: kind !== 'river' && amb.id === 'hiver' ? 1 : 0 },
         fogColor: { value: new THREE.Color() }, fogNear: { value: 1 }, fogFar: { value: 1000 }, fogDensity: { value: 0 }
       },
       vertexShader: [
@@ -34,7 +35,7 @@
       fragmentShader: [
         '#include <common>',
         '#include <fog_pars_fragment>',
-        'uniform vec3 uDeep, uShallow, uFoam, uSkyTint; uniform float uTime, uKind, uFoamThr;',
+        'uniform vec3 uDeep, uShallow, uFoam, uSkyTint; uniform float uTime, uKind, uFoamThr, uIce;',
         'varying vec2 vUv; varying float vEdge; varying vec3 vW;',
         'float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }',
         'float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);',
@@ -52,6 +53,14 @@
         '  c = mix(c, uFoam, glint * 0.6);',
         '  float foam = step(uFoamThr, vEdge + 0.05 * sin(uTime * 2.2 + vW.x * 0.6 + vW.z * 0.45));',
         '  c = mix(c, uFoam, foam * 0.9);',
+        // lac gelé (hiver) : glace bleutée, fissures et plaques de neige
+        '  if (uIce > 0.5) {',
+        '    float n = vnoise(vW.xz * 0.12) * 0.6 + vnoise(vW.xz * 0.5) * 0.4;',
+        '    c = mix(vec3(0.72, 0.85, 0.93), vec3(0.86, 0.93, 0.98), n);',
+        '    float cr = abs(fract(vnoise(vW.xz * 0.07 + 3.0) * 6.0) - 0.5);',
+        '    c = mix(c, vec3(0.55, 0.7, 0.82), (1.0 - smoothstep(0.0, 0.03, cr)) * 0.6);',
+        '    c = mix(c, vec3(0.96, 0.97, 1.0), smoothstep(0.62, 0.7, n) + step(0.9, vEdge));',
+        '  }',
         '  c *= uSkyTint;', // assombrie la nuit et par temps d'orage
         '  gl_FragColor = vec4(c, 1.0);',
         '  #include <fog_fragment>',

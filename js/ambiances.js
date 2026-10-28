@@ -55,12 +55,26 @@
       flowers: ['#ffffff', '#ffd04a', '#ff7f9f', '#c28cff'],
       crops: [['#eac35a', 3], ['#9fcf5a', 2], ['#b08250', 1], ['#ad8ee0', 0.6, 'lavender'], ['#e3c843', 1, 'sunflower']],
       water: { deep: '#3b78c4', shallow: '#7cc4e0' }, rockTint: ['#b9a79d', '#a18f86', '#cbb5a7']
+    },
+    {
+      id: 'hiver', name: 'Hiver enneigé',
+      sky: { top: '#6fa3d8', horizon: '#e4eef6', fog: '#dfe8f0' },
+      sun: { color: '#fff1dc', intensity: 3.0, elev: 18, azim: 180 },
+      hemi: { sky: '#dbe7f4', ground: '#b9c2cc', intensity: 1.8 },
+      grass: ['#a6ad84', '#b2b68e', '#9da57c'], meadow: '#b4b890', forestFloor: '#8d8a6e',
+      alpine: '#c6c8b0', rock: '#9fa2aa', rockDark: '#767a85', snow: '#f8fbff', sand: '#d9d2bc', dirt: '#a99a80',
+      conifer: ['#2b5e45', '#30614a', '#29574a'], decid: ['#8a7a66', '#958670', '#7f705e', '#9c8d78'],
+      bush: ['#7d7462', '#8a806c'], poplar: ['#8f8270', '#9a8d78'], grassTuft: ['#b3b48c', '#a8aa84'],
+      flowers: ['#ffffff', '#f4f6ff'],
+      crops: [['#9c8a68', 3], ['#a8916a', 2], ['#8f9a72', 1]],
+      water: { deep: '#3f7fb0', shallow: '#7cc0dc' }, rockTint: ['#a8aab0', '#9396a0', '#b6b4b0']
     }
   ];
 
-  // Couleurs des biomes ajoutées à chaque ambiance (ajustées pour l'automne).
+  // Couleurs des biomes ajoutées à chaque ambiance (ajustées pour l'automne et l'hiver).
   for (const amb of list) {
     const autumn = amb.id === 'automne';
+    const winter = amb.id === 'hiver';
     Object.assign(amb, {
       vineGreen: autumn ? '#c9a23a' : '#4f8f2f',
       soil: '#9a6f45',
@@ -81,6 +95,16 @@
       shrub: ['#8f9a5a', '#9aa566', '#7f8f55'],
       pond: { deep: '#3b8d7a', shallow: '#74c7a0' }
     });
+    if (winter) {
+      // arbres dénudés, vignes et vergers en sommeil, lande grise
+      Object.assign(amb, {
+        vineGreen: '#8a7a5e', garrigue: '#a8a68a', heath: '#8f8296', wetland: '#9aa486',
+        birch: ['#c9c2b4', '#bdb5a6', '#d2ccc0'], willow: ['#a89a78', '#9c8f70'],
+        orchard: ['#8f8270', '#9a8d7a', '#86796a'], fruit: '#f4f6fa',
+        heather: ['#8f8296', '#9a8da0'], reeds: ['#b5a77a', '#a89a70'], shrub: ['#8f8c72', '#9a967c'],
+        pond: { deep: '#5f8ea8', shallow: '#9cc4d8' }
+      });
+    }
   }
 
   B3D.ambiances = list;

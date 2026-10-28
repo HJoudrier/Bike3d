@@ -52,18 +52,21 @@ Sous la jauge, la **réserve d'énergie** se vide quand on roule au-dessus du **
 
 En montée raide le coureur se met en danseuse, en descente rapide (jauge à zéro) il prend la position aérodynamique.
 
-## Météo, vent, jour et nuit
+## Météo, vent, neige, jour et nuit
 
 Le ciel vit pendant la course, et se règle dans l'aperçu (carte « Ciel et météo ») ou dans le menu pause :
 
 - **Heure** : un curseur règle l'heure de départ (🎲 : tirée au hasard pour chaque paysage). Le soleil suit sa course réelle selon la saison de l'ambiance : il se lève à l'est vers 6 h en été, plus tard en automne, monte haut à midi, se couche à l'ouest avec un ciel doré, puis vient la nuit, avec la lune et les étoiles. Le temps peut être **figé**, s'écouler **×30** (une minute de jeu = une demi-heure) ou **×300**, et il avance aussi avec l'accélération <kbd>T</kbd>.
-- **Météo** : grand soleil, nuageux, pluie ou orage, ou **variable** : le temps évolue alors tout seul au fil de la course. Le passage d'un temps à l'autre est progressif (environ une minute) : le ciel se couvre, la lumière baisse, la pluie s'intensifie, la route se mouille puis sèche lentement après l'averse.
+- **Météo** : grand soleil, nuageux, pluie, orage ou neige, ou **variable** : le temps évolue alors tout seul au fil de la course. Le passage d'un temps à l'autre est progressif (environ une minute) : le ciel se couvre, la lumière baisse, la pluie s'intensifie, la route se mouille puis sèche lentement après l'averse.
   - **Nuages** : une couche nuageuse qui défile avec le vent, plus ou moins épaisse, et des cumulus cartoon. Ils deviennent gris sombre sous l'orage et dorés au coucher du soleil.
   - **Pluie** : des gouttes inclinées par le vent, une route plus sombre avec des flaques qui reflètent le ciel, une visibilité réduite. On roule un peu moins vite et on freine moins bien.
   - **Orage** : ciel très sombre, éclairs (flash et arc électrique), puis tonnerre avec un retard qui dépend de la distance (3 s par kilomètre).
+  - **Neige** : des flocons qui tombent en tourbillonnant et dérivent avec le vent, un ciel gris clair, une visibilité réduite. Le manteau neigeux se forme en une minute environ : les prés, les toits, les arbres et les rochers blanchissent, des bourrelets de neige bordent la route. Après la chute, il fond lentement. Sur la neige, on roule moins vite, on freine moins bien, et le bas-côté devient très lent. En montagne, au-dessus de 1 800 m environ, la pluie se transforme en neige : on traverse la limite pluie-neige en montant un col.
 - **Vent** : calme, brise, fort ou tempête (🎲 : au hasard), avec une direction et des rafales. Il entre dans la physique : de face il freine, de dos il pousse. À 300 W, sous un vent de 25 km/h, on roule à 27 km/h de face et à 50 km/h de dos. De côté, le sillage des coureurs est déporté sous le vent : il faut se décaler pour rester abrité, et le peloton se met **en bordure**, une file en diagonale, avec la tête du côté d'où vient le vent. Les arbres, les herbes et les fleurs se couchent dans le sens du vent. Le HUD indique l'heure et le vent, avec une flèche orientée par rapport au coureur (« 47 km/h · ¾ face, droite »).
+- **Hiver** : une ambiance « Hiver enneigé » peut être tirée au sort. Le paysage est sous la neige, les feuillus sont dénudés, les lacs et les mares sont gelés, et les journées sont courtes (lever vers 8 h 30, coucher vers 17 h). La météo variable y apporte des chutes de neige au lieu de la pluie. Les vaches restent presque toutes à l'étable, les hirondelles sont parties, et on n'entend ni grenouilles ni cigales.
 - **Nuit** : les fenêtres et les lampadaires des villages s'allument dès le crépuscule. Le vélo a un phare qui éclaire la route et un feu arrière, les autres coureurs et les véhicules de la caravane allument leurs feux, et l'hélicoptère sa balise clignotante.
-- **Sons** : la pluie et les gouttes sur le casque, le tonnerre, le vent (qui dépend du vent réel), des grillons et des chouettes la nuit. Les oiseaux se taisent sous la pluie et les cigales ne chantent qu'au soleil.
+- **Animaux de jour et de nuit** : le jour, on voit les vaches, chevaux, moutons, bouquetins, marmottes et hérons, et dans le ciel les aigles, corbeaux, hirondelles, mouettes, oies, pigeons et canards. Au crépuscule, ils rentrent ou se posent, et les animaux de la nuit sortent : sangliers dans les sous-bois et les champs, renards en lisière, hérissons dans les haies et les jardins. Les chevreuils sortent brouter à l'aube et au crépuscule, et restent la nuit. Les chauves-souris virevoltent autour du coureur, attirées par les insectes du phare, et des chouettes planent au-dessus des bois. Il n'y a donc pas de vache la nuit, et les meuglements et les clarines se taisent.
+- **Sons** : la pluie et les gouttes sur le casque, le tonnerre, le vent (qui dépend du vent réel). La nuit, des grillons (sauf dans la neige), des chouettes, les grognements des sangliers, les glapissements du renard et l'aboiement du chevreuil. Les oiseaux se taisent sous la pluie et les cigales ne chantent qu'au soleil.
 
 Des messages annoncent les changements : « 🌧️ La pluie arrive », « 🌇 Coucher de soleil », « 🌙 La nuit tombe »…
 
@@ -159,11 +162,11 @@ Tous les sons sont synthétisés dans le navigateur (Web Audio), sans fichier au
 - **Eau** : rivières qui suivent les fonds de vallée (ponts automatiques aux croisements), lacs placés à l'écart de la route et petites mares bordées de roseaux, avec nénuphars et canards.
 - **Sol et végétation** : prés fleuris, parcelles de champs avec haies (labours, lavande, tournesols, citrouilles), forêts de feuillus ou de sapins selon l'altitude, alpages, neige sur les sommets, rochers, bottes de foin.
 - **Biomes** : selon la région et le tirage, le paysage peut contenir des vignes en rangs, des vergers, de la garrigue (pins parasols, oliviers, cyprès), des landes de bruyère, des zones humides (saules, roseaux, hérons) et des bois de bouleaux.
-- **Faune** : vaches, chevaux, moutons, cerfs dans les clairières, bouquetins et marmottes en montagne, hérons au bord de l'eau. Dans le ciel : aigles qui planent au-dessus des cols, nuées de corbeaux sur les champs, hirondelles qui virevoltent autour du coureur, mouettes au-dessus des lacs, vols d'oies en V. Les pigeons picorent sur les trottoirs des villages et s'envolent au passage du coureur.
+- **Faune** : vaches, chevaux, moutons, cerfs dans les clairières, bouquetins et marmottes en montagne, hérons au bord de l'eau. Dans le ciel : aigles qui planent au-dessus des cols, nuées de corbeaux sur les champs, hirondelles qui virevoltent autour du coureur, mouettes au-dessus des lacs, vols d'oies en V. Les pigeons picorent sur les trottoirs des villages et s'envolent au passage du coureur. La nuit, place aux sangliers, renards, hérissons, chevreuils, chauves-souris et chouettes.
 - **Villages** : la route traverse des villages aux noms farfelus (« Saint-Pédalin-la-Montée »…) avec panneaux d'entrée et de sortie, trottoirs, lampadaires et fanions. On y trouve des maisons à volets, une église et son clocher (horloge, vitraux, fontaine sur le parvis), une boulangerie (avec sa baguette géante), un café et sa terrasse, un tabac, une pharmacie, une mairie avec son drapeau et d'autres commerces. Le style dépend de la région : chalets en bois et toits d'ardoise en montagne, tuiles rouges et façades ocre dans le Sud, ardoise et façades claires ailleurs.
 - **Public** : des supporters applaudissent, lèvent les bras ou font coucou au bord de la route. Ils sont regroupés dans les villages, les montées (parfois avec leur camping-car), aux sommets et à l'arrivée, et s'excitent quand le coureur passe devant eux.
 - **Bord de route** : glissières au-dessus des ravins, parapets sur les ponts, bornes kilométriques, panneaux de col, flamme rouge, arches de départ et d'arrivée, arches de sprint, du GPM et du ravitaillement, messages peints sur la route dans les montées.
-- **Ambiances** : printemps, plein été, automne ou fin de journée, avec chacune ses couleurs. L'heure et la météo font ensuite varier la lumière (voir plus haut).
+- **Ambiances** : printemps, plein été, automne, fin de journée ou hiver enneigé, avec chacune ses couleurs. L'heure et la météo font ensuite varier la lumière (voir plus haut).
 
 Le terrain est découpé en tuiles chargées autour du cycliste, ce qui permet de rouler sur des parcours longs.
 
@@ -182,9 +185,9 @@ Le terrain est découpé en tuiles chargées autour du cycliste, ce qui permet d
 | `js/convoy.js` | caravane : motos TV, voitures suiveuses, voiture-balai, hélicoptère, dépannage |
 | `js/hccrowd.js` | foule des cols hors catégorie, drapeaux et fumigènes |
 | `js/village.js` | villages : maisons, église, commerces, trottoirs, fanions, habitants |
-| `js/fauna.js` | oiseaux en vol et canards animés |
+| `js/fauna.js` | oiseaux en vol et canards animés, chauves-souris et chouettes la nuit |
 | `js/water.js`, `js/sky.js` | eau animée, ciel, nuages, montagnes lointaines |
-| `js/atmosphere.js` | heure, soleil, lune et étoiles, météo et transitions, vent, pluie, route mouillée, éclairs |
+| `js/atmosphere.js` | heure, soleil, lune et étoiles, météo et transitions, vent, pluie, neige et manteau neigeux, route mouillée, éclairs |
 | `js/cyclist.js` | modèle et animation du cycliste |
 | `js/toon.js`, `js/props.js` | matériaux cartoon, contours, objets du décor |
 | `js/hud.js`, `js/audio.js`, `js/confetti.js`, `js/game.js` | HUD, sons, confettis, boucle de jeu |

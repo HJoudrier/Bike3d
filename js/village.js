@@ -492,7 +492,7 @@
     }
 
     // maillage du village
-    const toonMat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradientMap() });
+    const toonMat = B3D.toon.snowPatch(new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradientMap() })); // toits enneigés
     if (K.struct.length) {
       const geo = merge(K.struct);
       computeOutlineNormals(geo);

@@ -412,6 +412,27 @@
           [0.95, 1.3, 1.55].forEach((d, k) => this._call({ type: 'sine', f0: f * 0.97, f1: f * (k === 2 ? 0.86 : 0.95), dur: k === 2 ? 0.9 : 0.22, vib: [6, 6], vol: vol * 0.8, pan, delay: d, attack: 0.04 }));
           break;
         }
+        case 'boar': { // sanglier : grognements graves et rauques
+          const n = 2 + Math.floor(R() * 3);
+          for (let k = 0; k < n; k++) {
+            this._call({ type: 'sawtooth', f0: 95 + R() * 25, f1: 70, dur: 0.22 + R() * 0.12, bp: [380, 2.5], trem: 26, tremDepth: 0.6, vol: vol * 1.5, pan, delay: k * (0.3 + R() * 0.15), attack: 0.02 });
+            this._burst(t + k * 0.32, 0.18, 300, 1.2, vol * 0.6, pan);
+          }
+          break;
+        }
+        case 'fox': { // renard : glapissement aigu, souvent répété
+          const n = 1 + Math.floor(R() * 3);
+          for (let k = 0; k < n; k++) this._call({ type: 'sawtooth', f0: 900, fMid: 1350, midAt: 0.25, f1: 700, dur: 0.32, bp: [1500, 2], vib: [24, 30], vol, pan, delay: k * 0.55, attack: 0.02 });
+          break;
+        }
+        case 'deer': { // chevreuil : aboiement bref et rauque (le « brame » du chevreuil)
+          const n = 1 + Math.floor(R() * 2);
+          for (let k = 0; k < n; k++) {
+            this._call({ type: 'sawtooth', f0: 480, f1: 320, dur: 0.2, bp: [800, 2], vol: vol * 1.4, pan, delay: k * 0.9, attack: 0.01 });
+            this._burst(t + k * 0.9, 0.16, 700, 1.4, vol * 0.7, pan);
+          }
+          break;
+        }
         case 'frog': { // ribbit : deux trains d'impulsions
           const f = 120 + R() * 60;
           this._call({ type: 'square', f0: f, f1: f * 0.95, dur: 0.18, bp: [650, 4], trem: 32, tremDepth: 0.55, vol: vol * 1.6, pan, attack: 0.01 });

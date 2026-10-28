@@ -13,37 +13,47 @@
   };
 
   const POOLS = [
-    { name: 'conifer', cap: 17000, outline: true, sway: 0.0015, shadow: true },
-    { name: 'deciduous', cap: 15000, outline: true, sway: 0.0012, shadow: true },
-    { name: 'poplar', cap: 3000, outline: true, sway: 0.0012, shadow: true },
-    { name: 'bush', cap: 8000, outline: true, sway: 0.004 },
-    { name: 'rock', cap: 5000, outline: true },
-    { name: 'hay', cap: 1500, outline: true },
+    { name: 'conifer', snow: 1, cap: 17000, outline: true, sway: 0.0015, shadow: true },
+    { name: 'deciduous', snow: 0.9, cap: 15000, outline: true, sway: 0.0012, shadow: true },
+    { name: 'poplar', snow: 0.8, cap: 3000, outline: true, sway: 0.0012, shadow: true },
+    { name: 'bush', snow: 1, cap: 8000, outline: true, sway: 0.004 },
+    { name: 'rock', snow: 1, cap: 5000, outline: true },
+    { name: 'hay', snow: 1, cap: 1500, outline: true },
     { name: 'cow', cap: 600, outline: true },
     { name: 'spectator', cap: 2600, outline: true, people: true, outlineWidth: 0.8 },
-    { name: 'grass', cap: 16000, outline: false, sway: 0.08 },
-    { name: 'flowers', cap: 9000, outline: false, sway: 0.15 },
+    { name: 'grass', snow: 0.85, cap: 16000, outline: false, sway: 0.08 },
+    { name: 'flowers', snow: 0.85, cap: 9000, outline: false, sway: 0.15 },
     // biomes
-    { name: 'vine', cap: 7000, outline: false },
-    { name: 'fruittree', cap: 2500, outline: true, sway: 0.0012, shadow: true },
-    { name: 'cypress', cap: 2500, outline: true, sway: 0.0008, shadow: true },
-    { name: 'olive', cap: 3000, outline: true, sway: 0.001, shadow: true },
-    { name: 'pine', cap: 3000, outline: true, sway: 0.0008, shadow: true },
-    { name: 'birch', cap: 6000, outline: true, sway: 0.0015, shadow: true },
-    { name: 'willow', cap: 600, outline: true, sway: 0.002, shadow: true },
-    { name: 'reeds', cap: 6000, outline: false, sway: 0.06 },
-    { name: 'heather', cap: 5000, outline: false },
-    { name: 'lavender', cap: 7000, outline: false, sway: 0.03 },
-    { name: 'sunflower', cap: 6000, outline: false },
-    { name: 'pumpkin', cap: 3000, outline: true, maxW: 0.05 },
+    { name: 'vine', snow: 0.8, cap: 7000, outline: false },
+    { name: 'fruittree', snow: 0.9, cap: 2500, outline: true, sway: 0.0012, shadow: true },
+    { name: 'cypress', snow: 0.8, cap: 2500, outline: true, sway: 0.0008, shadow: true },
+    { name: 'olive', snow: 0.9, cap: 3000, outline: true, sway: 0.001, shadow: true },
+    { name: 'pine', snow: 1, cap: 3000, outline: true, sway: 0.0008, shadow: true },
+    { name: 'birch', snow: 0.9, cap: 6000, outline: true, sway: 0.0015, shadow: true },
+    { name: 'willow', snow: 0.8, cap: 600, outline: true, sway: 0.002, shadow: true },
+    { name: 'reeds', snow: 0.6, cap: 6000, outline: false, sway: 0.06 },
+    { name: 'heather', snow: 1, cap: 5000, outline: false },
+    { name: 'lavender', snow: 1, cap: 7000, outline: false, sway: 0.03 },
+    { name: 'sunflower', snow: 0.7, cap: 6000, outline: false },
+    { name: 'pumpkin', snow: 0.9, cap: 3000, outline: true, maxW: 0.05 },
     // faune
     { name: 'horse', cap: 800, outline: true },
     { name: 'sheep', cap: 2000, outline: true },
     { name: 'ibex', cap: 600, outline: true },
     { name: 'marmot', cap: 600, outline: true },
     { name: 'deer', cap: 400, outline: true },
-    { name: 'heron', cap: 300, outline: true }
+    { name: 'heron', cap: 300, outline: true },
+    // faune de la nuit
+    { name: 'boar', cap: 700, outline: true },
+    { name: 'fox', cap: 400, outline: true },
+    { name: 'hedgehog', cap: 400, outline: true, maxW: 0.04 }
   ];
+  // qui sort quand : le jour (vaches, chevaux…), la nuit (sangliers, renards, hérissons), à l'aube, au crépuscule et la nuit (chevreuils)
+  const ACTIVITY = {
+    day: ['cow', 'horse', 'sheep', 'ibex', 'marmot', 'heron'],
+    night: ['boar', 'fox', 'hedgehog'],
+    twilight: ['deer']
+  };
 
   // Éléments plantés en rangs réguliers, alignés sur les rangs dessinés au sol par le shader du terrain.
   const ROWS = {
@@ -57,7 +67,9 @@
     sheep: ['#f4f0e8', '#ece6da', '#f8f6f0', '#efe7d8', '#3a3440'],
     ibex: ['#8f7a62', '#7d6a55', '#9a8670'],
     marmot: ['#9a7350', '#8a6545', '#a07c58'],
-    deer: ['#a0603a', '#8f5533', '#9a6a42']
+    deer: ['#a0603a', '#8f5533', '#9a6a42'],
+    boar: ['#4a3a30', '#3f322b', '#56443a'],
+    fox: ['#d9692a', '#cf5d22', '#e07a36']
   };
 
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
@@ -100,6 +112,7 @@
         shader.uniforms.uVineGreen = { value: vineGreen };
         shader.uniforms.uSoil = { value: soil };
         shader.uniforms.uWet = B3D.toon.shared.uWet;
+        shader.uniforms.uSnow = B3D.toon.shared.uSnow;
         shader.vertexShader = shader.vertexShader
           .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying float vUpN;\nattribute float stripe;\nflat varying float vStripe;')
           .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvUpN = normal.y;\nvStripe = stripe;');
@@ -111,7 +124,7 @@
             'flat varying float vStripe;',
             'uniform vec2 uRowDir;',
             'uniform vec3 uVineGreen, uSoil;',
-            'uniform float uWet;',
+            'uniform float uWet, uSnow;',
             'float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }',
             'float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);',
             '  return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }'
@@ -138,6 +151,12 @@
             '  if (kind < 1.5 || kind > 4.5) diffuseColor.rgb *= 1.0 - 0.13 * smoothstep(0.5, 0.85, row) * rf;',
             '  else if (kind < 2.5) diffuseColor.rgb = mix(diffuseColor.rgb, uVineGreen, mix(0.35, smoothstep(0.55, 0.85, row) * 0.8, rf));',
             '  else diffuseColor.rgb = mix(diffuseColor.rgb, uSoil, mix(0.15, smoothstep(0.6, 0.9, 1.0 - row) * 0.6, rf));',
+            '}',
+            // manteau neigeux : tout ce qui n'est pas trop raide blanchit, avec des taches où l'herbe perce
+            'if (uSnow > 0.01) {',
+            '  float snP = vnoise(vWPos.xz * 0.11) * 0.65 + vnoise(vWPos.xz * 0.7) * 0.35;',
+            '  float snK = uSnow * smoothstep(0.5, 0.8, vUpN) * smoothstep(0.18, 0.42, snP + uSnow * 0.35);',
+            '  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.99) * (0.96 + 0.06 * gN), snK);',
             '}'
           ].join('\n'));
       };
@@ -167,7 +186,7 @@
         const cap = Math.round(p.cap * this.Q.caps);
         const geo = p.name === 'fruittree' ? B3D.props.fruitTree(this.L.amb.fruit) : geos[p.name];
         this.pools[p.name] = new B3D.props.InstancePool(this.scene, geo, {
-          capacity: cap, outline: p.outline, sway: p.sway, bounce: p.bounce, people: p.people, outlineWidth: p.outlineWidth, maxW: p.maxW,
+          capacity: cap, outline: p.outline, sway: p.sway, bounce: p.bounce, people: p.people, outlineWidth: p.outlineWidth, maxW: p.maxW, snow: p.snow,
           castShadow: p.shadow && this.Q.treeShadows || p.name === 'spectator'
         });
       }
@@ -342,6 +361,7 @@
     // Animal le plus proche d'un point (dans les tuiles voisines) : { x, y, z, d } ou null.
     // type : 'cow', 'horse', 'sheep', 'marmot', 'ibex'
     nearestAnimal(type, x, z, maxD) {
+      if (this.pools[type] && !this.pools[type].active) return null; // il dort
       const S = this.S;
       const tx0 = Math.floor(x / S), tz0 = Math.floor(z / S);
       let best = null, bd = maxD;
@@ -360,6 +380,18 @@
     }
 
     nearestCow(x, z, maxD) { return this.nearestAnimal('cow', x, z, maxD); }
+
+    // Animaux de jour et de nuit : dk = luminosité du jour (1 plein jour, 0 nuit noire).
+    // Les animaux du jour rentrent au crépuscule, ceux de la nuit sortent (avec un petit chevauchement).
+    setActivity(dk) {
+      const day = this._dayOn === undefined ? dk > 0.3 : this._dayOn ? dk > 0.22 : dk > 0.38;
+      const night = dk < 0.45;
+      const twilight = dk < 0.85;
+      this._dayOn = day;
+      for (const n of ACTIVITY.day) this.pools[n].setActive(day);
+      for (const n of ACTIVITY.night) this.pools[n].setActive(night);
+      for (const n of ACTIVITY.twilight) this.pools[n].setActive(twilight);
+    }
 
     // Proportion de couvertures du sol autour d'un point (pour l'ambiance sonore).
     coverMix(x, z) {
@@ -427,7 +459,7 @@
       const L = this.L, P = L.P, B = L.bio, amb = L.amb, half = L.roadHalf;
       const list = [];
       // positions des animaux (pour leurs cris)
-      const F = t.fauna = { cow: [], horse: [], sheep: [], marmot: [], ibex: [] };
+      const F = t.fauna = { cow: [], horse: [], sheep: [], marmot: [], ibex: [], deer: [], boar: [], fox: [], hedgehog: [] };
       const st = this.Q.treeStep;
       const n = Math.floor(this.S / st);
       const V = t.V;
@@ -467,6 +499,7 @@
           // village : les maisons occupent le terrain, seulement quelques haies de jardin au fond
           if (t.vill[k] > 0.15 && rd < 36) {
             if (r < 0.06 && rd > half + 14) this._place(list, 'bush', x, y - 0.1, z, rot, sc, this._tint(rnd, amb.bush));
+            else if (r < 0.07 && rd > half + 6) animal('hedgehog', x, y, z, rot, rnd, 0.9 + rnd() * 0.3); // dans les jardins, la nuit
             continue;
           }
           const nearRiver = t.dr[k] < t.rw[k] + 16 && t.dr[k] > t.rw[k] + 3;
@@ -495,6 +528,12 @@
                 // chevreuil en lisière
                 const edge = [k - 1, k + 1, k - V, k + V].some((q) => q >= 0 && q < t.cover.length && t.cover[q] !== COVER.FOREST);
                 if (edge) animal('deer', x, y, z, rot, rnd, 0.9 + rnd() * 0.2);
+              } else if (r < 0.962) {
+                // compagnie de sangliers qui fouille le sous-bois
+                if (herd(x, z, -61.7, 140.3, 0.3)) animal('boar', x, y, z, rot, rnd, 0.85 + rnd() * 0.3);
+              } else if (r < 0.966) {
+                const edge = [k - 1, k + 1, k - V, k + V].some((q) => q >= 0 && q < t.cover.length && t.cover[q] !== COVER.FOREST);
+                if (edge) animal('fox', x, y, z, rot, rnd, 0.9 + rnd() * 0.2);
               }
               break;
             }
@@ -513,6 +552,10 @@
                 animal('sheep', x, y, z, rot, rnd, 0.85 + rnd() * 0.3);
               } else if (r < (acc += 0.006 * P.rockiness)) {
                 this._place(list, 'rock', x, y - 0.2, z, rot, 0.5 + rnd() * 1.2, this._tint(rnd, amb.rockTint), 1, 0.7 + rnd() * 0.5);
+              } else if (r < (acc += 0.0025)) {
+                animal('fox', x, y, z, rot, rnd, 0.9 + rnd() * 0.2); // renard qui chasse les mulots
+              } else if (r < (acc += herd(x, z, -61.7, 140.3, 0.45) ? 0.012 : 0) && slope < 0.4) {
+                animal('deer', x, y, z, rot, rnd, 0.9 + rnd() * 0.2); // chevreuils sortis brouter à la tombée du jour
               }
               break;
             }
@@ -524,11 +567,14 @@
             case COVER.HEDGE: {
               if (r < 0.5) this._place(list, 'bush', x, y - 0.1, z, rot, sc * 1.1, this._tint(rnd, amb.bush));
               else if (r < 0.62) this._place(list, 'deciduous', x, y - 0.3, z, rot, sc, this._tint(rnd, amb.decid));
+              else if (r < 0.66) animal('hedgehog', x, y, z, rot, rnd, 0.9 + rnd() * 0.3);
               break;
             }
             case COVER.FIELD: {
               if (L.cropHay[t.crop[k]] && r < 0.03) {
                 this._place(list, 'hay', x, y, z, rot, 0.9 + rnd() * 0.2, this._tint(rnd, ['#e9cf6a', '#dcc060'], 0.08));
+              } else if (r > 0.99 && herd(x, z, -61.7, 140.3, 0.35)) {
+                animal('boar', x, y, z, rot, rnd, 0.85 + rnd() * 0.3); // les sangliers ravagent les champs la nuit
               }
               break;
             }

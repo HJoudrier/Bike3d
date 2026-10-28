@@ -10,7 +10,7 @@
   const RIDER_COUNTS = [0, 5, 10, 20, 40];
   // réglages du ciel : [valeur, libellé]
   const SKY_OPTS = {
-    weather: [['variable', '🎲 Variable'], ['soleil', '☀️ Soleil'], ['nuageux', '⛅ Nuageux'], ['pluie', '🌧️ Pluie'], ['orage', '⛈️ Orage']],
+    weather: [['variable', '🎲 Variable'], ['soleil', '☀️ Soleil'], ['nuageux', '⛅ Nuageux'], ['pluie', '🌧️ Pluie'], ['orage', '⛈️ Orage'], ['neige', '🌨️ Neige']],
     wind: [['auto', '🎲'], ['calme', 'Calme'], ['brise', 'Brise'], ['fort', 'Fort'], ['tempete', 'Tempête']],
     timeFlow: [[0, '⏸ Figé'], [30, '▶ ×30'], [300, '⏩ ×300']]
   };
@@ -107,6 +107,7 @@
       // contour d'environ 1,7 px quelle que soit la taille de l'écran
       B3D.toon.shared.uOutlineScale.value = 1.7 * 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) / h;
       if (this.hcCrowd) this.hcCrowd.setViewHeight(this.renderer.getDrawingBufferSize(new THREE.Vector2()).y);
+      if (this.atmo) this.atmo.setPointScale(this.renderer.getDrawingBufferSize(new THREE.Vector2()).y * 0.5 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2));
     },
 
     // ------------------------------------------------------------------ interface
@@ -511,6 +512,7 @@
       this.atmo = new B3D.Atmosphere({ scene: this.scene, sky: this.sky, sun: this.sun, hemi: this.hemi, fog: this.scene.fog, quality: this.settings.quality }, L, this.settings);
       this.atmo.setFogBase(this.Q.radius * 0.22, this.Q.radius * 0.93);
       this.atmo.onThunder = (t) => this.thunder(t);
+      this.atmo.setPointScale(this.renderer.getDrawingBufferSize(new THREE.Vector2()).y * 0.5 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2));
       this.sunDir = this.atmo.lightDir;
       this.atmoStart = null;
 
@@ -808,7 +810,7 @@
       if (W.scanT <= 0) {
         W.scanT = 0.5;
         W.mix = this.tiles.coverMix(P.x, P.z);
-        for (const [type, r] of [['horse', 90], ['sheep', 90], ['marmot', 110], ['ibex', 60]]) W.near[type] = this.tiles.nearestAnimal(type, P.x, P.z, r);
+        for (const [type, r] of [['horse', 90], ['sheep', 90], ['marmot', 110], ['ibex', 60], ['boar', 80], ['fox', 140], ['deer', 140]]) W.near[type] = this.tiles.nearestAnimal(type, P.x, P.z, r);
         let pd = 1e9;
         for (const lk of L.lakes) if (lk.kind === 'pond') pd = Math.min(pd, Math.hypot(lk.x - P.x, lk.z - P.z) - lk.r);
         W.pondD = pd;
@@ -827,6 +829,10 @@
       if (near.horse && due('horse', 7, 14)) S.animal('horse', 0.03 + 0.2 * fall(near.horse.d, 90), this.panOf(near.horse.x, near.horse.z));
       if (near.sheep && due('sheep', 2.5, 6)) S.animal('sheep', 0.03 + 0.17 * fall(near.sheep.d, 90), this.panOf(near.sheep.x, near.sheep.z));
       if (near.marmot && near.marmot.d < 70 && due('marmot', 4, 9)) S.animal('marmot', 0.03 + 0.12 * fall(near.marmot.d, 110), this.panOf(near.marmot.x, near.marmot.z));
+      // la nuit : grognements des sangliers, glapissements du renard, brame lointain du chevreuil (aboiement)
+      if (near.boar && due('boar', 3, 7)) S.animal('boar', 0.04 + 0.16 * fall(near.boar.d, 80), this.panOf(near.boar.x, near.boar.z));
+      if (near.fox && due('fox', 6, 12)) S.animal('fox', 0.03 + 0.12 * fall(near.fox.d, 140), this.panOf(near.fox.x, near.fox.z));
+      if (near.deer && due('deer', 9, 15)) S.animal('deer', 0.03 + 0.1 * fall(near.deer.d, 140), this.panOf(near.deer.x, near.deer.z));
       // oiseaux animés (distances calculées par la faune)
       const A = this.fauna ? this.fauna.audio : null;
       if (A) {
@@ -837,6 +843,7 @@
         if (A.duck < 120 && due('duck', 2.5, 6)) S.animal('duck', 0.03 + 0.14 * fall(A.duck, 120), (R() - 0.5) * 1.2);
         if (A.swallow < 30 && due('swallow', 2, 5)) S.animal('swallow', 0.03, (R() - 0.5) * 1.4);
         if (A.takeoff > 0) S.animal('flutter', 0.12 + 0.04 * Math.min(4, A.takeoff), (R() - 0.5));
+        if (A.owl < 160 && due('owlF', 8, 12)) S.animal('owl', 0.04 + 0.08 * fall(A.owl, 160), (R() - 0.5) * 1.2);
       }
       if (mix) {
         // le jour : oiseaux (qui se taisent sous la pluie) ; la nuit : grillons et chouettes
@@ -844,11 +851,11 @@
         // passereaux dans les prés et les haies, merles en forêt, plus discrets en altitude
         const song = (mix.meadow * 0.8 + mix.forest + mix.garrigue * 0.5 + mix.wet * 0.5) * day * (1 - 0.85 * rain);
         if (song > 0.15 && due('song', 1.4 / song, 4 / song)) S.animal(mix.forest > mix.meadow && R() < 0.6 ? 'blackbird' : 'songbird', 0.012 + 0.025 * R(), (R() - 0.5) * 1.6);
-        const crick = (mix.meadow + mix.garrigue + mix.wet * 0.5) * night * (1 - 0.8 * rain);
+        const crick = (mix.meadow + mix.garrigue + mix.wet * 0.5) * night * (1 - 0.8 * rain) * (1 - (at ? at.snowCover : 0)); // pas de grillons dans la neige
         if (crick > 0.15 && due('cricket', 0.5 / crick, 1.4 / crick)) S.animal('cricket', 0.015 + 0.02 * R(), (R() - 0.5) * 1.6);
         if (mix.forest > 0.2 && night > 0.5 && rain < 0.3 && due('owl', 9, 16)) S.animal('owl', 0.05 + 0.04 * R(), (R() - 0.5) * 1.6);
         // grenouilles près des mares et des zones humides (surtout le soir et la nuit)
-        const frogs = Math.max(W.pondD < 90 ? 1 - W.pondD / 90 : 0, mix.wet * 2) * (L.amb.id === 'soir' ? 1.4 : 1) * (1 + 0.8 * night);
+        const frogs = Math.max(W.pondD < 90 ? 1 - W.pondD / 90 : 0, mix.wet * 2) * (L.amb.id === 'soir' ? 1.4 : L.amb.id === 'hiver' ? 0 : 1) * (1 + 0.8 * night);
         if (frogs > 0.1 && due('frog', 0.8 / frogs, 2.5 / frogs)) S.animal('frog', 0.02 + 0.06 * Math.min(1, frogs), (R() - 0.5) * 1.6);
         // cigales : garrigue et campagne du Sud, l'été, au soleil
         const warm = (L.amb.id === 'ete' || L.amb.id === 'soir' ? 1 : L.amb.id === 'printemps' ? 0.3 : 0) * clamp((1000 - P.y) / 300, 0, 1);
@@ -889,8 +896,9 @@
       const p = route.sample(R.s, this._rs || (this._rs = {}));
       const grade = p.grade, v = R.v;
       const offRoad = Math.abs(R.lat) > half - 0.2;
-      const wet = this.atmo ? this.atmo.wet : 0;
-      const crr = PHYS.crr * (offRoad ? 3.5 : 1) * (1 + 0.12 * wet); // chaussée mouillée : ça roule un peu moins bien
+      const wet = this.atmo ? this.atmo.wet : 0, snow = this.atmo ? this.atmo.snowCover : 0;
+      // chaussée mouillée ou enneigée : ça roule moins bien, surtout sur le bas-côté plein de neige
+      const crr = PHYS.crr * (offRoad ? 3.5 + 3 * snow : 1) * (1 + 0.12 * wet + 0.15 * snow);
       const cda = R.tuck ? PHYS.cdaTuck : R.standing ? PHYS.cdaStand : PHYS.cda;
       // vent : composante dans le sens de la course (de dos > 0) et de côté (vers la droite > 0)
       const W = this.atmo ? this.atmo.wind : null;
@@ -920,7 +928,7 @@
       const fg = PHYS.mass * PHYS.g * sinA;
       const fr = v > 0.05 ? crr * PHYS.mass * PHYS.g : 0;
       const fa = 0.5 * PHYS.rho * cda * (1 - draft) * va * Math.abs(va);
-      const fb = R.braking ? PHYS.brake * (1 - 0.3 * wet) : 0; // freins moins efficaces sous la pluie
+      const fb = R.braking ? PHYS.brake * (1 - Math.max(0.3 * wet, 0.4 * snow)) : 0; // freins moins efficaces sous la pluie et sur la neige
       let a = (drive - fg - fr - fa - fb) / PHYS.mass;
       if (v <= 0.01 && a < 0) a = 0; // pas de recul
       R.v = clamp(v + a * h, 0, PHYS.vMax);
@@ -1070,10 +1078,13 @@
       if (this.peloton) {
         this.peloton.lightsOn = on > 0.3;
         this.peloton.wind = A.wind;
-        this.peloton.crrK = 1 + 0.12 * A.wet;
-        this.peloton.brakeK = 1 - 0.3 * A.wet;
+        this.peloton.crrK = 1 + 0.12 * A.wet + 0.15 * A.snowCover;
+        this.peloton.brakeK = 1 - Math.max(0.3 * A.wet, 0.4 * A.snowCover);
       }
       if (this.convoy) this.convoy.setLights(on > 0.3);
+      // animaux du jour et de la nuit
+      if (this.tiles) this.tiles.setActivity(A.dayK);
+      if (this.fauna) this.fauna.setDaylight(A.dayK);
     },
 
     // messages : changement de temps, lever et coucher du soleil
@@ -1086,11 +1097,21 @@
           'nuageux>pluie': ['🌧️ La pluie arrive', 'Route glissante : on freine moins bien'],
           'pluie>orage': ['⛈️ Orage !', 'Éclairs, tonnerre et rafales de vent'],
           'orage>pluie': ['🌧️ L\u2019orage s\u2019éloigne', 'Il pleut encore'],
-          'pluie>nuageux': ['⛅ La pluie cesse', 'La route va sécher peu à peu']
+          'pluie>nuageux': ['⛅ La pluie cesse', 'La route va sécher peu à peu'],
+          'nuageux>neige': ['🌨️ Il neige !', 'Le paysage blanchit, la route devient glissante'],
+          'neige>nuageux': ['⛅ La neige cesse', 'Le manteau blanc va fondre peu à peu'],
+          'pluie>neige': ['🌨️ La pluie se change en neige', 'Il fait de plus en plus froid'],
+          'orage>neige': ['🌨️ L\u2019orage tourne à la neige', 'Bourrasques de flocons']
         }[A.changed.from + '>' + A.changed.to];
         if (MSG) this.toast(MSG[0] + '<small>' + MSG[1] + '</small>', 2800);
         A.changed = null;
       }
+      // en montant dans le col, la pluie se transforme en neige (et l'inverse en redescendant)
+      const flakes = A.cur.rain > 0.3 && A.snowFrac > 0.5;
+      if (R.flakes !== undefined && flakes !== R.flakes && A.cur.rain > 0.3) {
+        this.toast(flakes ? '🌨️ La pluie se change en neige<small>On a passé la limite pluie-neige</small>' : '🌧️ La neige redevient pluie<small>On redescend sous la limite pluie-neige</small>', 2600);
+      }
+      R.flakes = flakes;
       const per = A.period();
       if (R.period && per !== R.period) {
         if (per === 'lever du soleil') this.toast('🌅 Le soleil se lève<small>Les phares s\u2019éteignent bientôt</small>', 2600);
@@ -1111,7 +1132,7 @@
 
     // sons d'ambiance liés à la course : aspiration, vélos autour, moto, hélicoptère, vent, pluie
     soundEnv() {
-      const env = { draft: this.ride.draft || 0, bikes: 0, moto: 1e9, heli: 1e9, air: this.ride.air, rain: this.atmo ? this.atmo.cur.rain : 0 };
+      const env = { draft: this.ride.draft || 0, bikes: 0, moto: 1e9, heli: 1e9, air: this.ride.air, rain: this.atmo ? this.atmo.rainEff : 0 };
       const P = this.cyclist.root.position;
       if (this.peloton) for (const r of this.peloton.riders) if (r.pos && !r.done && r.pos.distanceTo(P) < 12) env.bikes++;
       if (this.convoy) { env.moto = this.convoy.nearest('moto', P); env.heli = this.convoy.nearest('heli', P); }

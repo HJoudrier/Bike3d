@@ -1,6 +1,6 @@
 /* Bike3D — atmosphère : heure de la journée (aube, matin, midi, après-midi, soir, nuit) avec le soleil, la lune
-   et les étoiles, météo (soleil, nuageux, pluie, orage) qui évolue avec des transitions douces, vent
-   (vitesse, direction, rafales), pluie, route mouillée, éclairs et tonnerre. */
+   et les étoiles, météo (soleil, nuageux, pluie, orage, neige) qui évolue avec des transitions douces, vent
+   (vitesse, direction, rafales), pluie, route mouillée, éclairs et tonnerre, flocons et manteau neigeux. */
 (function (root) {
   'use strict';
   const B3D = root.B3D = root.B3D || {};
@@ -9,14 +9,16 @@
 
   // Paramètres de chaque temps : couverture nuageuse, assombrissement, pluie, orage, visibilité, force du vent.
   const PRESETS = {
-    soleil: { cloud: 0.1, dark: 0, rain: 0, storm: 0, fog: 1, wind: 1, name: 'Grand soleil', icon: '☀️' },
-    nuageux: { cloud: 0.72, dark: 0.18, rain: 0, storm: 0, fog: 0.85, wind: 1.15, name: 'Nuageux', icon: '⛅' },
-    pluie: { cloud: 0.96, dark: 0.45, rain: 0.75, storm: 0, fog: 0.6, wind: 1.3, name: 'Pluie', icon: '🌧️' },
-    orage: { cloud: 1, dark: 0.78, rain: 1, storm: 1, fog: 0.48, wind: 1.75, name: 'Orage', icon: '⛈️' }
+    soleil: { cloud: 0.1, dark: 0, rain: 0, snow: 0, storm: 0, fog: 1, wind: 1, name: 'Grand soleil', icon: '☀️' },
+    nuageux: { cloud: 0.72, dark: 0.18, rain: 0, snow: 0, storm: 0, fog: 0.85, wind: 1.15, name: 'Nuageux', icon: '⛅' },
+    pluie: { cloud: 0.96, dark: 0.45, rain: 0.75, snow: 0, storm: 0, fog: 0.6, wind: 1.3, name: 'Pluie', icon: '🌧️' },
+    orage: { cloud: 1, dark: 0.78, rain: 1, snow: 0, storm: 1, fog: 0.48, wind: 1.75, name: 'Orage', icon: '⛈️' },
+    neige: { cloud: 0.94, dark: 0.22, rain: 0, snow: 0.9, storm: 0, fog: 0.45, wind: 1.1, name: 'Neige', icon: '🌨️' }
   };
-  const KEYS = ['cloud', 'dark', 'rain', 'storm', 'fog', 'wind'];
-  // météo variable : vers quel temps on peut évoluer
-  const NEXT = { soleil: [['nuageux', 1]], nuageux: [['soleil', 1.2], ['pluie', 1]], pluie: [['nuageux', 1.3], ['orage', 0.7]], orage: [['pluie', 1]] };
+  const KEYS = ['cloud', 'dark', 'rain', 'snow', 'storm', 'fog', 'wind'];
+  // météo variable : vers quel temps on peut évoluer (en hiver, il neige au lieu de pleuvoir)
+  const NEXT = { soleil: [['nuageux', 1]], nuageux: [['soleil', 1.2], ['pluie', 1]], pluie: [['nuageux', 1.3], ['orage', 0.7]], orage: [['pluie', 1]], neige: [['nuageux', 1]] };
+  const NEXT_COLD = { soleil: [['nuageux', 1]], nuageux: [['soleil', 1], ['neige', 1.2]], neige: [['nuageux', 1]], pluie: [['neige', 1]], orage: [['neige', 1]] };
   // vent moyen (m/s)
   const WIND = { calme: 0.6, brise: 3.6, fort: 7, tempete: 11 };
   // lever, coucher (heures) et hauteur du soleil à midi selon la saison
@@ -24,6 +26,7 @@
     printemps: { rise: 6.75, set: 20.25, max: 55, az: 72 },
     ete: { rise: 6.0, set: 21.5, max: 64, az: 55 },
     automne: { rise: 7.75, set: 19.0, max: 36, az: 105 },
+    hiver: { rise: 8.4, set: 17.2, max: 22, az: 125 },
     soir: { rise: 6.0, set: 21.5, max: 64, az: 55 }
   };
   const FLOWS = [0, 30, 300];
@@ -37,7 +40,7 @@
     cloudDay: C('#ffffff'), cloudGold: C('#ffc6a0'), cloudNight: C('#2c3550'), cloudStorm: C('#59606d'),
     cloudDayDark: C('#aeb7c6'), cloudStormDark: C('#30353f'), white: C('#ffffff'), black: C('#000000'),
     nightTint: C('#3b4568'), sunWhite: C('#fff8e0'),
-    stormHemi: C('#7f8898'), cloudLine: C('#5d6c8a'), cloudLineNight: C('#0b1022'), cloudLineStorm: C('#262a33')
+    stormHemi: C('#7f8898'), snowTop: C('#aab6c6'), snowHor: C('#dfe5ec'), cloudLine: C('#5d6c8a'), cloudLineNight: C('#0b1022'), cloudLineStorm: C('#262a33')
   };
 
   // --- dôme du ciel : dégradé, soleil, lune, étoiles, couche nuageuse qui défile avec le vent, éclairs
@@ -140,6 +143,51 @@
     return mesh;
   }
 
+  // --- neige : flocons (points ronds) qui tombent lentement en tourbillonnant, dans une boîte qui suit la caméra
+  function snowMesh(count) {
+    const seeds = new Float32Array(count * 3), ph = new Float32Array(count);
+    const rnd = mulberry32(91);
+    for (let i = 0; i < count; i++) { seeds[i * 3] = rnd(); seeds[i * 3 + 1] = rnd(); seeds[i * 3 + 2] = rnd(); ph[i] = rnd() * 6.283; }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(seeds, 3));
+    g.setAttribute('aPh', new THREE.BufferAttribute(ph, 1));
+    g.setDrawRange(0, 0);
+    const m = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 }, uCenter: { value: new THREE.Vector3() }, uBox: { value: new THREE.Vector3(44, 24, 44) },
+        uDrift: { value: new THREE.Vector3(0, -1.3, 0) }, uScale: { value: 600 }, uAlpha: { value: 0.9 }, uColor: { value: new THREE.Color('#ffffff') }
+      },
+      vertexShader: [
+        'attribute float aPh;',
+        'uniform float uTime, uScale; uniform vec3 uCenter, uBox, uDrift;',
+        'varying float vA;',
+        'void main() {',
+        '  vec3 p = position * uBox + uDrift * uTime;',
+        '  p.x += sin(uTime * 0.9 + aPh) * 0.7; p.z += cos(uTime * 0.7 + aPh * 1.3) * 0.7;',
+        '  vec3 rel = mod(p - uCenter, uBox) - 0.5 * uBox;',
+        '  vec4 mv = viewMatrix * vec4(uCenter + rel, 1.0);',
+        '  vA = 1.0 - smoothstep(0.32, 0.5, length(rel.xz) / uBox.x);',
+        '  gl_PointSize = clamp((0.07 + 0.05 * fract(aPh * 3.7)) * uScale / max(0.3, -mv.z), 1.0, 40.0);',
+        '  gl_Position = projectionMatrix * mv;',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform vec3 uColor; uniform float uAlpha; varying float vA;',
+        'void main() {',
+        '  float r = length(gl_PointCoord - 0.5) * 2.0;',
+        '  if (r > 1.0) discard;',
+        '  gl_FragColor = vec4(uColor, uAlpha * vA * (1.0 - smoothstep(0.55, 1.0, r)));',
+        '}'
+      ].join('\n'),
+      transparent: true, depthWrite: false, fog: false
+    });
+    const mesh = new THREE.Points(g, m);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 6;
+    mesh.userData.count = count;
+    return mesh;
+  }
+
   class Atmosphere {
     // ctx : { scene, sky, sun, hemi, fog, quality }, settings : { hour, weather, wind, timeFlow }
     constructor(ctx, L, settings) {
@@ -158,7 +206,9 @@
       this.flow = settings.timeFlow !== undefined ? settings.timeFlow : 30;
       // météo
       this.mode = settings.weather || 'variable';
-      const first = this.mode === 'variable' ? this._pick([['soleil', 4], ['nuageux', 3], ['pluie', 1.6], ['orage', 0.8]]) : this.mode;
+      // hiver : paysage enneigé, et la neige remplace la pluie
+      this.cold = L.amb.id === 'hiver';
+      const first = this.mode === 'variable' ? this._pick(this.cold ? [['soleil', 4], ['nuageux', 3], ['neige', 2.5]] : [['soleil', 4], ['nuageux', 3], ['pluie', 1.6], ['orage', 0.8]]) : this.mode;
       this.state = first;
       this.cur = Object.assign({}, PRESETS[first]);
       this.tgt = PRESETS[first];
@@ -171,6 +221,12 @@
       this.wind = { x: 0, z: 0, speed: 0, dir: this.windDir };
       this.gustT = rnd() * 100;
       this.wet = this.cur.rain > 0.2 ? 1 : 0;
+      // manteau neigeux (0..1) : permanent en hiver, sinon il se forme sous les chutes de neige et fond ensuite
+      this.snowBase = this.cold ? 0.85 : 0;
+      this.snowCover = Math.max(this.snowBase, this.cur.snow > 0.3 ? 0.7 : 0);
+      this.snowFrac = this.cold ? 1 : 0;
+      this.alt = 0;
+      this.pointScale = 600;
       this.flash = 0;
       this.nextBolt = 6;
       this.onThunder = null;
@@ -196,6 +252,8 @@
       const q = ctx.quality || 'medium';
       this.rain = rainMesh({ low: 2600, medium: 4500, high: 7000 }[q] || 4500);
       this.scene.add(this.rain);
+      this.snow = snowMesh({ low: 2500, medium: 4000, high: 6000 }[q] || 4000);
+      this.scene.add(this.snow);
       this.bolt = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: '#f4f2ff', fog: false, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
       this.bolt.frustumCulled = false;
       this.bolt.visible = false;
@@ -217,6 +275,8 @@
     setHour(h) { this.hour = ((h % 24) + 24) % 24; }
     setFlow(f) { this.flow = f; }
     setFogBase(near, far) { this.fogNear = near; this.fogFar = far; }
+    // taille des flocons à l'écran : demi-hauteur de l'image / tan(fov / 2)
+    setPointScale(v) { this.pointScale = v; }
 
     setWeather(mode) {
       this.mode = mode;
@@ -278,7 +338,8 @@
     info() {
       const P = PRESETS[this.state];
       return {
-        clock: this.clock(), period: this.period(), icon: this.elev < -3 && (this.state === 'soleil' || this.state === 'nuageux') ? (this.state === 'soleil' ? '🌙' : '☁️') : P.icon, name: P.name,
+        clock: this.clock(), period: this.period(), name: P.name,
+        icon: this.elev < -3 && (this.state === 'soleil' || this.state === 'nuageux') ? (this.state === 'soleil' ? '🌙' : '☁️') : (this.snowEff > 0.25 && this.snowEff > this.rainEff) ? '🌨️' : P.icon,
         windKmh: Math.round(this.wind.speed * 3.6), windLevel: this.windLevel, mode: this.mode
       };
     }
@@ -296,7 +357,7 @@
         this.nextChange -= dt;
         if (this.nextChange <= 0) {
           const from = this.state;
-          this.state = this._pick(NEXT[this.state]);
+          this.state = this._pick((this.cold ? NEXT_COLD : NEXT)[this.state]);
           this.changed = { from, to: this.state };
           this.tgt = PRESETS[this.state];
           this.nextChange = 150 + rnd() * 240;
@@ -314,19 +375,29 @@
       this.windDir = this.windDir0 + 0.35 * Math.sin(this.time * 0.004 + 1) + 0.08 * Math.sin(this.gustT * 0.7);
       this.wind.speed = speed; this.wind.dir = this.windDir;
       this.wind.x = Math.sin(this.windDir) * speed; this.wind.z = Math.cos(this.windDir) * speed;
-      // route mouillée : vite sous la pluie, sèche lentement
-      const wetT = W.rain > 0.2 ? 1 : 0;
+      // pluie ou neige ? En altitude (au-dessus de ~1 800 m) et en hiver, les précipitations tombent en neige.
+      if (camera) this.alt = camera.getWorldPosition(this._cp || (this._cp = new THREE.Vector3())).y;
+      const snowFrac = this.snowFrac = this.cold ? 1 : smoothstep(1650, 1950, this.alt);
+      const rainEff = this.rainEff = W.rain * (1 - snowFrac);
+      const snowEff = this.snowEff = clamp(W.snow + W.rain * snowFrac * 0.9, 0, 1);
+      // route mouillée : vite sous la pluie, sèche lentement (la neige qui fond mouille aussi)
+      const wetT = rainEff > 0.2 ? 1 : snowEff > 0.2 && !this.cold ? 0.5 : 0;
       this.wet += (wetT - this.wet) * (1 - Math.exp(-dt / (wetT ? 20 : 150)));
+      // manteau neigeux : se forme en ~1 min sous une bonne chute de neige, fond en quelques minutes
+      const snowT = Math.max(this.snowBase, snowEff > 0.25 ? 1 : 0);
+      this.snowCover += (snowT - this.snowCover) * (1 - Math.exp(-dt / (snowT > this.snowCover ? 45 + 60 * (1 - snowEff) : 320)));
       // la couche nuageuse défile avec le vent
       this.U.uCloudOff.value.x -= this.wind.x * dtReal * 0.0012;
       this.U.uCloudOff.value.y -= this.wind.z * dtReal * 0.0012;
       this._light(elev, W);
       this._rain(dt, dtReal, camera, W);
+      this._snow(dt, dtReal, camera, W);
       this._storm(dtReal, camera, W);
       // partagés avec les matériaux (végétation, eau, route, terrain)
       const sh = B3D.toon.shared;
       sh.uWind.value.set(Math.sin(this.windDir), Math.cos(this.windDir), clamp(speed / 10, 0, 1.6));
       sh.uWet.value = this.wet;
+      sh.uSnow.value = this.snowCover;
       // lumières (fenêtres, lampadaires, phares) : dès le crépuscule, et dans l'obscurité d'un orage
       this.lampK = clamp(clamp((0.62 - this.dayK) / 0.4, 0, 1) + 0.6 * W.dark * W.rain, 0, 1);
       sh.uNight.value = this.lampK;
@@ -347,8 +418,9 @@
       top.copy(COL.nightTop).lerp(c1.set(amb.sky.top), dayK).lerp(COL.twiTop, twiK * 0.6).lerp(COL.goldTop, goldK * 0.45);
       hor.copy(COL.nightHor).lerp(c1.set(amb.sky.horizon), dayK).lerp(COL.twiHor, twiK * 0.5).lerp(COL.goldHor, goldK * 0.85);
       const level = 0.12 + 0.88 * dayK; // luminosité générale du ciel
-      c2.copy(COL.overTop).lerp(COL.stormTop, dark).multiplyScalar(level);
-      c3.copy(COL.overHor).lerp(COL.stormHor, dark).multiplyScalar(level);
+      const sk = clamp(W.snow * 1.2, 0, 1); // ciel de neige : gris clair et uniforme
+      c2.copy(COL.overTop).lerp(COL.snowTop, sk).lerp(COL.stormTop, dark * (1 - sk)).multiplyScalar(level);
+      c3.copy(COL.overHor).lerp(COL.snowHor, sk).lerp(COL.stormHor, dark * (1 - sk)).multiplyScalar(level);
       top.lerp(c2, c * 0.85);
       hor.lerp(c3, c * 0.8);
       U.uGround.value.copy(hor).multiplyScalar(0.92);
@@ -410,15 +482,29 @@
 
     _rain(dt, dtReal, camera, W) {
       const r = this.rain, u = r.material.uniforms;
-      const n = Math.round(r.userData.count * clamp(W.rain, 0, 1));
+      const n = Math.round(r.userData.count * clamp(this.rainEff, 0, 1));
       r.visible = n > 20;
       if (!r.visible) return;
       r.geometry.setDrawRange(0, n * 2);
       u.uTime.value += dtReal;
       if (camera) camera.getWorldPosition(u.uCenter.value);
       u.uFall.value.set(this.wind.x * 0.85, -9 - 2 * W.storm, this.wind.z * 0.85);
-      u.uAlpha.value = (0.28 + 0.25 * W.rain) * (0.45 + 0.55 * this.dayK) + this.flash * 0.5;
+      u.uAlpha.value = (0.28 + 0.25 * this.rainEff) * (0.45 + 0.55 * this.dayK) + this.flash * 0.5;
       u.uColor.value.copy(COL.white).lerp(this.hemi.color, 0.5);
+    }
+
+    _snow(dt, dtReal, camera, W) {
+      const sn = this.snow, u = sn.material.uniforms;
+      const n = Math.round(sn.userData.count * clamp(this.snowEff, 0, 1));
+      sn.visible = n > 20;
+      if (!sn.visible) return;
+      sn.geometry.setDrawRange(0, n);
+      u.uTime.value += dtReal;
+      if (camera) camera.getWorldPosition(u.uCenter.value);
+      u.uDrift.value.set(this.wind.x * 0.75, -1.25, this.wind.z * 0.75);
+      u.uScale.value = this.pointScale;
+      u.uAlpha.value = 0.95 * (0.35 + 0.65 * this.dayK) + 0.15;
+      u.uColor.value.copy(COL.white).lerp(this.hemi.color, 0.25);
     }
 
     // éclairs : flash du ciel et de la lumière, arc électrique au loin, tonnerre retardé selon la distance
@@ -471,9 +557,11 @@
       this.rain.geometry.dispose(); this.rain.material.dispose();
       this.scene.remove(this.bolt);
       this.bolt.geometry.dispose(); this.bolt.material.dispose();
+      this.scene.remove(this.snow);
+      this.snow.geometry.dispose(); this.snow.material.dispose();
       for (const m of this.basicMats) m.color.set('#ffffff');
       const sh = B3D.toon.shared;
-      sh.uWind.value.set(0, 1, 0); sh.uWet.value = 0; sh.uNight.value = 0; sh.uSkyTint.value.set('#ffffff');
+      sh.uWind.value.set(0, 1, 0); sh.uWet.value = 0; sh.uSnow.value = 0; sh.uNight.value = 0; sh.uSkyTint.value.set('#ffffff');
     }
   }
 

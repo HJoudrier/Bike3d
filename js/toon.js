@@ -12,8 +12,32 @@
     uWind: { value: new THREE.Vector3(0, 1, 0) },
     uWet: { value: 0 },
     uNight: { value: 0 },
-    uSkyTint: { value: new THREE.Color('#ffffff') }
+    uSkyTint: { value: new THREE.Color('#ffffff') },
+    uSnow: { value: 0 } // manteau neigeux (0..1)
   };
+
+  // Neige sur les faces tournées vers le ciel : injectée dans un matériau toon (avant l'éclairage).
+  // amount : facteur (1 = sommets des arbres, toits…). Se combine avec un onBeforeCompile existant.
+  const SNOW_FRAG = [
+    '{',
+    '  vec3 snN = (vec4(normal, 0.0) * viewMatrix).xyz;', // normale dans le monde
+    '  float snK = uSnow * smoothstep(0.2, 0.62, snN.y);',
+    '  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.97, 1.0), snK * SNOW_AMOUNT);',
+    '}'
+  ].join('\n');
+  function snowPatch(m, amount) {
+    const prev = m.onBeforeCompile;
+    const prevKey = m.customProgramCacheKey;
+    m.onBeforeCompile = (shader, renderer) => {
+      if (prev) prev.call(m, shader, renderer);
+      shader.uniforms.uSnow = shared.uSnow;
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uSnow;')
+        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + SNOW_FRAG.replace('SNOW_AMOUNT', Number(amount || 1).toFixed(3)));
+    };
+    m.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|snow' + (amount || 1);
+    return m;
+  }
 
   // --- Animation du public : chaque spectateur applaudit, lève les bras ou fait coucou.
   // Les bras sont modélisés tendus vers l'avant (+z) depuis l'épaule ; l'attribut armSide vaut -1/+1 sur les bras.
@@ -128,7 +152,14 @@
     const people = !!opts.people;
     const phase = !!opts.peoplePhase;
     const flap = opts.flap ? flapGLSL(opts.flap) : null;
+    const snow = opts.snow || 0;
     m.onBeforeCompile = (shader) => {
+      if (snow) {
+        shader.uniforms.uSnow = shared.uSnow;
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\nuniform float uSnow;')
+          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + SNOW_FRAG.replace('SNOW_AMOUNT', Number(snow).toFixed(3)));
+      }
       shader.uniforms.uTime = shared.uTime;
       shader.uniforms.uRider = shared.uRider;
       shader.uniforms.uWind = shared.uWind;
@@ -160,7 +191,7 @@
         ].join('\n'))
         .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + swayGLSL(sway, bounce));
     };
-    m.customProgramCacheKey = () => 'inst-' + sway + '-' + bounce + '-' + people + phase + '-' + (opts.flap ? JSON.stringify(opts.flap) : '');
+    m.customProgramCacheKey = () => 'inst-' + sway + '-' + bounce + '-' + people + phase + '-' + snow + '-' + (opts.flap ? JSON.stringify(opts.flap) : '');
     return m;
   }
 
@@ -394,5 +425,5 @@
     return m;
   }
 
-  B3D.toon = { shared, glowMat, gradientMap, terrainGradientMap, mat, instancedMat, outlineMat, computeOutlineNormals, addOutline, outlineAll, merge, tr, textTexture, _m };
+  B3D.toon = { shared, snowPatch, glowMat, gradientMap, terrainGradientMap, mat, instancedMat, outlineMat, computeOutlineNormals, addOutline, outlineAll, merge, tr, textTexture, _m };
 })(typeof window !== 'undefined' ? window : globalThis);
