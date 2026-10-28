@@ -75,9 +75,14 @@
       this.prevButtons = {};
       this.msg = null;
       this.computer = canvasPanel(512, 384, 0.26, 0.195);
-      this.dash = new THREE.Mesh(this.computer.mesh.geometry, this.computer.mesh.material); // le même écran, flottant (vue poursuite)
-      this.dash.renderOrder = 20;
+      // le même écran, flottant (vue poursuite) : toujours dessiné devant les coureurs
+      this.dash = new THREE.Mesh(this.computer.mesh.geometry, this.computer.mesh.material.clone());
+      this.dash.material.depthTest = false;
+      this.dash.renderOrder = 25;
       this.panel = canvasPanel(1024, 512, 1.6, 0.8);
+      this.panel.mesh.material.depthTest = false;
+      this.panel.mesh.renderOrder = 25;
+      this.pack = 0;
       this.vignette = vignetteMesh();
       this.lastDraw = 0;
       if (navigator.xr && navigator.xr.isSessionSupported) {
@@ -286,10 +291,15 @@
         wantYaw = heading;
       } else {
         cyc.head.visible = true;
+        // des coureurs juste derrière : la caméra monte et recule pour voir par-dessus
+        let n = 0;
+        if (g.peloton) for (const r of g.peloton.riders) { const ds = R.s - r.s; if (ds > 0.3 && ds < 7 && Math.abs(r.lat - R.lat) < 2.2 && !r.done) n++; }
+        this.pack = lerp(this.pack, Math.min(1, n / 2), 1 - Math.exp(-dt * 1.2));
         const tmp = this._tq || (this._tq = {});
-        const b = route.sample(R.s - 4.6, tmp);
+        const back = 4.6 + 2.0 * this.pack, up = 2.2 + 1.6 * this.pack;
+        const b = route.sample(R.s - back, tmp);
         target = this._ct || (this._ct = new THREE.Vector3());
-        target.set(b.x + b.rx * R.lat * 0.6, Math.max(b.y, cyc.root.position.y - 0.7) + 2.2, b.z + b.rz * R.lat * 0.6);
+        target.set(b.x + b.rx * R.lat * 0.6, Math.max(b.y, cyc.root.position.y - back * 0.15) + up, b.z + b.rz * R.lat * 0.6);
         wantYaw = Math.atan2(cyc.root.position.x - target.x, cyc.root.position.z - target.z);
       }
       // lissage : la nacelle suit le vélo sans à-coups
@@ -363,6 +373,8 @@
       ctx.clearRect(0, 0, W, H);
       if (!m) { this.panel.mesh.visible = false; return; }
       this.panel.mesh.visible = true;
+      // les cartes (pause, arrivée) sont plus grandes que les messages, qui ne doivent pas cacher la route
+      this.panel.mesh.scale.setScalar(m.kind === 'pause' || m.kind === 'finish' ? 1.15 : 0.85);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       if (m.kind === 'count') {
         ctx.font = '700 300px ' + FONT;
