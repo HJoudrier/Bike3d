@@ -185,6 +185,7 @@ html, body {
 .btn:disabled { opacity: 0.5; cursor: wait; }
 .btn.primary { background: var(--yellow); }
 .btn.success { background: var(--green); color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.25); }
+.btn.vr { background: #9b6bff; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.25); }
 .btn.ghost { background: transparent; box-shadow: none; border-color: transparent; text-decoration: underline; }
 .btn.ghost:active { transform: none; }
 .btn.big { font-size: 24px; padding: 14px 26px; }

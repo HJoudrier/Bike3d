@@ -17,6 +17,8 @@ Aucune installation ni compilation : three.js est fourni dans `vendor/`.
 
 Il faut un navigateur récent avec WebGL 2 (Chrome, Edge, Firefox ou Safari récents).
 
+Pour jouer avec un casque de réalité virtuelle, voir [Réalité virtuelle](#réalité-virtuelle-meta-quest-et-autres-casques) : il faut alors servir le jeu avec `python3 tools/serve.py`.
+
 ## Déroulement
 
 1. **Importer un GPX** (clic ou glisser-déposer), ou choisir un parcours de démo. Les fichiers `samples/*.gpx` permettent de tester l'import.
@@ -71,6 +73,46 @@ Quand il y a d'autres coureurs, les sprints et les sommets sont disputés pour d
 ## Les cols hors catégorie
 
 Dans les montées classées HC, une foule dense envahit la route sur les derniers kilomètres. Les spectateurs ne laissent qu'un étroit couloir et s'écartent au dernier moment devant les coureurs et les véhicules, puis se referment derrière eux. Certains agitent des drapeaux, d'autres allument des fumigènes colorés. Le parcours de démo **« Col hors catégorie »** (onze lacets à 9 %) permet de le voir tout de suite.
+
+## Réalité virtuelle (Meta Quest et autres casques)
+
+Le jeu a un mode immersif WebXR : on roule assis sur le vélo, au milieu du paysage et du peloton, en tournant la tête pour regarder autour de soi.
+
+### Ouvrir le jeu dans le casque
+
+Le navigateur n'autorise la réalité virtuelle que sur une page sécurisée (`https://` ou `localhost`) : il faut donc servir le dossier. Le script `tools/serve.py` (Python 3) s'en charge.
+
+1. **Avec le câble USB** (casque en mode développeur) : sur le PC, lancer `python3 tools/serve.py` puis `adb reverse tcp:8000 tcp:8000`, et ouvrir `http://localhost:8000` dans le navigateur du Quest.
+2. **En Wi-Fi** : lancer `python3 tools/serve.py --https` (il faut `openssl`). Ouvrir l'adresse affichée (`https://192.168.x.x:8443`) dans le navigateur du Quest, et accepter le certificat (« Avancé » puis « Continuer »).
+3. **En ligne** : publier le dossier sur un hébergement en HTTPS (GitHub Pages, par exemple) et ouvrir l'adresse dans le casque.
+
+Avec un casque relié au PC (Quest Link, Air Link…), on peut aussi utiliser Chrome ou Edge sur le PC, avec `python3 tools/serve.py` et `http://localhost:8000`.
+
+Ensuite, on choisit un parcours, on modélise le paysage, puis on clique sur **« 🥽 Rouler en réalité virtuelle »**. Ce bouton n'apparaît que si un casque est disponible ; on le retrouve aussi dans le menu pause d'une course commencée à l'écran.
+
+Sur un casque autonome, mieux vaut choisir la qualité « Rapide » et 10 à 20 coureurs. Et s'asseoir !
+
+### Dans le casque
+
+- **Vue cycliste** : on est sur le vélo et on voit ses bras, le guidon et le **compteur fixé sur la potence**. Il affiche la vitesse, la jauge de puissance (consigne, puissance réelle, seuil), la réserve, la pente, l'aspiration, la position, la distance et le chrono. L'horizon reste droit, sans roulis dans les virages.
+- **Vue poursuite** : on se place derrière et au-dessus du coureur, avec le compteur qui flotte en bas du champ de vision.
+- Les messages (sprints, attaques, relais…), le compte à rebours, la pause et l'arrivée s'affichent sur un panneau flottant.
+- **Effet tunnel** : dans les virages serrés et à grande vitesse, la périphérie s'assombrit pour limiter le mal des transports. On peut le désactiver.
+- **Vibrations des manettes** : roue de devant touchée, bas-côté, musette attrapée, ligne de sprint ou de sommet, coup de bambou.
+
+| Manettes Touch | Action |
+| --- | --- |
+| stick gauche ← → | se déplacer sur la route |
+| stick droit ↑ ↓ | régler la jauge de puissance |
+| gâchettes (maintenues) | à fond, pour sprinter |
+| grips | freiner |
+| <kbd>A</kbd> | vue cycliste / vue poursuite |
+| <kbd>B</kbd> | accélérer le temps |
+| <kbd>X</kbd> | pause (<kbd>A</kbd> ou <kbd>X</kbd> pour reprendre, <kbd>B</kbd> pour quitter la réalité virtuelle) |
+| <kbd>Y</kbd> | recentrer la vue |
+| clic du stick droit | activer / désactiver l'effet tunnel |
+
+À l'arrivée, <kbd>A</kbd> relance la course et <kbd>B</kbd> quitte la réalité virtuelle. Si on retire le casque ou qu'on ouvre le menu du Quest, la course se met en pause.
 
 ## La course
 
@@ -130,6 +172,8 @@ Le terrain est découpé en tuiles chargées autour du cycliste, ce qui permet d
 | `js/cyclist.js` | modèle et animation du cycliste |
 | `js/toon.js`, `js/props.js` | matériaux cartoon, contours, objets du décor |
 | `js/hud.js`, `js/audio.js`, `js/confetti.js`, `js/game.js` | HUD, sons, confettis, boucle de jeu |
+| `js/vr.js` | réalité virtuelle : nacelle de caméra, compteur sur la potence, panneaux, manettes, effet tunnel |
+| `tools/serve.py` | serveur local HTTP / HTTPS pour jouer depuis un casque (`python3 tools/serve.py --https`) |
 | `tools/make-samples.js` | régénère les GPX d'exemple (`node tools/make-samples.js`) |
 
 ## Licences

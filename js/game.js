@@ -23,6 +23,7 @@
   const Game = {
     state: 'menu',
     settings: { jersey: 'jaune', quality: 'medium', riders: 10 },
+    phys: PHYS,
     input: { left: false, right: false, brake: false, pUp: false, pDown: false },
     camIndex: 0,
     timeScaleIndex: 0,
@@ -66,7 +67,9 @@
       this.bindInput();
       window.addEventListener('resize', () => this.resize());
       this.resize();
-      this.loop();
+      // réalité virtuelle (WebXR) ; la boucle passe par le moteur de rendu pour suivre le rythme du casque
+      this.vr = new B3D.VRMode(this);
+      this.renderer.setAnimationLoop(() => this.loop());
     },
 
     saveSettings() {
@@ -85,6 +88,7 @@
     },
 
     resize() {
+      if (this.renderer.xr && this.renderer.xr.isPresenting) return; // le casque impose sa résolution
       const w = window.innerWidth, h = window.innerHeight;
       this.renderer.setSize(w, h, false);
       this.camera.aspect = w / h;
@@ -140,6 +144,8 @@
       $('btn-model').onclick = () => this.newLandscape();
       $('btn-remodel').onclick = () => this.newLandscape();
       $('btn-validate').onclick = () => this.startRide();
+      $('btn-vr').onclick = () => this.enterVR(false);
+      $('btn-pause-vr').onclick = () => this.enterVR(true);
       $('btn-back').onclick = () => this.toMenu();
       $('btn-flyover').onclick = () => { this.preview.auto = !this.preview.auto; this.updateFlyBtn(); };
       const pos = $('preview-pos');
@@ -198,7 +204,7 @@
         if (e.repeat) return;
         if (riding()) {
           if (e.code === 'KeyC') this.cycleCamera();
-          if (e.code === 'KeyT') this.timeScaleIndex = (this.timeScaleIndex + 1) % TIME_SCALES.length;
+          if (e.code === 'KeyT') this.cycleTimeScale();
           if (e.code === 'KeyM') this.sound.setMuted(!this.sound.muted);
           if (e.code === 'Escape' || e.code === 'KeyP') this.togglePause(true);
         } else if (this.state === 'paused' && (e.code === 'Escape' || e.code === 'KeyP')) {
@@ -240,6 +246,37 @@
       });
     },
 
+    timeScale() { return TIME_SCALES[this.timeScaleIndex]; },
+    cycleTimeScale() { this.timeScaleIndex = (this.timeScaleIndex + 1) % TIME_SCALES.length; },
+
+    // ------------------------------------------------------------------ réalité virtuelle
+    refreshVRButtons() {
+      const ok = this.vr && this.vr.supported && !this.vr.presenting;
+      for (const id of ['btn-vr', 'btn-pause-vr']) $(id).classList.toggle('hidden', !ok);
+    },
+
+    showVRError(msg) { this.toast('🥽 ' + msg, 4000); },
+
+    // entrée / sortie du casque
+    onVRChange(on) {
+      this.refreshVRButtons();
+      if (on) { this.camState = null; return; }
+      this.resize();
+      if (this.hcCrowd) this.hcCrowd.setPointScale(null);
+      this.camState = null;
+      // on a retiré le casque en pleine course : pause, pour reprendre à l'écran
+      if (this.state === 'ride' || this.state === 'countdown') this.togglePause(true);
+    },
+
+    // bouton « Rouler en VR » (aperçu) ou « Passer en VR » (pause)
+    async enterVR(fromPause) {
+      if (this.building || !this.L) return;
+      const ok = await this.vr.enter();
+      if (!ok) return;
+      if (fromPause) this.togglePause(false);
+      else if (this.state === 'preview') this.startRide();
+    },
+
     show(id) { $(id).classList.remove('hidden'); },
     hide(id) { $(id).classList.add('hidden'); },
 
@@ -256,6 +293,7 @@
     },
 
     _showToast(html, ms) {
+      if (this.vr && this.vr.presenting) this.vr.toast(html, ms);
       const t = $('toast');
       t.innerHTML = html;
       t.classList.remove('hidden');
@@ -572,6 +610,7 @@
       }
       if (this.convoy) this.convoy.reset(this.peloton, this.playerProxy);
       this.raceT = new B3D.race.Tracker(route, this.L, PHYS, this.peloton);
+      if (this.vr && this.vr.presenting) this.vr.clearPanel();
       this._toastQ = [];
       this.timeScaleIndex = 0;
       this.hud.setup(route, this.L, PHYS);
@@ -591,10 +630,12 @@
         this.state = 'paused';
         this.show('screen-pause');
         this.sound.silence();
+        if (this.vr.presenting) this.vr.showPause(true);
       } else if (!on && this.state === 'paused') {
         this.state = this.pausedFrom;
         this.hide('screen-pause');
         this.clock.getDelta();
+        if (this.vr.presenting) this.vr.showPause(false);
       }
     },
 
@@ -675,7 +716,8 @@
     // panoramique stéréo d'un point vu de la caméra (-1 gauche, 1 droite)
     panOf(x, z) {
       const cam = this.camera;
-      const dx = x - cam.position.x, dz = z - cam.position.z;
+      const cp = cam.getWorldPosition(this._pw || (this._pw = new THREE.Vector3())); // dans le casque, la caméra est dans la nacelle
+      const dx = x - cp.x, dz = z - cp.z;
       const l = Math.hypot(dx, dz) || 1;
       const e = cam.matrixWorld.elements;
       return ((dx / l) * e[0] + (dz / l) * e[2]) * 0.8;
@@ -855,7 +897,13 @@
       }
       B3D.toon.shared.uRider.value.copy(cyc.root.position);
 
+      // vibrations : bas-côté caillouteux
+      if (this.vr.presenting && offRoad && R.v > 2) {
+        this._gravelT = (this._gravelT || 0) - dtReal;
+        if (this._gravelT <= 0) { this._gravelT = 0.12; this.vr.pulse(0.25 + Math.min(0.4, R.v / 30), 40); }
+      }
       // --- réserve : coup de bambou et récupération
+      if (R.msg === 'bonk' && this.vr.presenting) this.vr.pulse(1, 300);
       if (R.msg === 'bonk') this.toast('💥 Coup de bambou !<small>Réserve vide : tu roules sous ton seuil le temps de récupérer</small>', 3000);
       else if (R.msg === 'recover') this.toast('🔋 Ça repart !<small>Ta réserve se recharge, tu peux relancer</small>', 2200);
       R.msg = null;
@@ -866,6 +914,8 @@
         this.toast(ev.toast, ev.dur);
         if (ev.sound) this.sound.raceCue(ev.sound);
         if (ev.refill) R.reserve = Math.min(PHYS.wp, R.reserve + ev.refill * PHYS.wp);
+        // vibrations des manettes : ligne franchie, musette attrapée
+        if (ev.sound && this.vr.presenting) this.vr.pulse(ev.sound === 'win' ? 0.8 : 0.45, ev.sound === 'musette' ? 120 : 220);
       }
       if (this.peloton) this.handlePelotonEvents(dtReal);
       if (!R.flamme && route.length > 2500 && d >= route.length - 1000) {
@@ -915,7 +965,10 @@
         else if (ev.type === 'yourTurn' && this._turnT <= 0) { this._turnT = 40; this.toast('🔄 À toi de prendre le relais !<small>…ou décale-toi pour rester dans les roues</small>', 2600); }
         else if (ev.type === 'flat') { if (near) this.toast('🔧 Crevaison pour ' + r.name + '<small>La voiture suiveuse s’arrête pour le dépanner</small>', 2600); if (this.convoy) this.convoy.onFlat(r); }
         else if (ev.type === 'fixed') { if (this.convoy) this.convoy.onFixed(r); }
-        else if (ev.type === 'bump' && this._bumpT <= 0) { this._bumpT = 6; this.toast('😬 Attention à la roue de ' + r.name + ' !', 1400); }
+        else if (ev.type === 'bump') {
+          if (this.vr.presenting) this.vr.pulse(0.7, 90);
+          if (this._bumpT <= 0) { this._bumpT = 6; this.toast('😬 Attention à la roue de ' + r.name + ' !', 1400); }
+        }
       }
       P.events.length = 0;
     },
@@ -1034,6 +1087,18 @@
         rk.innerHTML = '<h3>' + (me === 0 ? '🏆 Victoire d’étape !' : 'Classement : ' + (me + 1) + (me === 0 ? 'er' : 'e') + ' sur ' + rows.length) + '</h3><ol>' + html + '</ol>';
         rk.classList.remove('hidden');
       } else rk.classList.add('hidden');
+      // dans le casque : carte d'arrivée flottante (Ⓐ rejouer, Ⓑ quitter la VR)
+      if (this.vr.presenting) {
+        let rows = [{ pos: 1, name: 'Toi', time: formatTime(R.time), me: true }], title = '🏆 Arrivée !';
+        if (this.peloton) {
+          const all = this.peloton.standings(R.time), me = all.findIndex((r) => r.player), first = all[0].t;
+          rows = all.map((r, i) => ({ pos: i + 1, name: r.name, me: !!r.player, time: i === 0 ? formatTime(r.t) : r.t === null ? '…' : r.t - first < 1 ? 'm.t.' : '+' + formatTime(r.t - first) }));
+          rows = rows.slice(0, me >= 5 ? 4 : 5).concat(me >= 5 ? [rows[me]] : []);
+          title = me === 0 ? '🏆 Victoire d’étape !' : '🏁 ' + (me + 1) + 'e sur ' + all.length;
+        }
+        const stats = formatTime(R.time) + ' · ' + (avg * 3.6).toFixed(1).replace('.', ',') + ' km/h de moyenne' + (record ? ' · record !' : '');
+        setTimeout(() => { if (this.state === 'finished' && this.vr.presenting) this.vr.showFinish(title, rows, stats); }, 900);
+      }
       setTimeout(() => { if (this.state === 'finished') this.show('screen-finish'); }, 900);
     },
 
@@ -1050,10 +1115,11 @@
 
     // ------------------------------------------------------------------ boucle
     loop() {
-      requestAnimationFrame(() => this.loop());
       const dt = Math.min(0.05, this.clock.getDelta());
       B3D.toon.shared.uTime.value += dt;
       if (this.state === 'menu' || this.building) return;
+      const vr = this.vr && this.vr.presenting;
+      if (vr) this.vr.update(dt);
       if (this.state === 'preview') {
         this.updatePreviewCamera(dt);
         this.tiles.update(this.focusX, this.focusZ, 8);
@@ -1064,20 +1130,21 @@
         const el = $('countdown-text');
         if (this.countdown > 0.2) { if (el.textContent !== String(n)) el.textContent = String(n); }
         else if (!el.classList.contains('go')) { el.textContent = 'GO !'; el.classList.add('go'); }
+        if (vr) this.vr.countdown(el.textContent);
         if (this.countdown <= -0.5) { this.hide('screen-countdown'); this.state = 'ride'; }
         if (this.countdown <= 0.2 && this.state === 'countdown') {
           // départ lancé : la course commence pendant l'affichage de "GO !"
           this.updateRide(dt);
         }
-        this.updateRideCamera(dt);
-        this.tiles.update(this.focusX, this.focusZ, 6);
-        this.updateHud();
+        if (vr) this.vr.updateRig(dt); else this.updateRideCamera(dt);
+        this.tiles.update(this.focusX, this.focusZ, vr ? 3 : 6);
+        if (!this.vr.session) this.updateHud(); // le HUD de l'écran n'est pas visible dans le casque
       } else if (this.state === 'ride') {
         this.updateGaugeKeys(dt);
         this.updateRide(dt);
-        this.updateRideCamera(dt);
-        this.tiles.update(this.focusX, this.focusZ, 6);
-        this.updateHud();
+        if (vr) this.vr.updateRig(dt); else this.updateRideCamera(dt);
+        this.tiles.update(this.focusX, this.focusZ, vr ? 3 : 6);
+        if (!this.vr.session) this.updateHud();
       } else if (this.state === 'finished') {
         // le cycliste continue sur sa lancée ; les autres finissent leur course
         this.ride.v *= Math.exp(-dt * 0.8);
@@ -1092,7 +1159,7 @@
         this.cyclist.root.rotation.set(-Math.atan(q.grade), Math.atan2(q.tx, q.tz), 0, 'YXZ');
         this.cyclist.update(dt, { speed: R.v, pedaling: false, standing: false, tuck: false, steer: 0 });
         B3D.toon.shared.uRider.value.copy(this.cyclist.root.position);
-        this.updateRideCamera(dt);
+        if (vr) this.vr.updateRig(dt); else this.updateRideCamera(dt);
         this.tiles.update(this.focusX, this.focusZ, 6);
         // ovation de l'arrivée qui s'éteint doucement
         R.finishT += dt;
@@ -1108,7 +1175,7 @@
       }
       if (this.fauna) this.updateFauna(dt);
       if (this.sky) this.sky.update(this.camera, dt);
-      if (this.villageGroup) B3D.villages.cull(this.villageGroup, this.camera.position, this.Q.radius + 150);
+      if (this.villageGroup) B3D.villages.cull(this.villageGroup, this.camera.getWorldPosition(this._cw || (this._cw = new THREE.Vector3())), this.Q.radius + 150);
       this.confetti.update(dt);
       // bulle "MEUH !" : petit rebond puis disparition
       if (this.bubbleT > 0) {

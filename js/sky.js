@@ -130,7 +130,8 @@
     }
 
     update(camera, dt) {
-      this.group.position.set(camera.position.x, camera.position.y, camera.position.z);
+      // position monde (en réalité virtuelle, la caméra est dans une nacelle)
+      camera.getWorldPosition(this.group.position);
       for (const c of this.clouds) {
         c.position.x += this.wind.x * dt;
         c.position.z += this.wind.z * dt;

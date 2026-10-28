@@ -813,7 +813,7 @@
 
     // étiquettes de nom des coureurs devant la caméra, ni trop près ni trop loin
     _renderTags(camera) {
-      const cp = camera.position;
+      const cp = camera.getWorldPosition(this._cp || (this._cp = new THREE.Vector3()));
       const fwd = camera.getWorldDirection(this._cf || (this._cf = new THREE.Vector3()));
       const near = [];
       for (const r of this.riders) {

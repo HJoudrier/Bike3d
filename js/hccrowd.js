@@ -285,13 +285,17 @@
       const g = this.smoke.geometry;
       g.setDrawRange(0, n);
       for (const k of ['position', 'aColor', 'aSize', 'aAlpha']) g.attributes[k].needsUpdate = true;
-      if (camera) {
+      if (this._pointScale) this.smoke.material.uniforms.uScale.value = this._pointScale;
+      else if (camera) {
         const h = (this._vh || 600);
         this.smoke.material.uniforms.uScale.value = h * 0.5 / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
       }
     }
 
     setViewHeight(h) { this._vh = h; }
+
+    // en réalité virtuelle : taille des particules calculée pour l'écran du casque (null = écran normal)
+    setPointScale(v) { this._pointScale = v; }
 
     dispose() {
       if (!this.fans.length) return;
