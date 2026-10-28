@@ -196,7 +196,21 @@ html, body {
 /* ---------- aperçu ---------- */
 #screen-preview { pointer-events: none; justify-content: flex-start; align-items: flex-start; }
 #screen-preview > * { pointer-events: auto; }
-.preview-panel { width: 330px; max-width: calc(100vw - 32px); }
+.preview-panel { width: 330px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow-y: auto; }
+/* réglages du ciel : heure, météo, vent, écoulement du temps */
+.sky-ctl { margin: 4px 0 10px; background: rgba(255,255,255,0.7); border: 3px solid var(--ink); border-radius: 14px; padding: 4px 10px; text-align: left; }
+/* dans l'aperçu : carte à droite, sous l'aide */
+.sky-card { position: fixed; right: 16px; top: 92px; width: 320px; padding: 6px 10px; }
+.sky-card .sky-ctl { margin: 0; background: none; border: none; padding: 0; }
+.sky-ctl summary { font-weight: 700; cursor: pointer; font-size: 15px; padding: 2px 0; }
+.sky-ctl summary small { font-weight: 500; opacity: 0.75; margin-left: 4px; }
+.sky-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 6px 0; }
+.sky-row .sky-lbl { font-size: 12px; font-weight: 700; width: 58px; white-space: nowrap; }
+.sky-row .chip { font-size: 12px; padding: 2px 8px; }
+.sky-row input[type=range] { flex: 1; min-width: 120px; accent-color: #f39a2b; }
+.sky-row .sky-clock { font-size: 14px; min-width: 44px; text-align: right; }
+.wind-arr { display: inline-block; font-weight: 700; margin-right: 6px; transition: transform 0.3s; }
+#screen-pause .small-card { max-height: calc(100vh - 32px); overflow-y: auto; }
 .preview-panel h2 { margin: 2px 0 8px; font-size: 26px; }
 .seed { font-size: 14px; opacity: 0.75; }
 .desc { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 4px; }
@@ -400,6 +414,8 @@ kbd {
   .preview-panel { width: 100%; padding: 14px 16px; }
   .preview-panel .desc { display: none; }
   .hint { display: none; }
+  .sky-card { top: auto; bottom: 96px; right: 16px; left: 16px; width: auto; }
+  .sky-card .sky-ctl:not([open]) { padding: 0; }
 }
 
 /* ---------- chargement / compte à rebours / fin ---------- */

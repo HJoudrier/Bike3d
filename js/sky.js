@@ -68,9 +68,10 @@
       this.clouds = [];
       const rnd = mulberry32(L.seed ^ 0xc10d);
       const cloudMat = new THREE.MeshToonMaterial({ color: '#ffffff', gradientMap: B3D.toon.gradientMap(), emissive: new THREE.Color('#8fa4bf'), fog: false });
+      cloudMat.userData.sky = true;
       const outline = B3D.toon.outlineMat({ color: '#5d6c8a', width: 1.2, minW: 0.5, maxW: 12 });
       outline.fog = false;
-      const nClouds = 10 + Math.floor(rnd() * 10);
+      const nClouds = 24 + Math.floor(rnd() * 8); // l'atmosphère n'en montre qu'une partie par beau temps
       for (let k = 0; k < nClouds; k++) {
         const parts = [];
         const nb = 4 + Math.floor(rnd() * 5);

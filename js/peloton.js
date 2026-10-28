@@ -24,7 +24,8 @@
   // ------------------------------------------------------------------ aspiration
   // Abri (0..0.62) d'un coureur en (s, lat) derrière les coureurs triés par s décroissante.
   // Réduit la traînée aérodynamique : jusqu'à ~40 % dans la roue, davantage au cœur d'un groupe.
-  function shelter(sorted, s, lat, self) {
+  // drift : dérive latérale du sillage par mètre en arrière (vent de côté) : l'abri se décale sous le vent.
+  function shelter(sorted, s, lat, self, drift) {
     let keep = 1, best = 0, src = null;
     for (let i = 0; i < sorted.length; i++) {
       const o = sorted[i];
@@ -32,7 +33,7 @@
       if (ds > 10) continue;
       if (ds < 0.3) break;
       if (o === self || o.done || o.state === 'flat') continue;
-      const dl = Math.abs(o.lat - lat);
+      const dl = Math.abs(o.lat + ds * (drift || 0) - lat);
       if (dl > 1.1) continue;
       const g = ds <= 1.3 ? 0.42 : 0.42 * (10 - ds) / 8.7;
       const sh = g * (1 - dl / 1.1);
@@ -293,7 +294,7 @@
     }
 
     // abri du joueur (ou de tout coureur)
-    shelterFor(r) { return shelter(this.list, r.s, r.lat, r); }
+    shelterFor(r, drift) { return shelter(this.list, r.s, r.lat, r, drift); }
 
     // ------------------------------------------------------------ décisions (toutes les 0,2 s)
     _decide() {
@@ -316,8 +317,16 @@
         if (!G.form.length) G.form.push(G.members[0]);
         G.head = G.form[0];
         G.cols = G.form.length <= 6 ? 1 : G.form.length <= 15 ? 2 : 3;
-        // file de référence : celle de la tête, qui serre doucement à droite (sauf si c'est le joueur)
-        G.lane = clamp(lerp(G.head.lat, 0.55, G.head.isPlayer ? 0 : 0.08), -laneMax + (G.cols - 1) * COL / 2, laneMax - (G.cols - 1) * COL / 2);
+        // file de référence : celle de la tête, qui serre doucement à droite (sauf si c'est le joueur) ;
+        // par vent de côté, la tête se met au bord d'où vient le vent et le groupe s'étire en bordure
+        // (bordure : une seule file en diagonale ; ceux qui n'y tiennent pas roulent dans le caniveau, sans abri)
+        const hd = G.head.drift || 0, ech = clamp((Math.abs(hd) - 0.05) * 8, 0, 1);
+        G.echelon = ech > 0.5;
+        if (G.echelon) G.cols = 1;
+        const laneT = lerp(0.55, -Math.sign(hd) * (laneMax - 0.3), ech);
+        // la tête roule dans la file de gauche : le centre de la formation est à sa droite
+        const center = G.head.lat + (G.cols - 1) / 2 * COL;
+        G.lane = clamp(lerp(center, laneT, G.head.isPlayer ? 0 : 0.08), -laneMax + (G.cols - 1) * COL / 2, laneMax - (G.cols - 1) * COL / 2);
         const prev = groups[gi - 1];
         G.chasing = !!prev && prev.last.s - G.head.s < 250 && G.form.length >= 3;
         G.form.forEach((r, k) => { r.rank = k; });
@@ -408,7 +417,8 @@
             const row = Math.floor(k / cols), col = k % cols;
             r.sT = head.s - row * ROW - (col % 2) * 0.55;
             r.vT = head.v;
-            r.latT = clamp(G.lane + (col - (cols - 1) / 2) * COL, -laneMax, laneMax);
+            // en bordure, chacun se décale sous le vent du précédent (échelon)
+            r.latT = clamp(G.lane + (col - (cols - 1) / 2) * COL + row * ROW * (r.drift || 0) * 0.95, -laneMax, laneMax);
             // décroché mais pas loin : il essaie de revenir
             const ahead = this._riderAhead(r);
             if (ahead && ahead.group !== G && ahead.s - r.s < 60 && r.reserve > r.wp * 0.4) { this._setState(r, 'chase'); r.chaseTarget = ahead; }
@@ -525,10 +535,16 @@
         const q = route.sample(r.s, tmp);
         const grade = q.grade;
         const sinA = grade / Math.sqrt(1 + grade * grade);
-        const sh = shelter(this.list, r.s, r.lat, r).f;
+        // vent : composante dans le sens de la course (de dos > 0) et de côté (vers la droite > 0)
+        const W = this.wind;
+        const head = W ? W.x * q.tx + W.z * q.tz : 0, cross = W ? W.x * q.rx + W.z * q.rz : 0;
+        r.drift = clamp(cross / Math.max(r.v - head, 3), -0.4, 0.4);
+        const sh = shelter(this.list, r.s, r.lat, r, r.drift).f;
         r.draft = sh;
         const m = r.mass;
-        const resist = (v) => m * phys.g * (sinA + phys.crr) + 0.5 * phys.rho * phys.cda * (1 - sh) * v * v;
+        const crr = phys.crr * (this.crrK || 1);
+        const air = (v) => { const va = v - head; return 0.5 * phys.rho * phys.cda * (1 - sh) * va * Math.abs(va); };
+        const resist = (v) => m * phys.g * (sinA + crr) + air(v);
         // puissance disponible (réserve vide = il « explose » et roule sous son seuil)
         if (r.reserve <= 0) r.bonk = true;
         if (r.bonk && r.reserve > r.wp * 0.3) r.bonk = false;
@@ -551,8 +567,8 @@
         // montée en puissance progressive
         r.power += clamp(P - r.power, -2500 * h, 1600 * h);
         const drive = r.power / Math.max(r.v, 1.6);
-        const fr = r.v > 0.05 ? phys.crr * m * phys.g : 0;
-        let a = (drive - m * phys.g * sinA - fr - 0.5 * phys.rho * phys.cda * (1 - sh) * r.v * r.v - brake) / m;
+        const fr = r.v > 0.05 ? crr * m * phys.g : 0;
+        let a = (drive - m * phys.g * sinA - fr - air(r.v) - brake * (this.brakeK || 1)) / m;
         if (r.v <= 0.01 && a < 0) a = 0;
         const s0 = r.s;
         r.v = clamp(r.v + a * h, 0, phys.vMax);
@@ -660,6 +676,16 @@
       this.mWheel = mk(G.wheel, n * 2, 0.7, true);
       this.mLimb = mk(G.limb, n * 4, 0.8, true);
       this.mShoe = mk(G.shoe, n * 2, 0.8, false);
+      // feux avant et arrière, allumés la nuit
+      this.mLamps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ fog: false }), n * 2);
+      this.mLamps.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.mLamps.frustumCulled = false;
+      this.mLamps.count = 0;
+      this.mLamps.visible = false;
+      const lf = new THREE.Color('#fffbe6'), lr = new THREE.Color('#ff2a2a');
+      for (let i = 0; i < n; i++) { this.mLamps.setColorAt(i * 2, lf); this.mLamps.setColorAt(i * 2 + 1, lr); }
+      this.scene.add(this.mLamps);
+      this.lightsOn = false;
       const skin = new THREE.Color('#f1c29b'), shorts = new THREE.Color('#26232f'), white = new THREE.Color('#ffffff');
       this.riders.forEach((r, i) => {
         this.mBody.mesh.setColorAt(i, r.color);
@@ -775,7 +801,14 @@
           mw.multiplyMatrices(m4, ml);
           this.mShoe.mesh.setMatrixAt(i * 2 + side, mw);
         }
+        if (this.lightsOn) {
+          ml.makeTranslation(0, 0.84, 0.58); mw.multiplyMatrices(m4, ml); this.mLamps.setMatrixAt(i * 2, mw);
+          ml.makeTranslation(0, 0.86, -0.38); mw.multiplyMatrices(m4, ml); this.mLamps.setMatrixAt(i * 2 + 1, mw);
+        }
       }
+      this.mLamps.visible = this.lightsOn;
+      this.mLamps.count = this.lightsOn ? n * 2 : 0;
+      if (this.lightsOn) this.mLamps.instanceMatrix.needsUpdate = true;
       for (const [M, k] of [[this.mBody, 1], [this.mWheel, 2], [this.mLimb, 4], [this.mShoe, 2]]) {
         M.mesh.count = M.ol.count = n * k;
         M.mesh.instanceMatrix.needsUpdate = true;
@@ -806,7 +839,9 @@
       if (!w.visible) return;
       const r = this.wakeSrc, q = this.route.sample(r.s, this._wq || (this._wq = {}));
       w.position.set(q.x + q.rx * r.lat, q.y, q.z + q.rz * r.lat);
-      w.rotation.set(-Math.atan(q.grade), Math.atan2(q.tx, q.tz), 0, 'YXZ');
+      // le sillage dérive sous le vent quand il souffle de côté
+      const dr = r.drift || 0;
+      w.rotation.set(-Math.atan(q.grade), Math.atan2(q.tx - dr * q.rx, q.tz - dr * q.rz), 0, 'YXZ');
       w.material.uniforms.uColor.value.set(inDraft ? '#3fe87a' : '#f4f8ff');
       w.material.uniforms.uAlpha.value = this.wakeAlpha * (inDraft ? 1 : 0.75);
     }
@@ -840,6 +875,7 @@
 
     dispose() {
       for (const M of [this.mBody, this.mWheel, this.mLimb, this.mShoe]) { this.scene.remove(M.mesh); this.scene.remove(M.ol); }
+      this.scene.remove(this.mLamps); this.mLamps.geometry.dispose(); this.mLamps.material.dispose();
       this.scene.remove(this.wake);
       this.wake.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
       for (const sp of this.tags) { this.scene.remove(sp); sp.material.dispose(); }

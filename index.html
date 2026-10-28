@@ -82,6 +82,7 @@
       <input type="range" id="preview-pos" min="0" max="1000" value="0" aria-label="Position sur le parcours">
       <span id="preview-km">0 km</span>
     </div>
+    <div class="sky-card card"><div class="sky-host" data-open="1"></div></div>
     <div class="hint">🖱️ Glisser pour tourner autour · molette pour zoomer · curseur pour se déplacer sur le parcours</div>
   </section>
 
@@ -93,6 +94,10 @@
       <div class="hud-row">
         <div class="pill" id="hud-grade-box"><span id="hud-grade">0 %</span></div>
         <div class="pill light">⛰️ <span id="hud-alt">0 m</span></div>
+      </div>
+      <div class="hud-row">
+        <div class="pill light" id="hud-clock">🕐 12:00</div>
+        <div class="pill light" id="hud-wind" title="Vent"><span class="wind-arr" id="hud-wind-arr">↑</span><span id="hud-wind-txt">0 km/h</span></div>
       </div>
     </div>
     <div class="hud-tr">
@@ -153,6 +158,7 @@
       <h2>Pause</h2>
       <div class="btn-col">
         <button id="btn-resume" class="btn primary big">▶ Reprendre</button>
+        <div class="sky-host"></div>
         <button id="btn-pause-vr" class="btn vr hidden">🥽 Passer en réalité virtuelle</button>
         <button id="btn-restart" class="btn">↺ Recommencer</button>
         <button id="btn-pause-landscape" class="btn">🎲 Changer de paysage</button>
@@ -197,6 +203,7 @@
   <script src="js/village.js"></script>
   <script src="js/fauna.js"></script>
   <script src="js/sky.js"></script>
+  <script src="js/atmosphere.js"></script>
   <script src="js/cyclist.js"></script>
   <script src="js/hud.js"></script>
   <script src="js/audio.js"></script>

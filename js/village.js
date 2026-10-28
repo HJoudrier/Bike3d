@@ -504,7 +504,12 @@
       group.add(m);
     }
     if (K.detail.length) {
-      const m = new THREE.Mesh(merge(K.detail), toonMat);
+      // vitres et lampes qui s'allument la nuit (une fenêtre sur trois reste éteinte)
+      for (const p of K.detail) {
+        if (p.color === '#fff3b0') p.glow = 1;
+        else if (p.color === '#3f5378') p.glow = rnd() < 0.68 ? 0.55 + rnd() * 0.45 : 0;
+      }
+      const m = new THREE.Mesh(merge(K.detail), B3D.toon.glowMat());
       m.receiveShadow = true;
       group.add(m);
     }

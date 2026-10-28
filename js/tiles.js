@@ -99,6 +99,7 @@
         shader.uniforms.uRowDir = { value: rowDir };
         shader.uniforms.uVineGreen = { value: vineGreen };
         shader.uniforms.uSoil = { value: soil };
+        shader.uniforms.uWet = B3D.toon.shared.uWet;
         shader.vertexShader = shader.vertexShader
           .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying float vUpN;\nattribute float stripe;\nflat varying float vStripe;')
           .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvUpN = normal.y;\nvStripe = stripe;');
@@ -110,6 +111,7 @@
             'flat varying float vStripe;',
             'uniform vec2 uRowDir;',
             'uniform vec3 uVineGreen, uSoil;',
+            'uniform float uWet;',
             'float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }',
             'float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);',
             '  return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }'
@@ -119,6 +121,7 @@
             'float gN = vnoise(vWPos.xz * 0.35) * 0.6 + vnoise(vWPos.xz * 1.7) * 0.4;',
             'float fade = clamp(1.0 - length(vWPos - cameraPosition) / 260.0, 0.0, 1.0);',
             'diffuseColor.rgb *= 1.0 + (gN - 0.5) * 0.16 * fade;',
+            'diffuseColor.rgb *= 1.0 - 0.16 * uWet;',
             // strates horizontales sur les parois raides (falaises)
             'float steep = smoothstep(0.78, 0.5, vUpN);',
             'float band = fract(vWPos.y / 7.0 + vnoise(vWPos.xz * 0.04) * 1.2);',

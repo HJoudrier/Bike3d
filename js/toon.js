@@ -7,7 +7,12 @@
   const shared = {
     uTime: { value: 0 },
     uOutlineScale: { value: 0.0022 }, // épaisseur (m) par mètre de distance à la caméra
-    uRider: { value: new THREE.Vector3(0, -1e5, 0) } // position du coureur (le public s'excite à son passage)
+    uRider: { value: new THREE.Vector3(0, -1e5, 0) }, // position du coureur (le public s'excite à son passage)
+    // météo : direction (x, z) et force (0..1,6) du vent, route mouillée, nuit, teinte d'ensemble (eau, panneaux)
+    uWind: { value: new THREE.Vector3(0, 1, 0) },
+    uWet: { value: 0 },
+    uNight: { value: 0 },
+    uSkyTint: { value: new THREE.Color('#ffffff') }
   };
 
   // --- Animation du public : chaque spectateur applaudit, lève les bras ou fait coucou.
@@ -126,6 +131,7 @@
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = shared.uTime;
       shader.uniforms.uRider = shared.uRider;
+      shader.uniforms.uWind = shared.uWind;
       let vs = shader.vertexShader;
       if (flap) {
         vs = vs
@@ -140,7 +146,7 @@
           .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = armPiv + armM * (transformed - armPiv);\ntransformed.y += jump;');
       }
       shader.vertexShader = vs
-        .replace('#include <common>', '#include <common>\nattribute float tintMask;\nuniform float uTime;')
+        .replace('#include <common>', '#include <common>\nattribute float tintMask;\nuniform float uTime;\nuniform vec3 uWind;')
         .replace('#include <color_vertex>', [
           '#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )',
           '  vColor = vec3( 1.0 );',
@@ -158,6 +164,8 @@
     return m;
   }
 
+  // Balancement au vent : plus ample et plus rapide quand le vent forcit, et la plante penche dans le sens du vent
+  // (uWind.xy = direction dans le monde, ramenée dans le repère de l'instance ; uWind.z = force).
   function swayGLSL(sway, bounce) {
     let s = '';
     if (sway > 0 || bounce > 0) {
@@ -165,8 +173,13 @@
       s += 'float phase_ = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.23;\n';
       if (sway > 0) {
         s += 'float h_ = max(position.y, 0.0);\n';
-        s += 'transformed.x += sin(uTime * 1.7 + phase_) * ' + sway.toFixed(4) + ' * h_ * h_;\n';
-        s += 'transformed.z += cos(uTime * 1.3 + phase_ * 1.3) * ' + (sway * 0.6).toFixed(4) + ' * h_ * h_;\n';
+        s += 'float ws_ = uWind.z;\n';
+        s += 'float amp_ = ' + sway.toFixed(4) + ' * (0.6 + 1.4 * ws_);\n';
+        s += 'transformed.x += sin(uTime * (1.7 + 1.6 * ws_) + phase_) * amp_ * h_ * h_;\n';
+        s += 'transformed.z += cos(uTime * (1.3 + 1.3 * ws_) + phase_ * 1.3) * amp_ * 0.6 * h_ * h_;\n';
+        s += 'vec3 wl_ = transpose(mat3(instanceMatrix)) * vec3(uWind.x, 0.0, uWind.y);\n';
+        s += 'wl_ /= max(length(wl_), 1e-4);\n';
+        s += 'transformed.xz += wl_.xz * ' + (sway * 2.6).toFixed(4) + ' * ws_ * ws_ * h_ * h_ * (0.85 + 0.15 * sin(uTime * 2.3 + phase_));\n';
       }
       if (bounce > 0) {
         s += 'transformed.y += abs(sin(uTime * 5.0 + phase_ * 3.0)) * ' + bounce.toFixed(4) + ';\n';
@@ -197,6 +210,7 @@
         uOutlineScale: shared.uOutlineScale,
         uTime: shared.uTime,
         uRider: shared.uRider,
+        uWind: shared.uWind,
         fogColor: { value: new THREE.Color() },
         fogNear: { value: 1 },
         fogFar: { value: 1000 },
@@ -207,6 +221,7 @@
         '#include <fog_pars_vertex>',
         'attribute vec3 outlineNormal;',
         'uniform float uWidth, uMinW, uMaxW, uOutlineScale, uTime;',
+        'uniform vec3 uWind;',
         people ? PEOPLE_PARS + (phase ? '\n' + PHASE_PARS : '') : '',
         flap ? flap.pars : '',
         'void main() {',
@@ -301,8 +316,10 @@
       const cnt = g.attributes.position.count;
       vCount += cnt;
       iCount += idx ? idx.length : cnt;
-      return { g, idx, cnt, color: new THREE.Color(p.color || '#ffffff'), tint: p.tint ? 1 : 0, arm: p.arm || 0, wing: p.wing || 0 };
+      return { g, idx, cnt, color: new THREE.Color(p.color || '#ffffff'), tint: p.tint ? 1 : 0, arm: p.arm || 0, wing: p.wing || 0, glow: p.glow || 0 };
     });
+    const hasGlow = prepared.some((p) => p.glow !== 0);
+    const glow = hasGlow ? new Float32Array(vCount) : null;
     const hasArm = prepared.some((p) => p.arm !== 0);
     const arm = hasArm ? new Float32Array(vCount) : null;
     const hasWing = prepared.some((p) => p.wing !== 0);
@@ -320,6 +337,7 @@
         tint[vo + i] = p.tint;
         if (arm) arm[vo + i] = p.arm;
         if (wing) wing[vo + i] = p.wing;
+        if (glow) glow[vo + i] = p.glow;
       }
       if (p.idx) { for (let k = 0; k < p.idx.length; k++) index[io + k] = p.idx[k] + vo; io += p.idx.length; }
       else { for (let k = 0; k < p.cnt; k++) index[io + k] = vo + k; io += p.cnt; }
@@ -332,6 +350,7 @@
     geo.setAttribute('tintMask', new THREE.BufferAttribute(tint, 1));
     if (arm) geo.setAttribute('armSide', new THREE.BufferAttribute(arm, 1));
     if (wing) geo.setAttribute('wingSide', new THREE.BufferAttribute(wing, 1));
+    if (glow) geo.setAttribute('glow', new THREE.BufferAttribute(glow, 1));
     geo.setIndex(new THREE.BufferAttribute(index, 1));
     geo.computeBoundingSphere();
     return geo;
@@ -359,5 +378,21 @@
     return t;
   }
 
-  B3D.toon = { shared, gradientMap, terrainGradientMap, mat, instancedMat, outlineMat, computeOutlineNormals, addOutline, outlineAll, merge, tr, textTexture, _m };
+  // Matériau toon dont les pièces marquées « glow » (fenêtres, lampes) s'allument la nuit (lumière chaude).
+  function glowMat(opts) {
+    const m = new THREE.MeshToonMaterial(Object.assign({ vertexColors: true, gradientMap: gradientMap() }, opts || {}));
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.uNight = shared.uNight;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float glow;\nvarying float vGlow;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glow;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vGlow;\nuniform float uNight;')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.78, 0.42) * vGlow * uNight * 1.6;');
+    };
+    m.customProgramCacheKey = () => 'glow';
+    return m;
+  }
+
+  B3D.toon = { shared, glowMat, gradientMap, terrainGradientMap, mat, instancedMat, outlineMat, computeOutlineNormals, addOutline, outlineAll, merge, tr, textTexture, _m };
 })(typeof window !== 'undefined' ? window : globalThis);

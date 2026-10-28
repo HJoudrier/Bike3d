@@ -107,6 +107,9 @@
         climb: document.getElementById('hud-climb'),
         next: document.getElementById('hud-next'),
         pos: document.getElementById('hud-pos'),
+        clock: document.getElementById('hud-clock'),
+        windArr: document.getElementById('hud-wind-arr'),
+        windTxt: document.getElementById('hud-wind-txt'),
         gTrack: document.getElementById('g-track'),
         gFill: document.getElementById('g-fill'),
         gTarget: document.getElementById('g-target'),
@@ -261,6 +264,17 @@
         const html = st.next.icon + ' ' + st.next.label + ' <small>dans ' + st.next.dist + '</small>';
         if (e.next.innerHTML !== html) e.next.innerHTML = html;
       } else e.next.classList.add('hidden');
+      // heure et vent
+      if (st.sky) {
+        const k = st.sky;
+        e.clock.textContent = k.icon + ' ' + k.clock;
+        const a = Math.abs(k.angle);
+        const side = k.angle > 0 ? 'gauche' : 'droite'; // le vent pousse vers la droite : il vient de gauche
+        const label = k.kmh < 3 ? 'calme' : a < 35 ? 'de dos' : a < 80 ? '¾ dos, ' + side : a < 100 ? 'de ' + side : a < 145 ? '¾ face, ' + side : 'de face';
+        e.windArr.style.transform = 'rotate(' + k.angle.toFixed(0) + 'deg)';
+        e.windArr.style.opacity = k.kmh < 3 ? 0.3 : 1;
+        e.windTxt.textContent = Math.round(k.kmh) + ' km/h · ' + label;
+      }
       // position dans la course
       if (st.race) {
         const rc = st.race;

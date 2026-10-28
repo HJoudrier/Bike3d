@@ -55,6 +55,30 @@
       this._buildBike();
       this._buildRider();
       this.root.traverse((o) => { if (o.isMesh && !o.userData.isOutline) { o.castShadow = true; } });
+      this._buildLights();
+    }
+
+    // Phare (projecteur qui éclaire la route) et feu arrière, allumés la nuit. Le projecteur existe toujours
+    // (intensité nulle le jour) pour ne pas recompiler tous les matériaux quand il s'allume.
+    _buildLights() {
+      const front = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.06, 10), new THREE.MeshBasicMaterial({ color: '#fffbe6' }));
+      front.rotation.x = Math.PI / 2;
+      front.position.set(0, 0.84, 0.56);
+      const rear = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.025), new THREE.MeshBasicMaterial({ color: '#ff2a2a' }));
+      rear.position.set(0, 0.86, -0.36);
+      this.bikeGroup.add(front, rear);
+      this.lamps = [front, rear];
+      const spot = this.spot = new THREE.SpotLight('#fff1d0', 0, 55, 0.5, 0.55, 1.6);
+      spot.position.set(0, 0.95, 0.6);
+      spot.target.position.set(0, 0, 14);
+      spot.castShadow = false;
+      this.root.add(spot, spot.target);
+      this.setLights(0);
+    }
+
+    setLights(k) {
+      this.spot.intensity = 90 * k;
+      for (const m of this.lamps) m.visible = k > 0.05;
     }
 
     // Cylindre entre deux points (statique)

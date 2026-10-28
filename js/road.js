@@ -87,6 +87,33 @@
       map: roadTexture(), gradientMap: B3D.toon.gradientMap(),
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4
     });
+    // chaussée mouillée : bitume plus sombre et flaques qui reflètent le ciel (couleur du brouillard)
+    roadMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uWet = B3D.toon.shared.uWet;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vRoadW;')
+        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvRoadW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', [
+          '#include <common>',
+          'varying vec3 vRoadW;',
+          'uniform float uWet;',
+          'float rh21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }',
+          'float rnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);',
+          '  return mix(mix(rh21(i), rh21(i+vec2(1,0)), f.x), mix(rh21(i+vec2(0,1)), rh21(i+vec2(1,1)), f.x), f.y); }'
+        ].join('\n'))
+        .replace('#include <map_fragment>', [
+          '#include <map_fragment>',
+          'if (uWet > 0.01) {',
+          '  diffuseColor.rgb *= 1.0 - 0.32 * uWet;',
+          '  float pud = smoothstep(0.6, 0.66, rnoise(vRoadW.xz * 0.28) * 0.7 + rnoise(vRoadW.xz * 1.1) * 0.3) * uWet;',
+          '  #ifdef USE_FOG',
+          '  diffuseColor.rgb = mix(diffuseColor.rgb, fogColor * 0.75, pud * 0.6);',
+          '  #endif',
+          '}'
+        ].join('\n'));
+    };
+    roadMat.customProgramCacheKey = () => 'road-wet';
     const skirtMat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: B3D.toon.gradientMap() });
     const CH = 160;
     for (let a = 0; a < n - 1; a += CH) {

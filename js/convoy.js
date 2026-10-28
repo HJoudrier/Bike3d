@@ -167,6 +167,18 @@
     return g;
   }
 
+  // petites lampes non éclairées (phares, feux arrière), visibles la nuit
+  function lamps(list) {
+    const g = new THREE.Group();
+    for (const [x, y, z, color, r] of list) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r || 0.1, 8, 6), new THREE.MeshBasicMaterial({ color, fog: false }));
+      m.position.set(x, y, z);
+      g.add(m);
+    }
+    g.visible = false;
+    return g;
+  }
+
   class Convoy {
     constructor(scene, route, L) {
       this.scene = scene;
@@ -191,6 +203,24 @@
       this.mechanic.visible = false;
       this.group.add(this.mechanic);
       this.all = this.motos.concat(this.cars, [this.balai]);
+      // feux de nuit
+      this.lampGroups = [];
+      const W = '#fff6d8', R = '#ff2a2a';
+      for (const m of this.motos) {
+        const g = lamps([[0, 0.95, 0.9, W, 0.11], [0, 0.85, -0.85, R, 0.07]]);
+        m.obj.add(g);
+        this.lampGroups.push(g);
+      }
+      for (const c of this.cars.concat([this.balai])) {
+        const z = c === this.balai ? 2.25 : 2.17, zr = c === this.balai ? -2.33 : -2.17;
+        const g = lamps([[0.6, 0.66, z, W, 0.12], [-0.6, 0.66, z, W, 0.12], [0.7, 0.8, zr, R, 0.09], [-0.7, 0.8, zr, R, 0.09]].concat(c === this.balai ? [[0, 1.75, 0.6, '#ff9a2b', 0.13]] : []));
+        c.obj.add(g);
+        this.lampGroups.push(g);
+      }
+      const hb = lamps([[0, 1.0, -5.2, R, 0.22], [0, -1.0, 0.8, '#ffffff', 0.18]]);
+      this.heli.obj.add(hb);
+      this.heli.beacon = hb;
+      this.lightsOn = false;
       this.service = null;
       this.group.visible = false;
     }
@@ -223,6 +253,12 @@
       this.service.car.mode = 'follow';
       this.service = null;
       this.mechanic.visible = false;
+    }
+
+    setLights(on) {
+      if (on === this.lightsOn) return;
+      this.lightsOn = on;
+      for (const g of this.lampGroups) g.visible = on;
     }
 
     nearest(kind, P) {
@@ -328,6 +364,9 @@
       const dirx = -Math.sin(H.ang), dirz = Math.cos(H.ang);
       o.rotation.set(0.12, Math.atan2(dirx, dirz), -0.18, 'YXZ');
       o.userData.rotor.rotation.y += dt * 38;
+      // balise clignotante la nuit
+      H.blink = (H.blink || 0) + dt;
+      H.beacon.visible = this.lightsOn && (H.blink % 1.2) < 0.15;
       o.userData.tail.rotation.x += dt * 60;
     }
 

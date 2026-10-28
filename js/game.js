@@ -2,12 +2,18 @@
 (function () {
   'use strict';
   const B3D = window.B3D;
-  const { clamp, lerp, formatTime, hashString } = B3D.util;
+  const { clamp, lerp, smoothstep, formatTime, hashString } = B3D.util;
   const $ = (id) => document.getElementById(id);
 
   // cp : puissance critique (tenable longtemps), wp : réserve d'énergie au-dessus de cp (J), riderMass : coureur sans vélo
   const PHYS = { mass: 85, riderMass: 77, g: 9.81, crr: 0.0045, rho: 1.2, cda: 0.32, cdaTuck: 0.22, cdaStand: 0.4, pMax: 720, cp: 330, wp: 22000, brake: 430, vMax: 30 };
   const RIDER_COUNTS = [0, 5, 10, 20, 40];
+  // réglages du ciel : [valeur, libellé]
+  const SKY_OPTS = {
+    weather: [['variable', '🎲 Variable'], ['soleil', '☀️ Soleil'], ['nuageux', '⛅ Nuageux'], ['pluie', '🌧️ Pluie'], ['orage', '⛈️ Orage']],
+    wind: [['auto', '🎲'], ['calme', 'Calme'], ['brise', 'Brise'], ['fort', 'Fort'], ['tempete', 'Tempête']],
+    timeFlow: [[0, '⏸ Figé'], [30, '▶ ×30'], [300, '⏩ ×300']]
+  };
   const CAMS = [
     { name: 'Poursuite', dist: 5.2, height: 2.0, look: 1.1, ahead: 4 },
     { name: 'Large', dist: 11, height: 4.6, look: 1.0, ahead: 7 },
@@ -22,7 +28,7 @@
 
   const Game = {
     state: 'menu',
-    settings: { jersey: 'jaune', quality: 'medium', riders: 10 },
+    settings: { jersey: 'jaune', quality: 'medium', riders: 10, hour: 'auto', weather: 'variable', wind: 'auto', timeFlow: 30 },
     phys: PHYS,
     input: { left: false, right: false, brake: false, pUp: false, pDown: false },
     camIndex: 0,
@@ -33,6 +39,10 @@
       if (!B3D.TileManager.QUALITY[this.settings.quality]) this.settings.quality = 'medium';
       if (!B3D.Cyclist.JERSEYS[this.settings.jersey]) this.settings.jersey = 'jaune';
       if (!RIDER_COUNTS.includes(this.settings.riders)) this.settings.riders = 10;
+      if (!SKY_OPTS.weather.some((o) => o[0] === this.settings.weather)) this.settings.weather = 'variable';
+      if (!SKY_OPTS.wind.some((o) => o[0] === this.settings.wind)) this.settings.wind = 'auto';
+      if (!SKY_OPTS.timeFlow.some((o) => o[0] === this.settings.timeFlow)) this.settings.timeFlow = 30;
+      if (typeof this.settings.hour !== 'number') this.settings.hour = 'auto';
 
       const canvas = $('scene');
       let r;
@@ -84,6 +94,7 @@
       if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
       this.scene.fog.near = Q.radius * 0.22;
       this.scene.fog.far = Q.radius * 0.93;
+      if (this.atmo) this.atmo.setFogBase(Q.radius * 0.22, Q.radius * 0.93);
       this.resize();
     },
 
@@ -140,6 +151,7 @@
         b.onclick = () => { this.settings.riders = +b.dataset.n; this.saveSettings(); this.refreshChips(); };
       });
       this.refreshChips();
+      this.buildSkyControls();
 
       $('btn-model').onclick = () => this.newLandscape();
       $('btn-remodel').onclick = () => this.newLandscape();
@@ -178,6 +190,61 @@
         e.preventDefault();
         this.preview.radius = clamp(this.preview.radius * Math.exp(e.deltaY * 0.0012), 20, 520);
       }, { passive: false });
+    },
+
+    // Réglages du ciel (aperçu et pause) : heure, météo, vent, écoulement du temps. Les changements
+    // s'appliquent tout de suite au paysage, avec une transition douce pour la météo et le vent.
+    buildSkyControls() {
+      const row = (key, label) => '<div class="sky-row" data-k="' + key + '"><span class="sky-lbl">' + label + '</span>' +
+        SKY_OPTS[key].map(([v, l]) => '<button class="chip" data-v="' + v + '">' + l + '</button>').join('') + '</div>';
+      document.querySelectorAll('.sky-host').forEach((host) => {
+        host.innerHTML = '<details class="sky-ctl"' + (host.dataset.open ? ' open' : '') + '><summary>🌦️ Ciel et météo <small class="sky-sum"></small></summary>' +
+          '<div class="sky-row"><span class="sky-lbl">🕐 Heure</span><input type="range" class="sky-hour" min="0" max="23.99" step="0.25" aria-label="Heure de la journée"><b class="sky-clock">--:--</b>' +
+          '<button class="chip sky-hour-auto" title="Heure tirée au hasard pour chaque nouveau paysage">🎲</button></div>' +
+          row('weather', 'Météo') + row('wind', '💨 Vent') + row('timeFlow', '⏳ Temps') + '</details>';
+      });
+      document.querySelectorAll('.sky-row[data-k] .chip').forEach((b) => {
+        b.onclick = () => {
+          const k = b.parentElement.dataset.k;
+          const v = k === 'timeFlow' ? +b.dataset.v : b.dataset.v;
+          this.settings[k] = v;
+          this.saveSettings();
+          if (this.atmo) {
+            if (k === 'weather') this.atmo.setWeather(v);
+            else if (k === 'wind') this.atmo.setWind(v);
+            else this.atmo.setFlow(v);
+          }
+          this.syncSkyControls();
+        };
+      });
+      document.querySelectorAll('.sky-hour-auto').forEach((b) => {
+        b.onclick = () => { this.settings.hour = 'auto'; this.saveSettings(); this.syncSkyControls(); };
+      });
+      document.querySelectorAll('.sky-hour').forEach((inp) => {
+        inp.addEventListener('pointerdown', () => { this._hourDrag = true; });
+        inp.addEventListener('pointerup', () => { this._hourDrag = false; });
+        inp.addEventListener('input', () => {
+          const h = +inp.value;
+          this.settings.hour = h;
+          if (this.atmo) this.atmo.setHour(h);
+          this.syncSkyControls();
+        });
+        inp.addEventListener('change', () => { this._hourDrag = false; this.saveSettings(); });
+      });
+    },
+
+    syncSkyControls() {
+      const A = this.atmo;
+      const info = A ? A.info() : null;
+      document.querySelectorAll('.sky-row[data-k]').forEach((r) => {
+        const k = r.dataset.k;
+        r.querySelectorAll('.chip').forEach((b) => b.classList.toggle('active', String(this.settings[k]) === b.dataset.v));
+      });
+      document.querySelectorAll('.sky-hour-auto').forEach((b) => b.classList.toggle('active', this.settings.hour === 'auto'));
+      if (!info) return;
+      document.querySelectorAll('.sky-clock').forEach((e) => { e.textContent = info.clock; });
+      document.querySelectorAll('.sky-sum').forEach((e) => { e.textContent = info.clock + ' · ' + info.period + ' · ' + info.icon + ' · 💨 ' + info.windKmh + ' km/h'; });
+      if (!this._hourDrag) document.querySelectorAll('.sky-hour').forEach((e) => { e.value = A.hour.toFixed(2); });
     },
 
     refreshChips() {
@@ -400,6 +467,7 @@
       if (this.convoy) { this.convoy.dispose(); this.convoy = null; }
       if (this.hcCrowd) { this.hcCrowd.dispose(); this.hcCrowd = null; }
       if (this.mooBubble) this.mooBubble.visible = false;
+      if (this.atmo) { this.atmo.dispose(); this.atmo = null; }
       if (this.sky) { this.sky.dispose(); this.sky = null; }
       if (this.cyclist) { free(this.cyclist.root); this.cyclist = null; }
       this.L = null;
@@ -438,16 +506,13 @@
       this.setLoading(0.15, 'Rivières, lacs et falaises…');
       await nextFrame();
 
-      // ambiance
-      const amb = L.amb;
-      this.scene.fog.color.set(amb.sky.fog);
-      this.sun.color.set(amb.sun.color);
-      this.sun.intensity = amb.sun.intensity;
-      this.hemi.color.set(amb.hemi.sky);
-      this.hemi.groundColor.set(amb.hemi.ground);
-      this.hemi.intensity = amb.hemi.intensity;
+      // ciel, heure, météo et vent (couleurs de base données par l'ambiance)
       this.sky = new B3D.Sky(this.scene, L);
-      this.sunDir = this.sky.sunDir.clone();
+      this.atmo = new B3D.Atmosphere({ scene: this.scene, sky: this.sky, sun: this.sun, hemi: this.hemi, fog: this.scene.fog, quality: this.settings.quality }, L, this.settings);
+      this.atmo.setFogBase(this.Q.radius * 0.22, this.Q.radius * 0.93);
+      this.atmo.onThunder = (t) => this.thunder(t);
+      this.sunDir = this.atmo.lightDir;
+      this.atmoStart = null;
 
       this.roadGroup = B3D.road.build(route, L);
       this.scene.add(this.roadGroup);
@@ -470,6 +535,10 @@
       this.cyclist = new B3D.Cyclist({ jersey: this.settings.jersey, bikeColor: ['#e2463a', '#3d7be0', '#1d1a2b', '#4cc35a', '#ff7aa8'][seed % 5] });
       this.scene.add(this.cyclist.root);
       this.placeCyclistAtStart();
+      // panneaux et banderoles (non éclairés) : assombris la nuit
+      this.atmo.registerBasic(this.roadGroup);
+      this.atmo.registerBasic(this.villageGroup);
+      this.syncSkyControls();
 
       // aperçu centré sur le point focal
       this.preview = Object.assign(this.preview || { angle: 0.7, pitch: 0.5, radius: 150 }, { s: focusS, auto: true });
@@ -584,6 +653,11 @@
     // ------------------------------------------------------------------ course
     startRide() {
       if (this.building || !this.L) return;
+      // la course part à l'heure affichée dans l'aperçu ; « Rejouer » repart de cette même heure
+      if (this.atmo) {
+        if (this.state === 'preview' || !this.atmoStart) this.atmoStart = { hour: this.atmo.hour };
+        else this.atmo.setHour(this.atmoStart.hour);
+      }
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       this.hide('screen-preview');
       this.show('hud');
@@ -632,6 +706,7 @@
         this.sound.silence();
         if (this.vr.presenting) this.vr.showPause(true);
       } else if (!on && this.state === 'paused') {
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
         this.state = this.pausedFrom;
         this.hide('screen-pause');
         this.clock.getDelta();
@@ -764,15 +839,21 @@
         if (A.takeoff > 0) S.animal('flutter', 0.12 + 0.04 * Math.min(4, A.takeoff), (R() - 0.5));
       }
       if (mix) {
+        // le jour : oiseaux (qui se taisent sous la pluie) ; la nuit : grillons et chouettes
+        const at = this.atmo, day = at ? at.dayK : 1, night = at ? at.nightK : 0, rain = at ? at.cur.rain : 0;
         // passereaux dans les prés et les haies, merles en forêt, plus discrets en altitude
-        const song = mix.meadow * 0.8 + mix.forest + mix.garrigue * 0.5 + mix.wet * 0.5;
+        const song = (mix.meadow * 0.8 + mix.forest + mix.garrigue * 0.5 + mix.wet * 0.5) * day * (1 - 0.85 * rain);
         if (song > 0.15 && due('song', 1.4 / song, 4 / song)) S.animal(mix.forest > mix.meadow && R() < 0.6 ? 'blackbird' : 'songbird', 0.012 + 0.025 * R(), (R() - 0.5) * 1.6);
-        // grenouilles près des mares et des zones humides (surtout le soir)
-        const frogs = Math.max(W.pondD < 90 ? 1 - W.pondD / 90 : 0, mix.wet * 2) * (L.amb.id === 'soir' ? 1.4 : 1);
+        const crick = (mix.meadow + mix.garrigue + mix.wet * 0.5) * night * (1 - 0.8 * rain);
+        if (crick > 0.15 && due('cricket', 0.5 / crick, 1.4 / crick)) S.animal('cricket', 0.015 + 0.02 * R(), (R() - 0.5) * 1.6);
+        if (mix.forest > 0.2 && night > 0.5 && rain < 0.3 && due('owl', 9, 16)) S.animal('owl', 0.05 + 0.04 * R(), (R() - 0.5) * 1.6);
+        // grenouilles près des mares et des zones humides (surtout le soir et la nuit)
+        const frogs = Math.max(W.pondD < 90 ? 1 - W.pondD / 90 : 0, mix.wet * 2) * (L.amb.id === 'soir' ? 1.4 : 1) * (1 + 0.8 * night);
         if (frogs > 0.1 && due('frog', 0.8 / frogs, 2.5 / frogs)) S.animal('frog', 0.02 + 0.06 * Math.min(1, frogs), (R() - 0.5) * 1.6);
-        // cigales : garrigue et campagne du Sud, l'été ou en fin de journée
+        // cigales : garrigue et campagne du Sud, l'été, au soleil
         const warm = (L.amb.id === 'ete' || L.amb.id === 'soir' ? 1 : L.amb.id === 'printemps' ? 0.3 : 0) * clamp((1000 - P.y) / 300, 0, 1);
-        S.setCicadas(Math.min(1, (mix.garrigue * 2.5 + (L.bio.south ? mix.meadow * 0.6 + mix.forest * 0.4 : 0)) * warm));
+        const sunny = at ? smoothstep(0.2, 0.6, day) * (1 - at.cur.cloud * 0.7) * (1 - rain) : 1;
+        S.setCicadas(Math.min(1, (mix.garrigue * 2.5 + (L.bio.south ? mix.meadow * 0.6 + mix.forest * 0.4 : 0)) * warm * sunny));
       }
     },
 
@@ -808,12 +889,19 @@
       const p = route.sample(R.s, this._rs || (this._rs = {}));
       const grade = p.grade, v = R.v;
       const offRoad = Math.abs(R.lat) > half - 0.2;
-      const crr = PHYS.crr * (offRoad ? 3.5 : 1);
+      const wet = this.atmo ? this.atmo.wet : 0;
+      const crr = PHYS.crr * (offRoad ? 3.5 : 1) * (1 + 0.12 * wet); // chaussée mouillée : ça roule un peu moins bien
       const cda = R.tuck ? PHYS.cdaTuck : R.standing ? PHYS.cdaStand : PHYS.cda;
-      // aspiration derrière les autres coureurs
+      // vent : composante dans le sens de la course (de dos > 0) et de côté (vers la droite > 0)
+      const W = this.atmo ? this.atmo.wind : null;
+      const head = W ? W.x * p.tx + W.z * p.tz : 0, cross = W ? W.x * p.rx + W.z * p.rz : 0;
+      const va = v - head; // vitesse de l'air face au coureur
+      R.windHead = head; R.windCross = cross; R.air = Math.hypot(va, cross);
+      if (this.playerProxy) this.playerProxy.drift = clamp(cross / Math.max(va, 3), -0.4, 0.4);
+      // aspiration derrière les autres coureurs (le sillage dérive sous le vent)
       let draft = 0;
       if (this.peloton) {
-        const sh = this.peloton.shelterFor(this.playerProxy);
+        const sh = this.peloton.shelterFor(this.playerProxy, clamp(cross / Math.max(va, 3), -0.4, 0.4));
         draft = sh.f;
         this.peloton.playerDraft = draft;
         this.peloton.playerDraftSrc = sh.src;
@@ -831,8 +919,8 @@
       const sinA = grade / Math.sqrt(1 + grade * grade);
       const fg = PHYS.mass * PHYS.g * sinA;
       const fr = v > 0.05 ? crr * PHYS.mass * PHYS.g : 0;
-      const fa = 0.5 * PHYS.rho * cda * (1 - draft) * v * v;
-      const fb = R.braking ? PHYS.brake : 0;
+      const fa = 0.5 * PHYS.rho * cda * (1 - draft) * va * Math.abs(va);
+      const fb = R.braking ? PHYS.brake * (1 - 0.3 * wet) : 0; // freins moins efficaces sous la pluie
       let a = (drive - fg - fr - fa - fb) / PHYS.mass;
       if (v <= 0.01 && a < 0) a = 0; // pas de recul
       R.v = clamp(v + a * h, 0, PHYS.vMax);
@@ -918,6 +1006,7 @@
         if (ev.sound && this.vr.presenting) this.vr.pulse(ev.sound === 'win' ? 0.8 : 0.45, ev.sound === 'musette' ? 120 : 220);
       }
       if (this.peloton) this.handlePelotonEvents(dtReal);
+      if (this.atmo) this.skyEvents();
       if (!R.flamme && route.length > 2500 && d >= route.length - 1000) {
         R.flamme = true;
         this.toast('🚩 Flamme rouge !<small>Plus qu\'un kilomètre</small>', 2400);
@@ -973,9 +1062,56 @@
       P.events.length = 0;
     },
 
-    // sons d'ambiance liés à la course : aspiration, vélos autour, moto, hélicoptère
+    // feux de nuit (et par temps d'orage très sombre) ; vent et chaussée mouillée pour le peloton
+    applyNightLights() {
+      const A = this.atmo;
+      const on = A.lampK;
+      if (this.cyclist) this.cyclist.setLights(on);
+      if (this.peloton) {
+        this.peloton.lightsOn = on > 0.3;
+        this.peloton.wind = A.wind;
+        this.peloton.crrK = 1 + 0.12 * A.wet;
+        this.peloton.brakeK = 1 - 0.3 * A.wet;
+      }
+      if (this.convoy) this.convoy.setLights(on > 0.3);
+    },
+
+    // messages : changement de temps, lever et coucher du soleil
+    skyEvents() {
+      const A = this.atmo, R = this.ride;
+      if (A.changed) {
+        const MSG = {
+          'soleil>nuageux': ['⛅ Les nuages arrivent', 'Le ciel se couvre'],
+          'nuageux>soleil': ['☀️ Retour du soleil', 'Le ciel se dégage'],
+          'nuageux>pluie': ['🌧️ La pluie arrive', 'Route glissante : on freine moins bien'],
+          'pluie>orage': ['⛈️ Orage !', 'Éclairs, tonnerre et rafales de vent'],
+          'orage>pluie': ['🌧️ L\u2019orage s\u2019éloigne', 'Il pleut encore'],
+          'pluie>nuageux': ['⛅ La pluie cesse', 'La route va sécher peu à peu']
+        }[A.changed.from + '>' + A.changed.to];
+        if (MSG) this.toast(MSG[0] + '<small>' + MSG[1] + '</small>', 2800);
+        A.changed = null;
+      }
+      const per = A.period();
+      if (R.period && per !== R.period) {
+        if (per === 'lever du soleil') this.toast('🌅 Le soleil se lève<small>Les phares s\u2019éteignent bientôt</small>', 2600);
+        else if (per === 'coucher du soleil') this.toast('🌇 Coucher de soleil<small>Les phares vont s\u2019allumer</small>', 2600);
+        else if (per === 'nuit') this.toast('🌙 La nuit tombe<small>Phares allumés, étoiles et lune</small>', 2600);
+      }
+      R.period = per;
+    },
+
+    // tonnerre : le son arrive après l'éclair, d'autant plus tard et plus sourd que l'orage est loin
+    thunder(t) {
+      if (!this.sound.ctx || this.state === 'menu') return;
+      const vol = 0.12 + 0.5 * (1 - Math.min(1, t.dist / 1500));
+      const pan = this.panOf(t.x, t.z);
+      setTimeout(() => { if (this.state !== 'menu' && this.state !== 'paused') this.sound.thunder(vol, pan, t.dist); }, t.delay * 1000);
+      if (this.vr.presenting && t.dist < 600) this.vr.pulse(0.3, 160);
+    },
+
+    // sons d'ambiance liés à la course : aspiration, vélos autour, moto, hélicoptère, vent, pluie
     soundEnv() {
-      const env = { draft: this.ride.draft || 0, bikes: 0, moto: 1e9, heli: 1e9 };
+      const env = { draft: this.ride.draft || 0, bikes: 0, moto: 1e9, heli: 1e9, air: this.ride.air, rain: this.atmo ? this.atmo.cur.rain : 0 };
       const P = this.cyclist.root.position;
       if (this.peloton) for (const r of this.peloton.riders) if (r.pos && !r.done && r.pos.distanceTo(P) < 12) env.bikes++;
       if (this.convoy) { env.moto = this.convoy.nearest('moto', P); env.heli = this.convoy.nearest('heli', P); }
@@ -1174,6 +1310,15 @@
         this.hcCrowd.update(dt, this.camera, this.ridersForCrowd(), racing && this.ride ? this.ride.s : this.preview.s, racing ? dt * TIME_SCALES[this.timeScaleIndex] : dt);
       }
       if (this.fauna) this.updateFauna(dt);
+      // heure, météo et vent : le temps avance avec la course (accéléré avec T), pas pendant la pause
+      if (this.atmo) {
+        const racing = this.state === 'ride' || this.state === 'countdown' || this.state === 'finished';
+        const paused = this.state === 'paused';
+        this.atmo.update(paused ? 0 : racing ? dt * TIME_SCALES[this.timeScaleIndex] : dt, paused ? 0 : dt, this.camera);
+        this.applyNightLights();
+        this._skySync = (this._skySync || 0) - dt;
+        if (this._skySync <= 0) { this._skySync = 0.4; if (this.state === 'preview' || paused) this.syncSkyControls(); }
+      }
       if (this.sky) this.sky.update(this.camera, dt);
       if (this.villageGroup) B3D.villages.cull(this.villageGroup, this.camera.getWorldPosition(this._cw || (this._cw = new THREE.Vector3())), this.Q.radius + 150);
       this.confetti.update(dt);
@@ -1199,6 +1344,7 @@
         const q = this.route.sample(this.preview.s, this._faunaTmp || (this._faunaTmp = {}));
         fwd = { x: q.tx, z: q.tz };
       } else {
+        if (!this._rs) return;
         P = this.cyclist.root.position;
         fwd = { x: this._rs.tx, z: this._rs.tz };
       }
@@ -1216,8 +1362,18 @@
         next: this.raceT.next(R.s), points: this.raceT.points,
         target: R.target / PHYS.pMax, cp: PHYS.cp / PHYS.pMax, watts: R.effort, wkg: R.effort / PHYS.riderMass,
         reserve: R.reserve / PHYS.wp, bonk: R.bonk, draft: R.draft,
-        race: this.peloton ? this.peloton.raceInfo() : null
+        race: this.peloton ? this.peloton.raceInfo() : null,
+        sky: this.skyHud(q)
       }, performance.now());
+    },
+
+    // horloge et vent relatif au coureur (angle : 0 = le vent pousse dans le dos, 180 = de face)
+    skyHud(q) {
+      const A = this.atmo;
+      if (!A) return null;
+      const W = A.wind;
+      const f = W.x * q.tx + W.z * q.tz, r = W.x * q.rx + W.z * q.rz;
+      return { clock: A.clock(), icon: A.info().icon, kmh: W.speed * 3.6, angle: Math.atan2(r, f) * 180 / Math.PI };
     },
 
     // positions des coureurs (pour la foule des cols, qui s'écarte à leur passage)

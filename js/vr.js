@@ -482,16 +482,27 @@
       ctx.fillStyle = R.bonk ? '#e2463a' : res > 0.5 ? '#5cc85a' : res > 0.2 ? '#f39a2b' : '#e2463a';
       if (res > 0.01) { roundRect(ctx, 44, 270, (x1 - 44) * res, 26, 13); ctx.fill(); }
       roundRect(ctx, 44, 270, x1 - 44, 26, 13); ctx.lineWidth = 4; ctx.stroke();
-      // ligne du bas : position / distance / chrono
-      ctx.fillStyle = '#1d1a2b'; ctx.font = '600 28px ' + FONT;
+      // ligne du bas : position, distance restante, vent (flèche relative au coureur), chrono
+      ctx.fillStyle = '#1d1a2b'; ctx.font = '600 25px ' + FONT;
       const d = Math.max(0, R.s - g.route.sStart);
       const info = g.peloton ? g.peloton.raceInfo() : null;
-      const left = info ? '🏁 ' + info.position + '/' + info.total : '📏 ' + (d / 1000).toFixed(1).replace('.', ',') + ' km';
-      ctx.fillText(left, 44, 336);
-      ctx.textAlign = 'center';
-      ctx.fillText('reste ' + (Math.max(0, g.route.length - d) / 1000).toFixed(1).replace('.', ',') + ' km', W / 2 + 10, 336);
+      ctx.textAlign = 'left';
+      ctx.fillText(info ? '🏁 ' + info.position + '/' + info.total : '📏 ' + (d / 1000).toFixed(1).replace('.', ',') + ' km', 40, 338);
+      ctx.fillText((Math.max(0, g.route.length - d) / 1000).toFixed(1).replace('.', ',') + ' km', 150, 338);
+      const sky = g.skyHud ? g.skyHud(q) : null;
+      if (sky) {
+        const ax = 290, ay = 329;
+        ctx.save();
+        ctx.translate(ax, ay);
+        ctx.rotate(sky.angle * Math.PI / 180);
+        ctx.globalAlpha = sky.kmh < 3 ? 0.3 : 1;
+        ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(10, 3); ctx.lineTo(3, 1); ctx.lineTo(3, 14); ctx.lineTo(-3, 14); ctx.lineTo(-3, 1); ctx.lineTo(-10, 3); ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.fillText(Math.round(sky.kmh) + '', ax + 18, 338);
+      }
       ctx.textAlign = 'right';
-      ctx.fillText('⏱ ' + formatTime(R.time), W - 44, 336);
+      ctx.fillText('⏱ ' + formatTime(R.time), W - 40, 338);
       tex.needsUpdate = true;
     }
 

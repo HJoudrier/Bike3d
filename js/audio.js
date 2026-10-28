@@ -105,6 +105,48 @@
       this.motoOsc.connect(mlp); mlp.connect(this.motoGain); this.motoGain.connect(this.master);
       this.motoOsc.start();
       this.bikeClickAcc = 0;
+      // pluie : bruissement aigu et crépitement plus grave
+      const rhp = ctx.createBiquadFilter();
+      rhp.type = 'highpass'; rhp.frequency.value = 1800;
+      const rlp = ctx.createBiquadFilter();
+      rlp.type = 'lowpass'; rlp.frequency.value = 7000;
+      this.rainGain = ctx.createGain();
+      this.rainGain.gain.value = 0;
+      loop(0.9).connect(rhp); rhp.connect(rlp); rlp.connect(this.rainGain); this.rainGain.connect(this.master);
+      this.dropAcc = 0;
+    }
+
+    // Tonnerre : craquement sec si l'éclair est proche, puis grondement grave qui roule et s'éteint.
+    thunder(vol, pan, dist) {
+      if (!this.ctx || this.muted) return;
+      const ctx = this.ctx, t = ctx.currentTime;
+      const near = Math.max(0, 1 - dist / 700);
+      if (near > 0) {
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.7;
+        this._noise(t, 0.35).connect(bp);
+        bp.connect(this._out(vol * near * 0.9, pan, t, 0.005, 0.3));
+      }
+      const dur = 2.5 + 2.5 * Math.random() + dist / 600;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.Q.value = 0.9;
+      lp.frequency.setValueAtTime(260 + 300 * near, t);
+      lp.frequency.exponentialRampToValueAtTime(70, t + dur);
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuf; src.loop = true; src.playbackRate.value = 0.5;
+      src.connect(lp);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol * 2.2, t + 0.08 + 0.4 * (1 - near));
+      // grondement irrégulier : quelques regains avant de s'éteindre
+      for (let k = 1; k <= 3; k++) {
+        const tk = t + dur * k * 0.22;
+        g.gain.exponentialRampToValueAtTime(vol * 2.2 * (0.35 + 0.4 * Math.random()) / k, tk);
+      }
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      lp.connect(g);
+      if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan || 0)); g.connect(p); p.connect(this.master); } else g.connect(this.master);
+      src.start(t); src.stop(t + dur + 0.1);
     }
 
     setMuted(m) {
@@ -359,6 +401,17 @@
           }
           break;
         }
+        case 'cricket': { // grillon : petites salves de stridulations aiguës
+          const n = 2 + Math.floor(R() * 3), f = 4300 + R() * 900;
+          for (let k = 0; k < n; k++) this._call({ type: 'sine', f0: f, f1: f * 0.98, dur: 0.07, trem: 60, tremDepth: 0.6, vol, pan, delay: k * 0.11, attack: 0.005 });
+          break;
+        }
+        case 'owl': { // chouette hulotte : hou… hou-hou-houuu
+          const f = 360 + R() * 40;
+          this._call({ type: 'sine', f0: f, f1: f * 0.94, dur: 0.55, vib: [5, 4], vol, pan, attack: 0.06 });
+          [0.95, 1.3, 1.55].forEach((d, k) => this._call({ type: 'sine', f0: f * 0.97, f1: f * (k === 2 ? 0.86 : 0.95), dur: k === 2 ? 0.9 : 0.22, vib: [6, 6], vol: vol * 0.8, pan, delay: d, attack: 0.04 }));
+          break;
+        }
         case 'frog': { // ribbit : deux trains d'impulsions
           const f = 120 + R() * 60;
           this._call({ type: 'square', f0: f, f1: f * 0.95, dur: 0.18, bp: [650, 4], trem: 32, tremDepth: 0.55, vol: vol * 1.6, pan, attack: 0.01 });
@@ -438,7 +491,7 @@
     silence() {
       if (!this.ctx) return;
       const t = this.ctx.currentTime;
-      for (const g of [this.windGain, this.crowdGain, this.rollGain, this.humGain, this.cicadaGain, this.heliGain, this.motoGain]) g.gain.setTargetAtTime(0, t, 0.1);
+      for (const g of [this.windGain, this.crowdGain, this.rollGain, this.humGain, this.cicadaGain, this.heliGain, this.motoGain, this.rainGain]) g.gain.setTargetAtTime(0, t, 0.1);
     }
 
     // niveau des cigales (0..1), avec des phrases qui enflent et retombent
@@ -450,12 +503,20 @@
     }
 
     // speed en m/s ; freewheel = roue libre ; crowd = 0..1 (densité de spectateurs proches)
-    // env : { draft (0..1, abri), bikes (vélos à moins de 12 m), moto, heli (distances en m) }
+    // env : { draft (0..1, abri), bikes (vélos à moins de 12 m), moto, heli (distances en m),
+    //         air (vitesse de l'air, vent compris, m/s), rain (0..1) }
     update(dt, speed, freewheel, crowd, env) {
       if (!this.ctx || this.muted) return;
       const t = this.ctx.currentTime;
       const E = env || {};
-      const w = Math.min(1, speed / 22);
+      const w = Math.min(1, (E.air !== undefined ? E.air : speed) / 22);
+      const rain = E.rain || 0;
+      this.rainGain.gain.setTargetAtTime(rain * 0.1, t, 0.8);
+      // gouttes qui claquent sur le casque
+      if (rain > 0.1) {
+        this.dropAcc += dt * rain * 14;
+        while (this.dropAcc >= 1) { this.dropAcc -= 1; this.click(0.02 + 0.03 * Math.random(), (Math.random() - 0.5) * 1.6); }
+      }
       const shelter = 1 - 0.75 * Math.min(1, (E.draft || 0) / 0.45); // moins de vent dans les roues
       this.windGain.gain.setTargetAtTime((0.02 + w * w * 0.26) * shelter, t, 0.2);
       this.windFilter.frequency.setTargetAtTime(300 + w * 900 * shelter, t, 0.3);
