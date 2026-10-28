@@ -337,12 +337,13 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--rule);font-fa
   </figure>
 
   <h3>1. Le parcours</h3>
-  <p>Dans l'onglet <b>Parcours</b>, chaque clic sur la carte ajoute un point de passage ; le tracé suit les routes à vélo (routage BRouter) ou va en ligne droite. On peut aussi importer un fichier GPX. L'altitude vient d'un modèle numérique de terrain (Copernicus, maille de 90 m) si le fichier n'en contient pas. Sous la carte, le profil est coloré par la pente ; les montées principales sont détectées et classées.</p>
+  <p>Dans l'onglet <b>Parcours</b>, chaque clic sur la carte ajoute un point de passage ; le tracé suit les routes à vélo (routage BRouter) ou va en ligne droite. On peut aussi importer un fichier GPX. L'altitude vient d'un modèle numérique de terrain (Copernicus, maille de 90 m) si le fichier n'en contient pas. Au-dessus de la carte, le nom du parcours (un clic pour le modifier), sa distance, son D+ et son D− ; sur la carte, les outils de tracé : recherche de lieu, mode de tracé, annuler et rétablir (<kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>+<kbd>Y</kbd>), boucler, inverser, centrer, effacer. Sous la carte, le profil est coloré par la pente ; les montées principales sont détectées et classées.</p>
   <ul>
     <li><b>Portions de revêtement</b> : sélectionner une zone du profil puis choisir le revêtement (enrobé lisse, pavés, gravier…). Il multiplie le coefficient de roulement des pneus et change le risque de chute et de crevaison.</li>
     <li><b>Portions de vent</b> (sans météo) : provenance, vitesse moyenne, vent continu ou en rafales.</li>
     <li><b>Météo</b> : soit les prévisions horaires d'Open-Meteo sur 2 à 12 points du parcours, soit une météo personnalisée par portions (température, pluie, vent). La météo est lue à l'endroit <i>et</i> à l'heure où passe le cycliste.</li>
-    <li><b>Points en jeu</b> : sprints intermédiaires et côtes classées (pour les classements du mode jeu), <b>zones de ravitaillement</b>.</li>
+    <li><b>Points en jeu</b> : sprints intermédiaires et côtes classées (pour les classements du mode jeu), <b>zones de ravitaillement</b>. Chaque clic sur « + Sprint intermédiaire » ou « + Côte classée » en ajoute un, placé automatiquement : le sprint sur du plat, au milieu du plus grand écart sans sprint ; la côte, la plus dure de celles qui ne sont pas encore classées.</li>
+    <li><b>Parcours complet</b> : « Exporter › Parcours complet » écrit un GPX enrichi, lisible par toute appli (trace, sprints, sommets, ravitaillements), qui emporte aussi les points en jeu, les ravitaillements, les portions, la météo et le découpage du tracé ; « Importer » le relit tel quel.</li>
   </ul>
 
   <h3>2. Le cycliste</h3>

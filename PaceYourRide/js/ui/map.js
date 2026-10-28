@@ -159,7 +159,10 @@
     let pts = [];
     if (p) for (let i = 0; i < p.n; i += Math.max(1, Math.floor(p.n / 400))) pts.push([p.lat[i], p.lng[i]]);
     else pts = wps.map((w) => [w.lat, w.lng]);
-    if (pts.length >= 2) M.map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] });
+    // onglet Parcours : les outils de tracé couvrent le haut de la carte
+    const tools = store.state.ui.tab === 'route' ? D.$('#route-tools') : null;
+    const top = tools && tools.offsetHeight ? tools.offsetTop + tools.offsetHeight + 16 : 30;
+    if (pts.length >= 2) M.map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [30, top], paddingBottomRight: [30, 30] });
     else if (pts.length === 1) M.map.setView(pts[0], 14);
   };
 

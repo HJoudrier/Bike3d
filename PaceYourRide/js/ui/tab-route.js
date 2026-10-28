@@ -28,101 +28,8 @@
     surfaceColor,
 
     init() {
-      // mode de tracé
-      D.fillSelect($('#routing-mode'), PYR.services.ROUTING_MODES, store.state.route.mode);
-      $('#routing-mode').addEventListener('change', (e) => PYR.routeModel.setMode(e.target.value));
-
-      // nom du parcours : enregistré avec le projet, repris dans la bibliothèque de l'accueil
-      // le nom tient lieu de titre de l'onglet ; le crayon le transforme en champ de saisie (Entrée ou clic ailleurs : terminé, Échap : annuler)
-      const nameIn = $('#route-name'), title = $('#route-title'), pen = $('#btn-rename-route');
-      let before = '';
-      const showName = () => {
-        const name = store.state.route.name || '';
-        if (document.activeElement !== nameIn) nameIn.value = name;
-        title.textContent = name || 'Tracé du parcours';
-      };
-      const edit = (on) => { nameIn.hidden = !on; title.hidden = on; pen.hidden = on; };
-      pen.addEventListener('click', () => { before = store.state.route.name || ''; edit(true); nameIn.focus(); nameIn.select(); });
-      nameIn.addEventListener('input', () => { store.state.route.name = nameIn.value.slice(0, 60); store.save(); });
-      nameIn.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') nameIn.blur();
-        else if (e.key === 'Escape') { store.state.route.name = before; nameIn.value = before; store.save(); nameIn.blur(); }
-      });
-      nameIn.addEventListener('blur', () => { edit(false); showName(); });
-      store.on('profile', showName);
-      store.on('route-geometry', showName);
-      showName();
-
-      $('#btn-undo').addEventListener('click', () => PYR.routeModel.undo());
-      $('#btn-loop').addEventListener('click', () => PYR.routeModel.loop());
-      $('#btn-reverse').addEventListener('click', () => PYR.routeModel.reverse());
-      $('#btn-fit').addEventListener('click', () => PYR.map.fit());
-      $('#btn-clear').addEventListener('click', () => {
-        if (!store.state.route.waypoints.length || confirm('Effacer tout le parcours ?')) PYR.routeModel.clear();
-      });
-      $('#btn-demo').addEventListener('click', () => { PYR.routeModel.demo(); setTimeout(() => PYR.map.fit(), 50); });
-      $('#input-gpx').addEventListener('change', async (e) => {
-        const f = e.target.files[0];
-        e.target.value = '';
-        if (!f) return;
-        try {
-          const parsed = PYR.services.parseGpx(await D.readFile(f));
-          PYR.routeModel.importGpx(parsed);
-          D.toast(`GPX importé : ${parsed.points.length} points${parsed.hasEle ? '' : ' (altitude récupérée en ligne)'}.`);
-          setTimeout(() => PYR.map.fit(), 50);
-        } catch (err) { D.toast(err.message, 'error'); }
-      });
-      // le projet ne contient qu'un parcours : la bibliothèque (page d'accueil) en garde plusieurs, mais seulement ceux qu'on y enregistre
-      $('#btn-save-lib').addEventListener('click', () => {
-        const Lib = PYR.library, p = store.profile;
-        if (!p) { D.toast('Aucun parcours à enregistrer', 'error'); return; }
-        if (!store.state.route.name.trim()) { store.state.route.name = Lib.defaultRouteName(); $('#route-name').value = store.state.route.name; $('#route-title').textContent = store.state.route.name; store.save(); }
-        const name = store.state.route.name.trim();
-        try {
-          let raw = null;
-          try { raw = JSON.parse(localStorage.getItem(Lib.STORAGE_KEY)); } catch (e) { /* bibliothèque illisible : on repart d'une vide */ }
-          const lib = Lib.normalize(raw), data = Lib.extract('route', store.state);
-          let r = Lib.save(lib, 'route', name, data);
-          if (r.exists) {
-            if (!confirm(`Un parcours nommé « ${r.exists.name} » existe déjà dans ta bibliothèque. Veux-tu vraiment l'écraser ?`)) return;
-            r = Lib.save(lib, 'route', name, data, Date.now(), true);
-          }
-          localStorage.setItem(Lib.STORAGE_KEY, JSON.stringify(lib));
-          D.toast(`« ${r.item.name} » ${r.replaced ? 'mis à jour dans' : 'enregistré dans'} ta bibliothèque (page d'accueil › Sélectionner un parcours).`);
-        } catch (e) { D.toast('Enregistrement impossible : stockage du navigateur indisponible.', 'error'); }
-      });
-      $('#btn-export-gpx').addEventListener('click', () => {
-        const p = store.profile;
-        if (!p) { D.toast('Aucun parcours à exporter', 'error'); return; }
-        D.download('parcours-paceyourride.gpx', PYR.services.toGpx(store.state.route.name || 'Parcours PaceYourRide', p.lat, p.lng, p.ele, p.n), 'application/gpx+xml');
-      });
-
-      // recherche de lieu
-      const results = $('#search-results');
-      $('#search-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const q = $('#search-input').value.trim();
-        if (!q) return;
-        D.clear(results);
-        results.hidden = false;
-        results.appendChild(h('li', null, 'Recherche…'));
-        try {
-          const list = await PYR.services.geocode(q);
-          D.clear(results);
-          if (!list.length) results.appendChild(h('li', null, 'Aucun résultat'));
-          for (const r of list) {
-            const li = h('li', { tabindex: 0 }, r.label, r.sub ? h('small', null, r.sub) : null);
-            const go = () => { PYR.map.map.setView([r.lat, r.lng], 13); results.hidden = true; };
-            li.addEventListener('click', go);
-            li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') go(); });
-            results.appendChild(li);
-          }
-        } catch (err) {
-          D.clear(results);
-          results.appendChild(h('li', null, 'Recherche indisponible (connexion ?)'));
-        }
-      });
-      document.addEventListener('click', (e) => { if (!e.target.closest('.search')) results.hidden = true; });
+      T.initHead();
+      T.initTools();
 
       // profil
       chart = new PYR.charts.ProfileChart($('#profile-chart'), {
@@ -140,16 +47,8 @@
       $('#sel-add-feed').addEventListener('click', () => { if (selection) T.addFeed(selection.a / 1000, selection.b / 1000); T.cancelSelection(); });
       $('#sel-cancel').addEventListener('click', () => T.cancelSelection());
 
-      $('#btn-add-sprint').addEventListener('click', () => {
-        const L = store.profile ? store.profile.length / 1000 : 0;
-        if (!L) { D.toast('Trace d\'abord un parcours', 'error'); return; }
-        T.addSprint(L / 2);
-      });
-      $('#btn-add-kom').addEventListener('click', () => {
-        const L = store.profile ? store.profile.length / 1000 : 0;
-        if (!L) { D.toast('Trace d\'abord un parcours', 'error'); return; }
-        T.addKom(Math.max(0, L / 2 - 1), L / 2);
-      });
+      $('#btn-add-sprint').addEventListener('click', () => T.autoSprint());
+      $('#btn-add-kom').addEventListener('click', () => T.autoKom());
       $('#btn-add-feed').addEventListener('click', () => {
         const L = store.profile ? store.profile.length / 1000 : 0;
         if (!L) { D.toast('Trace d\'abord un parcours', 'error'); return; }
@@ -157,8 +56,6 @@
         T.addFeed(Math.max(0, mid - PYR.feed.ZONE_LEN / 2000), Math.min(L, mid + PYR.feed.ZONE_LEN / 2000));
       });
       $('#btn-auto-feed').addEventListener('click', () => T.autoFeed());
-      $('#btn-auto-kom').addEventListener('click', () => T.autoCheckpoints('kom'));
-      $('#btn-auto-sprint').addEventListener('click', () => T.autoCheckpoints('sprint'));
 
       $('#btn-add-surface').addEventListener('click', () => {
         const L = store.profile ? store.profile.length / 1000 : 1;
@@ -202,6 +99,215 @@
 
     onShow() { if (chart) { chart.surface.request(); T.renderMarks(); } },
 
+    /** En-tête au-dessus de la carte : nom du parcours, distance et dénivelés ; enregistrer, importer, exporter. */
+    initHead() {
+      // nom du parcours : enregistré avec le projet, repris dans la bibliothèque de l'accueil et dans les fichiers exportés
+      // un clic sur le nom (ou le crayon) le transforme en champ de saisie (Entrée ou clic ailleurs : terminé, Échap : annuler)
+      const nameIn = $('#route-name'), title = $('#route-title'), pen = $('#btn-rename-route');
+      let before = '';
+      const showName = () => {
+        const r = store.state.route, name = r.name || '';
+        if (document.activeElement !== nameIn) nameIn.value = name;
+        title.textContent = name || (r.waypoints.length || r.fixed ? 'Parcours sans nom' : 'Nouveau parcours');
+        title.classList.toggle('unnamed', !name);
+      };
+      const edit = (on) => { nameIn.hidden = !on; title.hidden = on; pen.hidden = on; };
+      const rename = () => { before = store.state.route.name || ''; edit(true); nameIn.focus(); nameIn.select(); };
+      pen.addEventListener('click', rename);
+      title.addEventListener('click', rename);
+      nameIn.addEventListener('input', () => { store.state.route.name = nameIn.value.slice(0, 60); store.save(); });
+      nameIn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') nameIn.blur();
+        else if (e.key === 'Escape') { store.state.route.name = before; nameIn.value = before; store.save(); nameIn.blur(); }
+      });
+      nameIn.addEventListener('blur', () => { store.state.route.name = store.state.route.name.trim(); store.save(); edit(false); showName(); });
+      store.on('profile', showName);
+      store.on('route-geometry', showName);
+      showName();
+
+      // le projet ne contient qu'un parcours : la bibliothèque (page d'accueil) en garde plusieurs, mais seulement ceux qu'on y enregistre
+      $('#btn-save-lib').addEventListener('click', () => {
+        const Lib = PYR.library, p = store.profile;
+        if (!p) { D.toast('Aucun parcours à enregistrer', 'error'); return; }
+        if (!store.state.route.name.trim()) { store.state.route.name = Lib.defaultRouteName(); showName(); store.save(); }
+        const name = store.state.route.name.trim();
+        try {
+          let raw = null;
+          try { raw = JSON.parse(localStorage.getItem(Lib.STORAGE_KEY)); } catch (e) { /* bibliothèque illisible : on repart d'une vide */ }
+          const lib = Lib.normalize(raw), data = Lib.extract('route', store.state);
+          let r = Lib.save(lib, 'route', name, data);
+          if (r.exists) {
+            if (!confirm(`Un parcours nommé « ${r.exists.name} » existe déjà dans ta bibliothèque. Veux-tu vraiment l'écraser ?`)) return;
+            r = Lib.save(lib, 'route', name, data, Date.now(), true);
+          }
+          localStorage.setItem(Lib.STORAGE_KEY, JSON.stringify(lib));
+          D.toast(`« ${r.item.name} » ${r.replaced ? 'mis à jour dans' : 'enregistré dans'} ta bibliothèque (page d'accueil › Sélectionner un parcours).`);
+        } catch (e) { D.toast('Enregistrement impossible : stockage du navigateur indisponible.', 'error'); }
+      });
+
+      // import : une simple trace, ou un parcours complet exporté par PaceYourRide (reconnu à son extension)
+      $('#input-gpx').addEventListener('change', async (e) => {
+        const f = e.target.files[0];
+        e.target.value = '';
+        if (!f) return;
+        try {
+          const parsed = PYR.services.parseGpx(await D.readFile(f));
+          const full = PYR.routeFile.restore(parsed);
+          if (full) { T.importFull(full); return; }
+          PYR.routeModel.importGpx(parsed);
+          D.toast(`GPX importé : ${parsed.points.length} points${parsed.hasEle ? '' : ' (altitude récupérée en ligne)'}.`);
+          setTimeout(() => PYR.map.fit(), 50);
+        } catch (err) { D.toast(err.message, 'error'); }
+      });
+
+      // export : menu « Parcours complet » (GPX enrichi) / « Trace GPX »
+      const menuBtn = $('#btn-export-menu'), menu = $('#export-menu');
+      const items = () => Array.from(menu.querySelectorAll('[role="menuitem"]'));
+      const setMenu = (open, focus) => {
+        menu.hidden = !open;
+        menuBtn.setAttribute('aria-expanded', String(open));
+        if (open && focus) items()[0].focus();
+      };
+      menuBtn.addEventListener('click', (e) => { e.stopPropagation(); setMenu(menu.hidden, e.detail === 0); });
+      menuBtn.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown') { e.preventDefault(); setMenu(true, true); } });
+      menu.addEventListener('keydown', (e) => {
+        const list = items(), i = list.indexOf(document.activeElement);
+        if (e.key === 'Escape') { setMenu(false); menuBtn.focus(); } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          list[(i + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length].focus();
+        }
+      });
+      document.addEventListener('click', (e) => { if (!menu.hidden && !menu.contains(e.target)) setMenu(false); });
+      $('#btn-export-route').addEventListener('click', () => { setMenu(false); T.exportRoute(); });
+      $('#btn-export-gpx').addEventListener('click', () => { setMenu(false); T.exportTrace(); });
+    },
+
+    /** Outils de tracé posés sur la carte : recherche de lieu, mode de tracé, annuler / rétablir, boucler, inverser, centrer, effacer. */
+    initTools() {
+      const RM = PYR.routeModel;
+      // mode de tracé des nouveaux tronçons (chaque tronçon garde le sien)
+      // grand écran : un bouton par mode ; petit écran : une liste déroulante, plus compacte
+      const seg = $('#routing-modes'), pick = $('#routing-mode-select');
+      const showMode = () => {
+        for (const b of seg.children) b.setAttribute('aria-checked', String(b.dataset.mode === store.state.route.mode));
+        pick.value = store.state.route.mode;
+      };
+      const setMode = (id) => { RM.setMode(id); showMode(); };
+      for (const m of PYR.services.ROUTING_MODES) {
+        seg.appendChild(h('button', { type: 'button', role: 'radio', class: 'tool', 'data-mode': m.id, title: `Nouveaux tronçons : ${m.label.toLowerCase()}`, onclick: () => setMode(m.id) }, m.short));
+      }
+      D.fillSelect(pick, PYR.services.ROUTING_MODES.map((m) => ({ id: m.id, label: m.short })), store.state.route.mode);
+      pick.addEventListener('change', () => setMode(pick.value));
+      showMode();
+
+      $('#btn-undo').addEventListener('click', () => RM.undo());
+      $('#btn-redo').addEventListener('click', () => RM.redo());
+      $('#btn-loop').addEventListener('click', () => RM.loop());
+      $('#btn-reverse').addEventListener('click', () => RM.reverse());
+      $('#btn-fit').addEventListener('click', () => PYR.map.fit());
+      $('#btn-clear').addEventListener('click', () => {
+        if (!store.state.route.waypoints.length || confirm('Effacer tout le parcours ?')) PYR.routeModel.clear();
+      });
+      $('#btn-demo').addEventListener('click', () => { RM.demo(); setTimeout(() => PYR.map.fit(), 50); });
+      // Ctrl+Z annule, Ctrl+Y (ou Ctrl+Maj+Z) rétablit, dans l'onglet Parcours et hors des champs de saisie
+      document.addEventListener('keydown', (e) => {
+        if (store.state.ui.tab !== 'route' || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+        if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
+        const k = e.key.toLowerCase();
+        if (k === 'z' && !e.shiftKey) { e.preventDefault(); RM.undo(); } else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); RM.redo(); }
+      });
+
+      // boutons sans effet grisés ; tant que le tracé n'a pas deux points, une aide sur la carte dit par où commencer
+      const refresh = () => {
+        const r = store.state.route, wps = r.waypoints, n = wps.length;
+        const looped = n > 2 && U.haversine(wps[0].lat, wps[0].lng, wps[n - 1].lat, wps[n - 1].lng) < 5;
+        $('#btn-undo').disabled = !RM.canUndo;
+        $('#btn-redo').disabled = !RM.canRedo;
+        $('#btn-loop').disabled = n < 2 || looped;
+        $('#btn-reverse').disabled = n < 2;
+        $('#btn-fit').disabled = !n;
+        $('#btn-clear').disabled = !n && !r.fixed;
+        $('#route-hint').hidden = n >= 2 || !!r.fixed;
+        $('#route-hint-text').textContent = n ? 'Clique sur la carte pour placer le point suivant : le tracé suit les routes (ou la ligne droite, selon le mode choisi en haut).'
+          : 'Clique sur la carte pour placer le départ, puis les points suivants. Tu peux aussi chercher un lieu ou importer un GPX.';
+        $('#route-hint-actions').hidden = n > 0;
+      };
+      store.on('route-geometry', refresh);
+      refresh();
+
+      // recherche de lieu : Entrée lance la recherche, ↓ ↑ parcourent les résultats, Échap les ferme
+      const input = $('#search-input'), results = $('#search-results');
+      const close = () => { results.hidden = true; };
+      $('#search-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const q = input.value.trim();
+        if (!q) return;
+        D.clear(results);
+        results.hidden = false;
+        results.appendChild(h('li', null, 'Recherche…'));
+        try {
+          const list = await PYR.services.geocode(q);
+          D.clear(results);
+          if (!list.length) results.appendChild(h('li', null, 'Aucun résultat'));
+          for (const r of list) {
+            const li = h('li', { tabindex: 0 }, r.label, r.sub ? h('small', null, r.sub) : null);
+            const go = () => { PYR.map.map.setView([r.lat, r.lng], 13); input.value = r.label; close(); input.blur(); };
+            li.addEventListener('click', go);
+            li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') go(); });
+            results.appendChild(li);
+          }
+        } catch (err) {
+          D.clear(results);
+          results.appendChild(h('li', null, 'Recherche indisponible (connexion ?)'));
+        }
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') close();
+        else if (e.key === 'ArrowDown' && !results.hidden) { const li = results.querySelector('li[tabindex]'); if (li) { e.preventDefault(); li.focus(); } }
+      });
+      results.addEventListener('keydown', (e) => {
+        const list = Array.from(results.querySelectorAll('li[tabindex]')), i = list.indexOf(document.activeElement);
+        if (e.key === 'Escape') { close(); input.focus(); } else if (e.key === 'ArrowDown' && i < list.length - 1) { e.preventDefault(); list[i + 1].focus(); } else if (e.key === 'ArrowUp') { e.preventDefault(); (i > 0 ? list[i - 1] : input).focus(); }
+      });
+      document.addEventListener('click', (e) => { if (!e.target.closest('.search')) close(); });
+    },
+
+    /** Nom de fichier tiré du nom du parcours : « Tour du lac » → « tour-du-lac ». */
+    fileBase() {
+      const slug = String(store.state.route.name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      return slug.slice(0, 50) || 'parcours';
+    },
+
+    /** Trace seule (profil rééchantillonné tous les ~10 m), pour un compteur ou une autre appli. */
+    exportTrace() {
+      const p = store.profile;
+      if (!p) { D.toast('Aucun parcours à exporter', 'error'); return; }
+      D.download(`${T.fileBase()}.gpx`, PYR.services.toGpx(store.state.route.name || 'Parcours PaceYourRide', p.lat, p.lng, p.ele, p.n), 'application/gpx+xml');
+    },
+
+    /** Parcours complet : GPX enrichi des sprints, côtes, ravitaillements, portions et de la météo (js/core/route-file.js). */
+    exportRoute() {
+      const p = store.profile;
+      if (!p) { D.toast(PYR.routeModel.pending ? 'Le tracé est en cours de calcul : réessaie dans un instant.' : 'Aucun parcours à exporter', 'error'); return; }
+      try {
+        D.download(`${T.fileBase()}.pyr-parcours.gpx`, PYR.routeFile.build(store.state, p), 'application/gpx+xml');
+        const what = PYR.routeFile.summary(store.state);
+        D.toast(`Parcours complet exporté${what ? ` : ${what}` : ''}.`);
+      } catch (err) { D.toast(err.message, 'error'); }
+    },
+
+    /** Charge un parcours complet lu d'un GPX enrichi : il remplace celui du projet, puis la page se recharge. */
+    importFull(data) {
+      const cur = store.state.route, name = data.route.name || 'sans nom';
+      if ((cur.waypoints.length || cur.fixed) && !confirm(`Remplacer le parcours « ${cur.name || 'sans nom'} » par « ${name} », avec ses sprints, côtes, ravitaillements, portions et sa météo ?`)) return;
+      store.state.ui.center = null;      // au rechargement, la carte se centre sur le nouveau parcours
+      store.state.ui.zoom = null;
+      store.importRoute(data);
+      const what = PYR.routeFile.summary(data);
+      D.flash(`Parcours « ${name} » importé${what ? ` : ${what}` : ''}.`);
+      location.reload();
+    },
+
     renderProfileLegend() {
       const el = $('#profile-legend');
       D.clear(el);
@@ -222,29 +328,34 @@
       T.renderSelection();
     },
 
+    /** Chiffres clés sous le nom du parcours (distance, dénivelés), le reste (altitudes, pentes, montées) dans le panneau. */
     renderStats() {
-      const el = $('#route-stats');
+      const el = $('#route-stats'), key = $('#route-key-stats');
       D.clear(el);
+      D.clear(key);
+      const old = $('#route-extra');
+      if (old) old.remove();
       const p = store.profile;
       const wps = store.state.route.waypoints.length;
+      const keyStat = (cls, label, value, unit) => key.appendChild(h('span', { class: 'rh-stat ' + cls },
+        h('span', { class: 'rh-label' }, label), h('strong', null, value), h('em', null, unit)));
       if (!p) {
+        keyStat('dist', 'Distance', '–', 'km'); keyStat('up', 'D+', '–', 'm'); keyStat('down', 'D−', '–', 'm');
+        key.classList.add('empty');
         el.appendChild(D.stat('Points de passage', String(wps)));
-        el.appendChild(D.stat('Distance', '–'));
         return;
       }
+      key.classList.remove('empty');
       const s = p.stats;
-      el.appendChild(D.stat('Distance', U.fmt(s.length / 1000, s.length < 10000 ? 2 : 1), 'km'));
-      el.appendChild(D.stat('Dénivelé +', U.fmt(s.up, 0), 'm'));
-      el.appendChild(D.stat('Dénivelé −', U.fmt(s.down, 0), 'm'));
+      keyStat('dist', 'Distance', U.fmt(s.length / 1000, s.length < 10000 ? 2 : 1), 'km');
+      keyStat('up', 'D+', U.fmt(s.up, 0), 'm');
+      keyStat('down', 'D−', U.fmt(s.down, 0), 'm');
       el.appendChild(D.stat('Altitude max', U.fmt(s.emax, 0), 'm'));
       el.appendChild(D.stat('Altitude min', U.fmt(s.emin, 0), 'm'));
       el.appendChild(D.stat('Pente max (100 m)', U.fmt(s.gmax * 100, 1), '%'));
       el.appendChild(D.stat('Descente max', U.fmt(-s.gmin * 100, 1), '%'));
       el.appendChild(D.stat('Points de passage', String(wps)));
-      const parent = el.parentElement;
-      let extra = parent.querySelector('#route-extra');
-      if (extra) extra.remove();
-      extra = h('div', { id: 'route-extra' });
+      const extra = h('div', { id: 'route-extra' });
       if (p.eleMissing) extra.appendChild(h('div', { class: 'note warn' }, 'Altitude indisponible pour tout ou partie du parcours : le profil y est interpolé (vérifie ta connexion, ou importe un GPX avec altitude).'));
       if (p.climbs && p.climbs.length) {
         // les plus dures d'abord (indice FIETS), puis dans l'ordre du parcours
@@ -313,18 +424,47 @@
       T.cpChanged(it.id);
     },
 
-    /** Ajoute automatiquement les côtes classées (type « kom ») ou des sprints (« sprint ») : remplace ceux de ce type. */
-    autoCheckpoints(type) {
+    /** Un sprint intermédiaire de plus, placé automatiquement : sur du plat, au milieu du plus grand écart sans sprint, loin des côtes et des ravitaillements. */
+    autoSprint() {
       const p = store.profile;
       if (!p) { D.toast('Trace d\'abord un parcours', 'error'); return; }
-      const have = store.state.checkpoints.filter((c) => c.type === type);
-      if (have.length && !confirm(`Remplacer les ${have.length} ${type === 'kom' ? 'côte(s) classée(s)' : 'sprint(s)'} existant(s) ?`)) return;
-      const n = Number($('#auto-sprints').value) || 1;
-      const found = Cl.toItems(Cl.build(p, type === 'kom' ? { kom: true } : { sprints: n })).filter((c) => c.type === type);
-      store.state.checkpoints = store.state.checkpoints.filter((c) => c.type !== type).concat(found);
-      T.cpChanged(null);
-      D.toast(found.length ? (type === 'kom' ? `${found.length} côte${found.length > 1 ? 's' : ''} classée${found.length > 1 ? 's' : ''} ajoutée${found.length > 1 ? 's' : ''}.` : `${found.length} sprint${found.length > 1 ? 's' : ''} placé${found.length > 1 ? 's' : ''}.`)
-        : (type === 'kom' ? 'Aucune côte classée sur ce parcours.' : 'Pas assez de plat pour un sprint intermédiaire.'), found.length ? undefined : 'error');
+      const cps = store.state.checkpoints;
+      const taken = cps.filter((c) => c.type === 'sprint').map((c) => c.km * 1000);
+      const avoid = cps.filter((c) => c.type === 'kom').map((c) => ({ start: c.startKm * 1000, end: c.km * 1000 }))
+        .concat(store.state.feedZones.map((z) => ({ start: z.startKm * 1000, end: z.endKm * 1000 })));
+      const s = Cl.nextSprint(p.ele, p.step, p.climbs || Cl.findClimbs(p.ele, p.step), taken, avoid);
+      if (s === null) {
+        D.toast(taken.length ? 'Plus de place pour un autre sprint sur du plat (2 km au moins entre deux sprints) : pose-le à la main sur le profil.'
+          : 'Pas assez de plat pour un sprint intermédiaire : pose-le à la main sur le profil.', 'error');
+        return;
+      }
+      T.addSprint(s / 1000);
+      T.revealCp();
+      D.toast(`Sprint intermédiaire ajouté au km ${U.fmt(s / 1000, 1)}.`);
+    },
+
+    /** Une côte classée de plus : la plus dure de celles du parcours qui ne sont pas encore dans la liste. */
+    autoKom() {
+      const p = store.profile;
+      if (!p) { D.toast('Trace d\'abord un parcours', 'error'); return; }
+      const taken = store.state.checkpoints.filter((c) => c.type === 'kom').map((c) => ({ start: c.startKm * 1000, end: c.km * 1000 }));
+      const c = Cl.nextClimb(p.ele, p.step, taken);
+      if (!c) {
+        D.toast(taken.length ? 'Toutes les côtes classables du parcours sont déjà dans la liste : pose les autres à la main sur le profil.'
+          : 'Aucune côte classable sur ce parcours : pose-la à la main sur le profil.', 'error');
+        return;
+      }
+      const it = Cl.toItems([c])[0];
+      store.state.checkpoints.push(it);
+      T.cpChanged(it.id);
+      T.revealCp();
+      D.toast(`Côte classée ajoutée : ${Cl.longLabel(c, [{ s: p.length }])}, ${Cl.climbText(c)}.`);
+    },
+
+    /** Montre dans la liste le point en jeu qui vient d'être ajouté. */
+    revealCp() {
+      const el = activeId && document.querySelector(`[data-portion="${activeId}"]`);
+      if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     },
 
     /** Zone de ravitaillement du kilomètre a au kilomètre b (au moins MIN_LEN de long). */

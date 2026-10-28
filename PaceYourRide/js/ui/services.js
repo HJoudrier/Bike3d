@@ -10,11 +10,12 @@
 
   const U = PYR.util;
 
+  // short : libellé du sélecteur posé sur la carte (onglet Parcours)
   const ROUTING_MODES = [
-    { id: 'fastbike', label: 'Suivre les routes — vélo de route', engine: 'brouter', profile: 'fastbike' },
-    { id: 'lowtraffic', label: 'Suivre les routes — peu de trafic', engine: 'brouter', profile: 'fastbike-lowtraffic' },
-    { id: 'trekking', label: 'Suivre routes et chemins — mixte / gravel', engine: 'brouter', profile: 'trekking' },
-    { id: 'straight', label: 'Ligne droite (hors routes)', engine: 'straight' },
+    { id: 'fastbike', short: 'Route', label: 'Suivre les routes — vélo de route', engine: 'brouter', profile: 'fastbike' },
+    { id: 'lowtraffic', short: 'Peu de trafic', label: 'Suivre les routes — peu de trafic', engine: 'brouter', profile: 'fastbike-lowtraffic' },
+    { id: 'trekking', short: 'Gravel', label: 'Suivre routes et chemins — mixte / gravel', engine: 'brouter', profile: 'trekking' },
+    { id: 'straight', short: 'Ligne droite', label: 'Ligne droite (hors routes)', engine: 'straight' },
   ];
 
   const TIMEOUT = 20000;
@@ -218,7 +219,11 @@
     }
     if (points.length < 2) throw new Error('Aucune trace trouvée dans le GPX');
     const nameNode = doc.querySelector('trk > name, rte > name, metadata > name');
-    return { name: nameNode ? nameNode.textContent.trim() : '', points, hasEle };
+    // parcours complet exporté par PaceYourRide (js/core/route-file.js) : sprints, côtes, ravitaillements, météo… dans une extension
+    const ext = doc.getElementsByTagNameNS(PYR.routeFile.NS, 'route')[0];
+    let data = null;
+    if (ext) { try { data = JSON.parse(ext.textContent); } catch (e) { /* extension illisible : simple trace */ } }
+    return { name: nameNode ? nameNode.textContent.trim() : '', points, hasEle, data };
   }
 
   const xmlEscape = (s) => String(s).replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
