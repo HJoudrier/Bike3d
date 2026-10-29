@@ -5,15 +5,15 @@
 (function (PYR) {
   'use strict';
 
-  const ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
-  const TIMEOUT = 20000;        // ms par essai auprès d'un serveur
+  const ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.openstreetmap.fr/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+  const TIMEOUT = 25000;        // ms par essai auprès d'un serveur
   const SAMPLE = 20;            // m : écart entre deux points examinés le long du parcours
   const MATCH = 15;             // m : distance maximale entre le tracé et la voie retenue
   const STICK = 6;              // m : une voie déjà suivie garde la priorité si elle n'est pas plus loin de plus de ça
   const MIN_RUN = 60;           // m : une portion plus courte est ignorée
   const MERGE_GAP = 120;        // m : deux portions de même revêtement plus proches que ça n'en font qu'une
-  const CHUNK = 25000;          // m de parcours par requête Overpass
-  const BOX = 2500;             // m de parcours par boîte englobante dans une requête (boîtes serrées : peu de données, requête rapide)
+  const CHUNK = 12000;          // m de parcours par requête Overpass
+  const BOX = 2000;             // m de parcours par boîte englobante dans une requête (boîtes serrées : peu de données, requête rapide)
   const PAD = 0.0003;           // ° : marge des boîtes (≈ 35 m)
   const BUDGET = 150000;        // ms : au-delà, la lecture s'arrête avec ce qui a été lu
   const CELL = 0.0004;          // ° : cellule de l'index spatial (≈ 45 m)
@@ -48,7 +48,7 @@
   const ORDER = ['asphalt', 'smooth', 'rough', 'cobbles', 'gravel_hard', 'dirt', 'cobbles_hard', 'gravel_loose', 'grass'];
   const rank = (id) => ORDER.indexOf(id);
 
-  let good = 0;                 // dernier serveur qui a répondu : on commence par lui
+  const strikes = {};           // serveur → échecs de suite : les serveurs qui échouent passent après les autres
 
   const wait = (ms, signal) => new Promise((ok) => { const t = setTimeout(ok, ms); if (signal) signal.addEventListener('abort', () => { clearTimeout(t); ok(); }, { once: true }); });
 
@@ -57,8 +57,9 @@
     const why = [];
     for (let round = 0; round < 2; round++) {
       let busy = false;
-      for (let k = 0; k < ENDPOINTS.length; k++) {
-        const url = ENDPOINTS[(good + k) % ENDPOINTS.length];
+      const order = ENDPOINTS.map((u, i) => [u, i]).sort((a, b) => (strikes[a[0]] || 0) - (strikes[b[0]] || 0) || a[1] - b[1]).map((x) => x[0]);
+      const live = order.filter((u) => (strikes[u] || 0) < 2);      // deux échecs de suite : ce serveur est mis de côté pour cette lecture
+      for (const url of live.length ? live : order) {
         const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), TIMEOUT);
         const onAbort = () => ctrl.abort();
         if (signal) signal.addEventListener('abort', onAbort);
@@ -66,10 +67,11 @@
           const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(ql), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctrl.signal });
           if (!r.ok) { if (r.status === 429 || r.status === 504) busy = true; throw new Error('HTTP ' + r.status); }
           const data = await r.json();
-          good = (good + k) % ENDPOINTS.length;
+          strikes[url] = 0;
           return data;
         } catch (e) {
           if (signal && signal.aborted) throw e;
+          strikes[url] = (strikes[url] || 0) + 1;
           why.push(new URL(url).hostname + ' : ' + (ctrl.signal.aborted ? 'délai dépassé' : e.message === 'Failed to fetch' ? 'injoignable (réseau, blocage ou CORS)' : e.message));
         } finally {
           clearTimeout(timer);
@@ -88,16 +90,16 @@
   // On ne demande que les voies qui changent quelque chose : revêtement non asphalté, mauvais état, pistes et sentiers.
   // Une voie absente de la réponse est de l'asphalte (le défaut) : la réponse reste petite, même en ville.
   const NOTABLE = [
-    '["highway"]["surface"~"^(sett|cobblestone|cobblestone:flattened|unhewn_cobblestone|paving_stones|paving_stones:lanes|grass_paver|chipseal|compacted|fine_gravel|gravel|pebblestone|rock|stone|unpaved|ground|dirt|earth|mud|clay|woodchips|grass|sand|snow|ice)"]',
+    '["surface"~"^(sett|cobblestone|cobblestone:flattened|unhewn_cobblestone|paving_stones|paving_stones:lanes|grass_paver|chipseal|compacted|fine_gravel|gravel|pebblestone|rock|stone|unpaved|ground|dirt|earth|mud|clay|woodchips|grass|sand|snow|ice)"]',
     '["highway"~"^(track|path|bridleway)$"]',
-    '["highway"]["tracktype"]',
-    '["highway"]["smoothness"~"^(bad|very_bad|horrible|very_horrible)$"]',
+    '["tracktype"]',
+    '["smoothness"~"^(bad|very_bad|horrible|very_horrible)$"]',
   ];
 
   /** Voies notables le long de la portion [i0, i1] du parcours : une requête, avec une boîte serrée tous les BOX m. */
   async function fetchWays(profile, i0, i1, signal) {
     const per = Math.max(2, Math.round(BOX / profile.step));
-    const stmts = [];
+    const boxes = [];
     for (let a = i0; a < i1; a += per) {
       const b = Math.min(i1, a + per);
       let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity;
@@ -105,10 +107,11 @@
         s = Math.min(s, profile.lat[i]); n = Math.max(n, profile.lat[i]);
         w = Math.min(w, profile.lng[i]); e = Math.max(e, profile.lng[i]);
       }
-      const box = [s - PAD, w - PAD * 1.5, n + PAD, e + PAD * 1.5].map((v) => v.toFixed(5)).join(',');
-      for (const f of NOTABLE) stmts.push(`way${f}(${box});`);
+      boxes.push([s - PAD, w - PAD * 1.5, n + PAD, e + PAD * 1.5].map((v) => v.toFixed(5)).join(','));
     }
-    const data = await overpass(`[out:json][timeout:25];(${stmts.join('')});out tags geom;`, signal);
+    // les voies des boîtes sont lues une fois (.h), puis filtrées en mémoire : bien plus léger qu'une recherche par filtre et par boîte
+    const ql = `[out:json][timeout:25];(${boxes.map((b) => `way["highway"](${b});`).join('')})->.h;(${NOTABLE.map((f) => `way.h${f};`).join('')});out tags geom;`;
+    const data = await overpass(ql, signal);
     return (data.elements || []).filter((el) => el.type === 'way' && Array.isArray(el.geometry) && el.geometry.length > 1);
   }
 
@@ -202,21 +205,29 @@
     if (!profile || !(profile.n > 1)) return { portions: [], ways: 0 };
     const stride = Math.max(1, Math.round(SAMPLE / profile.step));
     const per = Math.max(2, Math.round(CHUNK / profile.step));
+    for (const k of Object.keys(strikes)) delete strikes[k];
     const ways = new Map();
     const chunks = [];
     for (let i = 0; i < profile.n - 1; i += per) chunks.push([i, Math.min(profile.n - 1, i + per)]);
-    let failed = 0, lastErr = null;
+    let lastErr = null, done = 0;
     const t0 = Date.now();
-    for (let c = 0; c < chunks.length; c++) {
-      if (Date.now() - t0 > BUDGET) { failed += chunks.length - c; break; }
-      if (o.onProgress) o.onProgress(c, chunks.length);
-      try {
-        for (const w of await fetchWays(profile, chunks[c][0], chunks[c][1], o.signal)) ways.set(w.id, w);
-      } catch (e) {
-        if (o.signal && o.signal.aborted) throw e;
-        failed++; lastErr = e;                      // un morceau illisible ne fait pas perdre les autres
+    let todo = chunks.map((_, c) => c);
+    for (let pass = 0; pass < 2 && todo.length; pass++) {       // un morceau illisible est retenté une fois, après les autres
+      const next = [];
+      for (const c of todo) {
+        if (Date.now() - t0 > BUDGET) { next.push(c); continue; }
+        if (o.onProgress) o.onProgress(done, chunks.length);
+        try {
+          for (const w of await fetchWays(profile, chunks[c][0], chunks[c][1], o.signal)) ways.set(w.id, w);
+          done++;
+        } catch (e) {
+          if (o.signal && o.signal.aborted) throw e;
+          next.push(c); lastErr = e;                  // un morceau illisible ne fait pas perdre les autres
+        }
       }
+      todo = next;
     }
+    const failed = todo.length;
     if (failed === chunks.length) throw lastErr || new Error('Overpass indisponible : trop long');
     if (o.onProgress) o.onProgress(chunks.length, chunks.length);
     const list = [...ways.values()];

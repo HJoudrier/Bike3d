@@ -74,8 +74,7 @@ test('detect : requête Overpass puis portions', async () => {
   try {
     const r = await S.detect(p);
     assert.equal(calls.length, 1);
-    assert.match(calls[0], /\(way\["highway"\]\["surface"~"[^"]*"\]\([\d.]+,[\d.]+,[\d.]+,[\d.]+\);.*\);out tags geom;$/);
-    assert.match(calls[0], /\["highway"~"\^\(track\|path\|bridleway\)\$"\]/);
+    assert.match(calls[0], /^data=\[out:json\]\[timeout:25\];\((?:way\["highway"\]\([\d.]+,[\d.]+,[\d.]+,[\d.]+\);)+\)->\.h;\(way\.h\["surface"~"[^"]*"\];way\.h\["highway"~"\^\(track\|path\|bridleway\)\$"\];way\.h\["tracktype"\];way\.h\["smoothness"~"[^"]*"\];\);out tags geom;$/);
     assert.equal(r.portions.length, 1);
     assert.equal(r.portions[0].surface, 'gravel_loose');
   } finally { globalThis.fetch = realFetch; }
@@ -86,6 +85,6 @@ test('detect : l\'erreur dit pourquoi chaque serveur a échoué', async () => {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
   try {
-    await assert.rejects(() => S.detect(p), (e) => e.reasons.length === 3 && /overpass-api\.de : injoignable/.test(e.reasons[0]));
+    await assert.rejects(() => S.detect(p), (e) => e.reasons.length === 4 && /overpass-api\.de : injoignable/.test(e.reasons[0]));
   } finally { globalThis.fetch = realFetch; }
 });
