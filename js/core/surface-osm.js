@@ -6,14 +6,16 @@
   'use strict';
 
   const ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
-  const TIMEOUT = 30000;        // ms par essai auprès d'un serveur
+  const TIMEOUT = 20000;        // ms par essai auprès d'un serveur
   const SAMPLE = 20;            // m : écart entre deux points examinés le long du parcours
-  const MATCH = 25;             // m : distance maximale entre le tracé et la voie retenue
+  const MATCH = 15;             // m : distance maximale entre le tracé et la voie retenue
   const STICK = 6;              // m : une voie déjà suivie garde la priorité si elle n'est pas plus loin de plus de ça
   const MIN_RUN = 60;           // m : une portion plus courte est ignorée
   const MERGE_GAP = 120;        // m : deux portions de même revêtement plus proches que ça n'en font qu'une
-  const CHUNK = 4000;           // m de parcours par requête Overpass (une boîte autour du morceau : rapide, car indexée)
-  const PAD = 0.0004;           // ° : marge de la boîte (≈ 45 m)
+  const CHUNK = 25000;          // m de parcours par requête Overpass
+  const BOX = 2500;             // m de parcours par boîte englobante dans une requête (boîtes serrées : peu de données, requête rapide)
+  const PAD = 0.0003;           // ° : marge des boîtes (≈ 35 m)
+  const BUDGET = 150000;        // ms : au-delà, la lecture s'arrête avec ce qui a été lu
   const CELL = 0.0004;          // ° : cellule de l'index spatial (≈ 45 m)
 
   // revêtement OpenStreetMap (tag surface) → revêtement de l'application (Ph.SURFACES) ; 'asphalt' = pas de portion
@@ -83,25 +85,36 @@
     throw err;
   }
 
-  // voies sans intérêt pour un vélo qui roule : on ne les demande pas (trottoirs, escaliers, couloirs…)
-  const SKIP = 'footway|steps|pedestrian|corridor|elevator|escalator|platform|construction|proposed|bus_guideway|services|rest_area';
+  // On ne demande que les voies qui changent quelque chose : revêtement non asphalté, mauvais état, pistes et sentiers.
+  // Une voie absente de la réponse est de l'asphalte (le défaut) : la réponse reste petite, même en ville.
+  const NOTABLE = [
+    '["highway"]["surface"~"^(sett|cobblestone|cobblestone:flattened|unhewn_cobblestone|paving_stones|paving_stones:lanes|grass_paver|chipseal|compacted|fine_gravel|gravel|pebblestone|rock|stone|unpaved|ground|dirt|earth|mud|clay|woodchips|grass|sand|snow|ice)"]',
+    '["highway"~"^(track|path|bridleway)$"]',
+    '["highway"]["tracktype"]',
+    '["highway"]["smoothness"~"^(bad|very_bad|horrible|very_horrible)$"]',
+  ];
 
-  /** Voies de la boîte qui entoure la portion [i0, i1] du parcours (une requête). */
+  /** Voies notables le long de la portion [i0, i1] du parcours : une requête, avec une boîte serrée tous les BOX m. */
   async function fetchWays(profile, i0, i1, signal) {
-    let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity;
-    for (let i = i0; i <= i1; i++) {
-      s = Math.min(s, profile.lat[i]); n = Math.max(n, profile.lat[i]);
-      w = Math.min(w, profile.lng[i]); e = Math.max(e, profile.lng[i]);
+    const per = Math.max(2, Math.round(BOX / profile.step));
+    const stmts = [];
+    for (let a = i0; a < i1; a += per) {
+      const b = Math.min(i1, a + per);
+      let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity;
+      for (let i = a; i <= b; i++) {
+        s = Math.min(s, profile.lat[i]); n = Math.max(n, profile.lat[i]);
+        w = Math.min(w, profile.lng[i]); e = Math.max(e, profile.lng[i]);
+      }
+      const box = [s - PAD, w - PAD * 1.5, n + PAD, e + PAD * 1.5].map((v) => v.toFixed(5)).join(',');
+      for (const f of NOTABLE) stmts.push(`way${f}(${box});`);
     }
-    const box = [s - PAD, w - PAD * 1.5, n + PAD, e + PAD * 1.5].map((v) => v.toFixed(5)).join(',');
-    const ql = `[out:json][timeout:25];way["highway"]["highway"!~"^(${SKIP})$"](${box});out tags geom;`;
-    const data = await overpass(ql, signal);
+    const data = await overpass(`[out:json][timeout:25];(${stmts.join('')});out tags geom;`, signal);
     return (data.elements || []).filter((el) => el.type === 'way' && Array.isArray(el.geometry) && el.geometry.length > 1);
   }
 
   /**
    * Revêtement de chaque point examiné du parcours (une voie OpenStreetMap par point), à partir des voies déjà chargées.
-   * Renvoie un tableau par échantillon : id du revêtement, ou null (aucune voie assez proche : le revêtement précédent continue).
+   * Renvoie un tableau par échantillon : id du revêtement, ou null (aucune voie notable assez proche : asphalte).
    */
   function matchWays(profile, ways, stride) {
     const lat0 = profile.lat[0], kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
@@ -153,15 +166,13 @@
   }
 
   /**
-   * Portions de revêtement (hors asphalte) d'après les revêtements par échantillon : les trous (voie inconnue) prennent le revêtement voisin,
-   * les portions trop courtes disparaissent et celles de même revêtement, proches, fusionnent. [{ startKm, endKm, surface }]
+   * Portions de revêtement (hors asphalte) d'après les revêtements par échantillon : les portions trop courtes disparaissent et celles de même revêtement, proches, fusionnent. [{ startKm, endKm, surface }]
    */
   function toPortions(samples, stride, step, length) {
     const d = stride * step;
     const runs = [];
-    let last = 'asphalt';
-    // 1. revêtement connu de chaque échantillon (inconnu : on garde le précédent)
-    const s = samples.map((v) => { if (v) last = v; return v || last; });
+    // 1. aucune voie notable à proximité : asphalte (seules les voies notables sont demandées à OpenStreetMap)
+    const s = samples.map((v) => v || 'asphalt');
     for (let i = 0; i < s.length;) {
       let j = i;
       while (j + 1 < s.length && s[j + 1] === s[i]) j++;
@@ -195,7 +206,9 @@
     const chunks = [];
     for (let i = 0; i < profile.n - 1; i += per) chunks.push([i, Math.min(profile.n - 1, i + per)]);
     let failed = 0, lastErr = null;
+    const t0 = Date.now();
     for (let c = 0; c < chunks.length; c++) {
+      if (Date.now() - t0 > BUDGET) { failed += chunks.length - c; break; }
       if (o.onProgress) o.onProgress(c, chunks.length);
       try {
         for (const w of await fetchWays(profile, chunks[c][0], chunks[c][1], o.signal)) ways.set(w.id, w);
@@ -204,7 +217,7 @@
         failed++; lastErr = e;                      // un morceau illisible ne fait pas perdre les autres
       }
     }
-    if (failed === chunks.length) throw lastErr || new Error('Overpass indisponible');
+    if (failed === chunks.length) throw lastErr || new Error('Overpass indisponible : trop long');
     if (o.onProgress) o.onProgress(chunks.length, chunks.length);
     const list = [...ways.values()];
     return { portions: toPortions(matchWays(profile, list, stride), stride, profile.step, profile.length), ways: list.length, failed, chunks: chunks.length };

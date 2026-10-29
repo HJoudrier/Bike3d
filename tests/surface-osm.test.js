@@ -74,7 +74,8 @@ test('detect : requête Overpass puis portions', async () => {
   try {
     const r = await S.detect(p);
     assert.equal(calls.length, 1);
-    assert.match(calls[0], /way\["highway"\]\["highway"!~"\^\(footway\|[^"]*\)\$"\]\([\d.]+,[\d.]+,[\d.]+,[\d.]+\);out tags geom/);
+    assert.match(calls[0], /\(way\["highway"\]\["surface"~"[^"]*"\]\([\d.]+,[\d.]+,[\d.]+,[\d.]+\);.*\);out tags geom;$/);
+    assert.match(calls[0], /\["highway"~"\^\(track\|path\|bridleway\)\$"\]/);
     assert.equal(r.portions.length, 1);
     assert.equal(r.portions[0].surface, 'gravel_loose');
   } finally { globalThis.fetch = realFetch; }

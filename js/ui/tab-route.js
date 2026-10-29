@@ -397,11 +397,12 @@
       const ctrl = detecting = new AbortController();
       const btns = ['#btn-detect-surfaces', '#btn-detect-surfaces-2'].map((id) => $(id));
       const busy = (on) => btns.forEach((b) => { b.classList.toggle('busy', on); b.setAttribute('aria-busy', String(on)); });
+      btns.forEach((b) => { if (!b.dataset.title) b.dataset.title = b.title; });
       busy(true);
       const start = 'Lecture des revêtements dans OpenStreetMap… (un nouveau clic annule)';
       say(start); D.toast('Lecture des revêtements dans OpenStreetMap…');
       try {
-        const res = await PYR.surfaceOsm.detect(p, { signal: ctrl.signal, onProgress: (i, n) => { if (n > 1) say(`Lecture des revêtements dans OpenStreetMap… ${i}/${n} (un nouveau clic annule)`); } });
+        const res = await PYR.surfaceOsm.detect(p, { signal: ctrl.signal, onProgress: (i, n) => { const m = `Lecture des revêtements dans OpenStreetMap… ${i}/${n} (un nouveau clic annule)`; say(m); btns.forEach((b) => { b.title = m; }); } });
         if (!store.profile || Math.abs(store.profile.length - p.length) > 1) { say(''); return; }       // le tracé a changé pendant la lecture
         store.state.surfaces.splice(0, store.state.surfaces.length, ...res.portions.map((r) => Object.assign({ id: U.uid(), factor: Ph.SURFACES.find((s) => s.id === r.surface).f }, r)));
         activeId = null;
@@ -412,7 +413,7 @@
         const parts = [['pavés', km(['cobbles', 'cobbles_hard'])], ['gravier', km(['gravel_hard', 'gravel_loose', 'rough'])], ['chemin', km(['dirt', 'grass'])]].filter((x) => x[1] > 0.05);
         const part = res.failed ? ` (${res.failed} morceau(x) sur ${res.chunks} illisible(s) : relance pour compléter)` : '';
         const msg = (res.portions.length ? `${res.portions.length} portion(s) détectée(s) : ${parts.map((x) => U.fmt(x[1], 1) + ' km de ' + x[0]).join(', ')}. Le reste est de l'asphalte.`
-          : res.ways ? 'Aucun revêtement particulier : asphalte partout (ou revêtement non renseigné dans OpenStreetMap).' : 'Aucune voie trouvée près du tracé.') + part;
+          : 'Aucun revêtement particulier : asphalte partout (ou revêtement non renseigné dans OpenStreetMap).') + part;
         say(msg); D.toast(msg);
       } catch (e) {
         if (ctrl.signal.aborted) { say('Détection annulée.'); D.toast('Détection annulée.'); }
@@ -424,6 +425,7 @@
       } finally {
         detecting = null;
         busy(false);
+        btns.forEach((b) => { b.title = b.dataset.title; });
       }
     },
 
