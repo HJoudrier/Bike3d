@@ -14,11 +14,10 @@ a { color: inherit; }
 .hm-top .brand { order: 0; margin: 0; text-decoration: none; }
 .hm-top .brand span { display: inline; }
 
-.hm-top-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; order: 2; }
-/* les pages du site, au milieu de la barre (sous le nom et les boutons sur petit écran) */
-.hm-top { flex-wrap: wrap; }
-.hm-top .hm-nav { order: 1; margin: 0 auto; }
-@media (max-width: 900px) { .hm-top .hm-nav { order: 3; width: 100%; } }
+.hm-top-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; order: 2; flex: 0 1 auto; min-width: 0; margin-left: auto; }
+/* le menu burger (style.css) ferme la barre, à droite des boutons */
+.hm-top .burger-wrap { order: 3; }
+.hm-top { flex-wrap: nowrap; }
 #hm-cloud.is-on .hm-cloud-ico { color: var(--accent); }
 #hm-cloud.is-err .hm-cloud-ico { color: var(--warning); }
 .cl-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }

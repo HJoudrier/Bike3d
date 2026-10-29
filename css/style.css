@@ -130,16 +130,23 @@ button, input, select { font: inherit; color: inherit; }
 .deeplink-flash { animation: deeplink-flash 1.1s ease-in-out 2; border-radius: 8px; }
 @keyframes deeplink-flash { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 4px var(--accent); } }
 @media (prefers-reduced-motion: reduce) { .deeplink-flash { animation: none; box-shadow: 0 0 0 3px var(--accent); } }
-.tabs { display: flex; gap: 2px; background: var(--surface-2); padding: 3px; border-radius: 9px; overflow-x: auto; scrollbar-width: none; }
-/* menu des pages du site (parcours.html, athlete.html…) : des liens ; la page ouverte porte aria-current */
-.tabs a {
-  border: 0; background: transparent; padding: 6px 12px; border-radius: 7px; cursor: pointer;
-  color: var(--ink-2); font-weight: 600; white-space: nowrap; text-decoration: none;
-  display: inline-flex; align-items: center; justify-content: center;
+/* menu burger, tout à droite de la barre : la liste des pages du site (parcours.html, athlete.html…), la page ouverte porte aria-current */
+.burger-wrap { position: relative; flex: 0 0 auto; }
+.burger { padding: 6px 9px; min-width: 36px; justify-content: center; }
+.burger svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.burger[aria-expanded="true"] { background: var(--surface-2); color: var(--ink); }
+.site-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 1300; min-width: 210px; padding: 4px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow);
 }
-.tabs a .ico { width: 20px; height: 20px; }
-.tabs a:hover { color: var(--ink); }
-.tabs a[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+.site-menu a {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 7px;
+  color: var(--ink-2); font-weight: 600; white-space: nowrap; text-decoration: none;
+}
+.site-menu a .ico { width: 20px; height: 20px; flex: 0 0 auto; }
+.site-menu a:hover, .site-menu a:focus-visible { background: var(--surface-2); color: var(--ink); }
+.site-menu a[aria-current="page"] { background: var(--surface-2); color: var(--accent); }
 /* parties d'une même page (Équipements : réglages et magasin) */
 .page-sections { margin: 0 0 12px; }
 .page-sections button { font-size: 13px; padding: 5px 16px; }
@@ -1018,10 +1025,9 @@ details.manual[open] summary { margin-bottom: 6px; }
   /* barre du haut : logo, pages et actions du projet en icônes, sur une seule ligne ; elle reste visible */
   .topbar { position: sticky; top: 0; gap: 4px; padding: 6px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left)); padding-top: max(6px, env(safe-area-inset-top)); }
   .brand span { display: none; }
-  .tabs { flex: 0 1 auto; min-width: 0; -webkit-overflow-scrolling: touch; }
-  .tabs a { padding: 7px 6px; }
-  .tabs a .ico, .top-actions .btn .ico { width: 18px; height: 18px; }
+  .top-actions .btn .ico { width: 18px; height: 18px; }
   .top-actions .btn { padding: 7px 6px; min-width: 30px; }
+  .burger { padding: 7px 6px; min-width: 30px; }
   .layout { flex-direction: column; flex: none; }
   .stage { flex: none; }
   .map-wrap { height: clamp(230px, 40dvh, 460px); flex: none; }
@@ -1068,14 +1074,13 @@ details.manual[open] summary { margin-bottom: 6px; }
   table.records input { width: 84px; }
 }
 
-/* très petit écran : les neuf icônes de l'en-tête tiennent encore sur la ligne */
+/* très petit écran : les icônes de l'en-tête tiennent encore sur la ligne */
 @media (max-width: 420px) {
   .topbar { padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); gap: 2px; }
   .brand svg { width: 24px; height: 24px; }
-  .tabs { gap: 0; padding: 2px; }
-  .tabs a { padding: 7px 4px; }
   .top-actions { gap: 0; }
   .top-actions .btn { padding: 7px 3px; min-width: 0; }
+  .burger { padding: 7px 4px; min-width: 0; }
 }
 }
 
@@ -1084,8 +1089,8 @@ details.manual[open] summary { margin-bottom: 6px; }
   :root { --top-h: 46px; }
   .topbar { flex-wrap: nowrap; height: var(--top-h); padding-top: 4px; padding-bottom: 4px; }
   .brand { margin-right: 0; }
-  .tabs a { padding: 4px 9px; }
-  .top-actions .btn { padding: 4px 7px; min-height: 0; }
+  .top-actions .btn, .burger { padding: 4px 7px; min-height: 0; }
+  .site-menu a { padding: 6px 12px; }
   .stage {
     display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto;
     height: calc(100dvh - var(--top-h)); min-height: 240px;

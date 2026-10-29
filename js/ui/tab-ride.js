@@ -2096,6 +2096,9 @@ Recalé sur ta FC depuis ${hmm(hf.n)} (filtre de Kalman) : FC de repos ${Math.ro
     V.back = h('button', { class: 'btn ghost', type: 'button', onclick: () => PYR.app.back() }, '‹ Retour');
     V.title = h('strong', { class: 'rd-title' }, 'Compteur');
     V.top = h('header', { class: 'rd-top' }, V.back, V.title);
+    // la page est recouverte par le compteur plein écran : le menu des pages du site (js/menu.js) passe dans son bandeau, à droite
+    const menu = document.querySelector('.burger-wrap');
+    if (menu) { menu.classList.add('rd-menu'); V.top.append(menu); }
     buildPrep(); buildLive();
     V.done = h('section', { class: 'rd-done', hidden: true });
     V.col = h('div', { class: 'rd-col' }, V.prep, V.live, V.done);

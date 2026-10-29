@@ -21,19 +21,22 @@
       <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor"/><path d="M10 44 L24 26 L32 36 L42 20 L54 44 Z" fill="#fff"/></svg>
       <span>PaceYourRide</span>
     </a>
-    <nav class="tabs" aria-label="Sections">
-      <a href="parcours.html" title="Parcours" aria-label="Parcours"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-5h6.5"/></svg></a>
-      <a href="athlete.html" title="Athlète" aria-label="Athlète"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></a>
-      <a href="equipement.html" title="Équipements" aria-label="Équipements"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17 9.5 8h5l4 9M9.5 8 12.5 17H5.5M14.5 5h2.5"/></svg></a>
-      <a href="pacing.html" aria-current="page" title="Pacing optimal" aria-label="Pacing optimal"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4"/><path d="m12 14 3-3"/><circle cx="12" cy="14" r="8"/></svg></a>
-      <a href="Jeu/index.html" title="Jeu" aria-label="Jeu"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h4M8 10v4"/><path d="M15 11.5h.01M18 13.5h.01"/><path d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5z"/></svg></a>
-      <a href="Compteur/index.html" title="Compteur" aria-label="Compteur"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg></a>
-    </nav>
     <div class="top-actions" id="top-actions">
       <a class="btn ghost" href="documentation.html" target="_blank" rel="noopener" title="Documentation : guide d'utilisation, modèles mécanique et physiologique, simulation et algorithmes d'optimisation" aria-label="Documentation"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></a>
       <button class="btn ghost" id="btn-export-project" type="button" title="Exporter : enregistrer tout le projet dans un fichier" aria-label="Exporter le projet"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></button>
       <label class="btn ghost" title="Importer : ouvrir un projet enregistré" aria-label="Importer un projet"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg><input type="file" id="input-import-project" accept=".json,application/json" hidden></label>
       <button class="btn ghost" id="btn-reset" type="button" title="Réinitialiser : tout effacer et repartir des valeurs par défaut" aria-label="Réinitialiser"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+    </div>
+    <div class="burger-wrap">
+      <button class="btn ghost burger" id="btn-menu" type="button" title="Menu : les pages du site" aria-label="Menu" aria-haspopup="true" aria-expanded="false" aria-controls="site-menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <nav class="site-menu" id="site-menu" aria-label="Sections" hidden>
+        <a href="parcours.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-5h6.5"/></svg><span>Parcours</span></a>
+        <a href="athlete.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Athlète</span></a>
+        <a href="equipement.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17 9.5 8h5l4 9M9.5 8 12.5 17H5.5M14.5 5h2.5"/></svg><span>Équipements</span></a>
+        <a href="pacing.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4"/><path d="m12 14 3-3"/><circle cx="12" cy="14" r="8"/></svg><span>Pacing optimal</span></a>
+        <a href="Jeu/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h4M8 10v4"/><path d="M15 11.5h.01M18 13.5h.01"/><path d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5z"/></svg><span>Jeu</span></a>
+        <a href="Compteur/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg><span>Compteur</span></a>
+      </nav>
     </div>
   </header>
 
@@ -169,6 +172,7 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
+  <script src="js/menu.js"></script>
   <!-- scripts de l'application (une seule liste pour toutes les pages) puis démarrage de cette page : js/boot.js, js/app.js -->
   <script src="js/boot.js"></script>
 </body>
