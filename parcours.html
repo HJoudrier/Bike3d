@@ -98,9 +98,14 @@
         <!-- page Parcours : le parcours en 3D (js/ui/route3d.js), à la place de la carte -->
         <div class="route3d" id="route3d" hidden>
           <div class="r3-panel">
+            <div class="seg-control" role="radiogroup" aria-label="Vue 3D">
+              <button type="button" role="radio" data-mode="terrain" aria-pressed="true" title="Le terrain lui-même en relief, la carte plaquée dessus et le tracé posé sur sa surface">Terrain 3D</button>
+              <button type="button" role="radio" data-mode="flat" aria-pressed="false" title="Fond de carte à plat, le tracé flotte au-dessus à la hauteur de son altitude">À plat</button>
+            </div>
             <div class="seg-control" role="radiogroup" aria-label="Fond de carte">
-              <button type="button" role="radio" data-base="plan" aria-pressed="true" title="Fond de carte à plat : plan">Plan</button>
-              <button type="button" role="radio" data-base="topo" aria-pressed="false" title="Fond de carte à plat : carte topographique (courbes de niveau)">Topographique</button>
+              <button type="button" role="radio" data-base="plan" aria-pressed="true" title="Plan (OpenStreetMap)">Plan</button>
+              <button type="button" role="radio" data-base="topo" aria-pressed="false" title="Carte topographique (courbes de niveau)">Topo</button>
+              <button type="button" role="radio" data-base="sat" aria-pressed="false" title="Image satellite">Satellite</button>
             </div>
             <label class="r3-exag" title="Exagération de la hauteur : à ×1 le relief est à l'échelle de la carte"><span>Relief</span><input type="range" id="r3-exag" min="1" max="10" step="0.5" value="1"><output id="r3-exag-out">×1</output></label>
             <button class="btn" type="button" id="r3-reset" title="Revenir à la vue de départ (double clic sur la vue)">Recentrer</button>

@@ -59,3 +59,24 @@ test('adresse d\'une tuile', () => {
   const u = R3.tileUrl({ url: 'https://{s}.tile.example/{z}/{x}/{y}{r}.png', subdomains: 'ab' }, 12, 2113, 1456);
   assert.match(u, /^https:\/\/[ab]\.tile\.example\/12\/2113\/1456\.png$/);
 });
+
+test('altitude Terrarium : R × 256 + V + B / 256 − 32768', () => {
+  assert.equal(R3.terrarium(128, 0, 0), 0);
+  assert.equal(R3.terrarium(133, 232, 0), 1000);        // 133 × 256 + 232 − 32768
+  assert.equal(R3.terrarium(128, 10, 128), 10.5);
+});
+
+test('maillage du terrain : altitude interpolée entre les quatre mailles voisines', () => {
+  // 3 × 3 mailles (2 segments par côté) : h = 10 × colonne + 100 × rangée
+  const h = new Float32Array(9).map((_, k) => 10 * (k % 3) + 100 * Math.floor(k / 3));
+  assert.equal(R3.sampleGrid(h, 2, 2, 0, 0), 0);
+  assert.equal(R3.sampleGrid(h, 2, 2, 1, 1), 220);
+  assert.equal(R3.sampleGrid(h, 2, 2, 0.5, 0.5), 110);
+  assert.equal(R3.sampleGrid(h, 2, 2, 0.25, 0.75), 5 + 150);
+  assert.equal(R3.sampleGrid(h, 2, 2, -3, 9), 200, 'borné au rectangle');
+});
+
+test('exagération conseillée sur un terrain : plus modeste, jamais au-delà de ×4', () => {
+  assert.equal(R3.autoExag(10000, 1500, 0.12, 4), 1);
+  assert.equal(R3.autoExag(10000, 300, 0.12, 4), 4);
+});
