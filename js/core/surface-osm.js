@@ -12,7 +12,7 @@
   const STICK = 6;              // m : une voie déjà suivie garde la priorité si elle n'est pas plus loin de plus de ça
   const MIN_RUN = 60;           // m : une portion plus courte est ignorée
   const MERGE_GAP = 120;        // m : deux portions de même revêtement plus proches que ça n'en font qu'une
-  const CHUNK = 12000;          // m de parcours par requête Overpass
+  const CHUNK = 5000;           // m de parcours par requête Overpass
   const BOX = 2000;             // m de parcours par boîte englobante dans une requête (boîtes serrées : peu de données, requête rapide)
   const PAD = 0.0003;           // ° : marge des boîtes (≈ 35 m)
   const BUDGET = 150000;        // ms : au-delà, la lecture s'arrête avec ce qui a été lu
