@@ -6,14 +6,14 @@
   'use strict';
 
   const ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
-  const TIMEOUT = 20000;        // ms par essai auprès d'un serveur
+  const TIMEOUT = 30000;        // ms par essai auprès d'un serveur
   const SAMPLE = 20;            // m : écart entre deux points examinés le long du parcours
   const MATCH = 25;             // m : distance maximale entre le tracé et la voie retenue
   const STICK = 6;              // m : une voie déjà suivie garde la priorité si elle n'est pas plus loin de plus de ça
   const MIN_RUN = 60;           // m : une portion plus courte est ignorée
   const MERGE_GAP = 120;        // m : deux portions de même revêtement plus proches que ça n'en font qu'une
-  const CHUNK = 10000;          // m de parcours par requête Overpass
-  const POLY = 80;              // m : écart entre les points de la ligne envoyée à Overpass
+  const CHUNK = 4000;           // m de parcours par requête Overpass (une boîte autour du morceau : rapide, car indexée)
+  const PAD = 0.0004;           // ° : marge de la boîte (≈ 45 m)
   const CELL = 0.0004;          // ° : cellule de l'index spatial (≈ 45 m)
 
   // revêtement OpenStreetMap (tag surface) → revêtement de l'application (Ph.SURFACES) ; 'asphalt' = pas de portion
@@ -48,39 +48,55 @@
 
   let good = 0;                 // dernier serveur qui a répondu : on commence par lui
 
-  /** Requête Overpass avec repli sur un autre serveur. */
+  const wait = (ms, signal) => new Promise((ok) => { const t = setTimeout(ok, ms); if (signal) signal.addEventListener('abort', () => { clearTimeout(t); ok(); }, { once: true }); });
+
+  /** Requête Overpass avec repli sur les autres serveurs, puis un second tour si tous étaient saturés. L'erreur dit pourquoi chaque serveur a échoué. */
   async function overpass(ql, signal) {
-    let last = null;
-    for (let k = 0; k < ENDPOINTS.length; k++) {
-      const url = ENDPOINTS[(good + k) % ENDPOINTS.length];
-      const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), TIMEOUT);
-      const onAbort = () => ctrl.abort();
-      if (signal) signal.addEventListener('abort', onAbort);
-      try {
-        const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(ql), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctrl.signal });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        const data = await r.json();
-        good = (good + k) % ENDPOINTS.length;
-        return data;
-      } catch (e) {
-        if (signal && signal.aborted) throw e;
-        last = e;
-      } finally {
-        clearTimeout(timer);
-        if (signal) signal.removeEventListener('abort', onAbort);
+    const why = [];
+    for (let round = 0; round < 2; round++) {
+      let busy = false;
+      for (let k = 0; k < ENDPOINTS.length; k++) {
+        const url = ENDPOINTS[(good + k) % ENDPOINTS.length];
+        const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), TIMEOUT);
+        const onAbort = () => ctrl.abort();
+        if (signal) signal.addEventListener('abort', onAbort);
+        try {
+          const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(ql), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctrl.signal });
+          if (!r.ok) { if (r.status === 429 || r.status === 504) busy = true; throw new Error('HTTP ' + r.status); }
+          const data = await r.json();
+          good = (good + k) % ENDPOINTS.length;
+          return data;
+        } catch (e) {
+          if (signal && signal.aborted) throw e;
+          why.push(new URL(url).hostname + ' : ' + (ctrl.signal.aborted ? 'délai dépassé' : e.message === 'Failed to fetch' ? 'injoignable (réseau, blocage ou CORS)' : e.message));
+        } finally {
+          clearTimeout(timer);
+          if (signal) signal.removeEventListener('abort', onAbort);
+        }
       }
+      if (!busy || round === 1) break;
+      await wait(4000, signal);                     // serveurs saturés : on laisse souffler avant le second tour
+      if (signal && signal.aborted) break;
     }
-    throw last || new Error('Overpass indisponible');
+    const err = new Error('Overpass indisponible : ' + why.join(' ; '));
+    err.reasons = why;
+    throw err;
   }
 
-  /** Voies à moins de MATCH m de la portion [i0, i1] du parcours (une requête). */
-  async function fetchWays(profile, i0, i1, stride, signal) {
-    const pts = [];
-    for (let i = i0; i <= i1; i += stride) pts.push(profile.lat[i].toFixed(5) + ',' + profile.lng[i].toFixed(5));
-    pts.push(profile.lat[i1].toFixed(5) + ',' + profile.lng[i1].toFixed(5));
-    const ql = `[out:json][timeout:25];way["highway"](around:${MATCH + 10},${pts.join(',')});out tags geom;`;
+  // voies sans intérêt pour un vélo qui roule : on ne les demande pas (trottoirs, escaliers, couloirs…)
+  const SKIP = 'footway|steps|pedestrian|corridor|elevator|escalator|platform|construction|proposed|bus_guideway|services|rest_area';
+
+  /** Voies de la boîte qui entoure la portion [i0, i1] du parcours (une requête). */
+  async function fetchWays(profile, i0, i1, signal) {
+    let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity;
+    for (let i = i0; i <= i1; i++) {
+      s = Math.min(s, profile.lat[i]); n = Math.max(n, profile.lat[i]);
+      w = Math.min(w, profile.lng[i]); e = Math.max(e, profile.lng[i]);
+    }
+    const box = [s - PAD, w - PAD * 1.5, n + PAD, e + PAD * 1.5].map((v) => v.toFixed(5)).join(',');
+    const ql = `[out:json][timeout:25];way["highway"]["highway"!~"^(${SKIP})$"](${box});out tags geom;`;
     const data = await overpass(ql, signal);
-    return (data.elements || []).filter((e) => e.type === 'way' && Array.isArray(e.geometry) && e.geometry.length > 1);
+    return (data.elements || []).filter((el) => el.type === 'way' && Array.isArray(el.geometry) && el.geometry.length > 1);
   }
 
   /**
@@ -178,17 +194,17 @@
     const ways = new Map();
     const chunks = [];
     for (let i = 0; i < profile.n - 1; i += per) chunks.push([i, Math.min(profile.n - 1, i + per)]);
-    let failed = 0;
+    let failed = 0, lastErr = null;
     for (let c = 0; c < chunks.length; c++) {
       if (o.onProgress) o.onProgress(c, chunks.length);
       try {
-        for (const w of await fetchWays(profile, chunks[c][0], chunks[c][1], Math.max(1, Math.round(POLY / profile.step)), o.signal)) ways.set(w.id, w);
+        for (const w of await fetchWays(profile, chunks[c][0], chunks[c][1], o.signal)) ways.set(w.id, w);
       } catch (e) {
         if (o.signal && o.signal.aborted) throw e;
-        failed++;                                   // un morceau illisible ne fait pas perdre les autres
+        failed++; lastErr = e;                      // un morceau illisible ne fait pas perdre les autres
       }
     }
-    if (failed === chunks.length) throw new Error('Overpass indisponible');
+    if (failed === chunks.length) throw lastErr || new Error('Overpass indisponible');
     if (o.onProgress) o.onProgress(chunks.length, chunks.length);
     const list = [...ways.values()];
     return { portions: toPortions(matchWays(profile, list, stride), stride, profile.step, profile.length), ways: list.length, failed, chunks: chunks.length };

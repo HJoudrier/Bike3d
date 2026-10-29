@@ -74,8 +74,17 @@ test('detect : requête Overpass puis portions', async () => {
   try {
     const r = await S.detect(p);
     assert.equal(calls.length, 1);
-    assert.match(calls[0], /way\["highway"\]\(around:/);
+    assert.match(calls[0], /way\["highway"\]\["highway"!~"\^\(footway\|[^"]*\)\$"\]\([\d.]+,[\d.]+,[\d.]+,[\d.]+\);out tags geom/);
     assert.equal(r.portions.length, 1);
     assert.equal(r.portions[0].surface, 'gravel_loose');
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test('detect : l\'erreur dit pourquoi chaque serveur a échoué', async () => {
+  const p = makeProfile([{ len: 1000, grade: 0 }]);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
+  try {
+    await assert.rejects(() => S.detect(p), (e) => e.reasons.length === 3 && /overpass-api\.de : injoignable/.test(e.reasons[0]));
   } finally { globalThis.fetch = realFetch; }
 });

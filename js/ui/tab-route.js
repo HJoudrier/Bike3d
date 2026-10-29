@@ -416,7 +416,11 @@
         say(msg); D.toast(msg);
       } catch (e) {
         if (ctrl.signal.aborted) { say('Détection annulée.'); D.toast('Détection annulée.'); }
-        else { say('OpenStreetMap n\'a pas répondu.'); D.toast('OpenStreetMap n\'a pas répondu (serveur Overpass occupé ou injoignable) : réessaie dans un instant.', 'error'); }
+        else {
+          const why = e && e.reasons ? ' — ' + e.reasons.slice(-3).join(' ; ') : '';
+          say('OpenStreetMap n\'a pas répondu' + why);
+          D.toast('OpenStreetMap n\'a pas répondu' + why, 'error', 8000);
+        }
       } finally {
         detecting = null;
         busy(false);
