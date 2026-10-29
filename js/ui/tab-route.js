@@ -23,6 +23,7 @@
   let chart = null;
   let selection = null;
   let activeId = null;
+  let detecting = false;      // lecture des revêtements en cours
 
   const T = {
     surfaceColor,
@@ -61,6 +62,7 @@
         const L = store.profile ? store.profile.length / 1000 : 1;
         T.addSurface(0, Math.min(L, 1));
       });
+      for (const id of ['#btn-detect-surfaces', '#btn-detect-surfaces-2']) $(id).addEventListener('click', () => T.detectSurfaces());
       $('#btn-add-wind').addEventListener('click', () => {
         const L = store.profile ? store.profile.length / 1000 : 1;
         T.addWind(0, Math.min(L, 5));
@@ -379,6 +381,39 @@
         bands.push({ kind: 'wind', id: w.id, start: w.startKm * 1000, end: w.endKm * 1000, color: WIND_COLOR, label: `${U.cardinal(w.dir)} ${Math.round(w.speed)}${w.gusty ? '↯' : ''}` });
       }
       chart.setBands(bands);
+    },
+
+    /** Pré-remplit les portions de revêtement d'après OpenStreetMap (remplace celles qui existent, après confirmation). */
+    async detectSurfaces() {
+      const p = store.profile;
+      const status = $('#surface-detect-status');
+      if (!p) { D.toast('Trace d\'abord un parcours', 'error'); return; }
+      if (detecting) return;
+      if (store.state.surfaces.length && !confirm('Remplacer les portions de revêtement existantes par celles d\'OpenStreetMap ?')) return;
+      detecting = true;
+      const btns = ['#btn-detect-surfaces', '#btn-detect-surfaces-2'].map((id) => $(id));
+      btns.forEach((b) => { b.disabled = true; });
+      const say = (m) => { if (status) status.textContent = m; };
+      try {
+        say('Lecture des revêtements dans OpenStreetMap…');
+        const res = await PYR.surfaceOsm.detect(p, { onProgress: (i, n) => { if (n > 1) say(`Lecture des revêtements dans OpenStreetMap… ${i}/${n}`); } });
+        if (!store.profile || Math.abs(store.profile.length - p.length) > 1) { say(''); return; }       // le tracé a changé pendant la lecture
+        store.state.surfaces.splice(0, store.state.surfaces.length, ...res.portions.map((r) => Object.assign({ id: U.uid(), factor: Ph.SURFACES.find((s) => s.id === r.surface).f }, r)));
+        activeId = null;
+        store.emit('surfaces');
+        store.save();
+        T.renderPortions();
+        const km = (ids) => res.portions.filter((r) => ids.includes(r.surface)).reduce((t, r) => t + r.endKm - r.startKm, 0);
+        const parts = [['pavés', km(['cobbles', 'cobbles_hard'])], ['gravier', km(['gravel_hard', 'gravel_loose', 'rough'])], ['chemin', km(['dirt', 'grass'])]].filter((x) => x[1] > 0.05);
+        say(res.portions.length ? `${res.portions.length} portion(s) détectée(s) : ${parts.map((x) => U.fmt(x[1], 1) + ' km de ' + x[0]).join(', ')}. Le reste est de l'asphalte.`
+          : res.ways ? 'Aucun revêtement particulier : asphalte partout (ou revêtement non renseigné dans OpenStreetMap).' : 'Aucune voie trouvée près du tracé.');
+      } catch (e) {
+        say('');
+        D.toast('OpenStreetMap indisponible, réessaie dans un instant.', 'error');
+      } finally {
+        detecting = false;
+        btns.forEach((b) => { b.disabled = false; });
+      }
     },
 
     addSurface(a, b) {

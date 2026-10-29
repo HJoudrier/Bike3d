@@ -84,6 +84,8 @@
             <button class="tool" type="button" id="btn-reverse" title="Inverser le sens du parcours (le départ devient l'arrivée)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg><span>Inverser</span></button>
             <button class="tool" type="button" id="btn-fit" title="Centrer la carte sur le parcours" aria-label="Centrer la carte sur le parcours"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V3h5"/><path d="M21 8V3h-5"/><path d="M3 16v5h5"/><path d="M21 16v5h-5"/><circle cx="12" cy="12" r="3"/></svg></button>
             <span class="tool-sep" aria-hidden="true"></span>
+            <button class="tool" type="button" id="btn-detect-surfaces" title="Détecter les revêtements (pavés, gravier, chemin) d'après OpenStreetMap et en faire des portions" aria-label="Détecter les revêtements"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 5 9-5"/></svg></button>
+            <span class="tool-sep" aria-hidden="true"></span>
             <button class="tool danger" type="button" id="btn-clear" title="Effacer le parcours" aria-label="Effacer le parcours"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 11v5M14 11v5"/></svg></button>
           </div>
         </div>
@@ -159,11 +161,15 @@
         <div class="portion-list" id="feed-list"></div>
 
         <h3>Portions — revêtement &amp; friction</h3>
-        <p class="hint">Cliquer-glisser sur le profil pour sélectionner une zone, ou ajoute une portion puis saisis ses kilomètres. Le coefficient multiplie le Crr des pneus. La largeur de route place le peloton du mode jeu (coureurs côte à côte, éventails) : chaque revêtement a la sienne (pavés 4 m, pavés difficiles 3 m, gravier 3 à 3,5 m, chemin 2,5 m…), qu'une portion peut changer ; ailleurs, la largeur par défaut s'applique.</p>
+        <p class="hint">Cliquer-glisser sur le profil pour sélectionner une zone, ou ajoute une portion puis saisis ses kilomètres. « Détecter » (aussi sur la carte) pré-remplit les portions d'après le revêtement des voies noté dans OpenStreetMap (pavés, gravier, chemin) : à relire, la donnée est parfois absente ou fausse, et l'asphalte est le revêtement par défaut. Le coefficient multiplie le Crr des pneus. La largeur de route place le peloton du mode jeu (coureurs côte à côte, éventails) : chaque revêtement a la sienne (pavés 4 m, pavés difficiles 3 m, gravier 3 à 3,5 m, chemin 2,5 m…), qu'une portion peut changer ; ailleurs, la largeur par défaut s'applique.</p>
         <div class="grid2">
           <div class="field"><label for="r-road-w">Largeur de route par défaut (m)</label><input type="number" id="r-road-w" min="1.5" max="20" step="0.5" data-bind="road.width"></div>
         </div>
-        <div class="toolbar"><button class="btn" id="btn-add-surface">+ Ajouter une portion</button></div>
+        <div class="toolbar">
+          <button class="btn" id="btn-add-surface">+ Ajouter une portion</button>
+          <button class="btn ghost" type="button" id="btn-detect-surfaces-2" title="Lit dans OpenStreetMap le revêtement des voies suivies (pavés, gravier, chemin) et remplace les portions par celles qu'il trouve">Détecter d'après OpenStreetMap</button>
+        </div>
+        <div class="status-line" id="surface-detect-status" role="status" aria-live="polite"></div>
         <div class="portion-list" id="surface-list"></div>
 
         <h3>Portions — vent</h3>
