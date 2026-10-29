@@ -31,6 +31,7 @@
     init() {
       T.initHead();
       T.initTools();
+      if (PYR.route3d) PYR.route3d.init();
 
       // profil
       chart = new PYR.charts.ProfileChart($('#profile-chart'), {

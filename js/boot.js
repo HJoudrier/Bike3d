@@ -21,7 +21,7 @@
     // état, stockage, échanges
     'js/core/dom.js', 'js/core/avatar.js', 'js/core/codec.js', 'js/core/zip.js', 'js/core/race-data.js', 'js/core/store.js', 'js/core/library.js', 'js/core/route-file.js', 'js/core/surface-osm.js',
     // interface : chaque page n'initialise que ses parties (js/app.js)
-    'js/ui/services.js', 'js/ui/route-model.js', 'js/ui/charts.js', 'js/ui/chart-config.js', 'js/ui/map-poi.js', 'js/ui/map.js',
+    'js/ui/services.js', 'js/ui/route-model.js', 'js/ui/charts.js', 'js/ui/chart-config.js', 'js/ui/map-poi.js', 'js/ui/map.js', 'js/ui/route3d.js',
     'js/ui/classif-view.js', 'js/ui/tab-route.js', 'js/ui/tab-weather.js', 'js/ui/rider-physio.js', 'js/ui/tab-rider.js', 'js/ui/rider-import.js',
     'js/ui/tab-bike.js', 'js/ui/calibration.js', 'js/ui/gear-art.js', 'js/ui/tab-shop.js', 'js/ui/tab-perf.js', 'js/ui/weather-fx.js',
     'js/ui/view3d.js', 'js/ui/game-source.js', 'js/ui/game-setup.js', 'js/ui/tab-game.js', 'js/ui/game-mobile.js', 'js/ui/sensors.js', 'js/ui/tab-ride.js',

@@ -74,6 +74,7 @@
     L.control.layers(bases, overlays, { position: 'topright' }).addTo(map);
     // choix du fond depuis l'extérieur (bouton du mode jeu, où le contrôle de Leaflet est masqué) ; la sauvegarde passe par « baselayerchange »
     M.baseLayers = BASE_LAYERS.map((b) => ({ id: b.id, label: b.label }));
+    M.baseSpecs = BASE_LAYERS;     // adresses des tuiles : la vue 3D du parcours (route3d.js) assemble son fond avec
     M.baseId = () => { for (const b of BASE_LAYERS) if (map.hasLayer(bases[b.label])) return b.id; return first.id; };
     M.baseSpec = () => BASE_LAYERS.find((b) => b.id === M.baseId()) || BASE_LAYERS[0];     // fond affiché (url, attribution), pour les cartes annexes
     M.setBase = (id) => {

@@ -53,6 +53,10 @@
           <div class="rh-stats" id="route-key-stats" aria-live="polite"></div>
         </div>
         <div class="rh-actions">
+          <div class="seg-control view-switch" id="view-switch" role="radiogroup" aria-label="Vue du parcours">
+            <button type="button" role="radio" data-view="map" aria-pressed="true" title="Carte : tracer et modifier le parcours">Carte</button>
+            <button type="button" role="radio" data-view="3d" aria-pressed="false" title="Le parcours en 3D, à la hauteur de son altitude, au-dessus du fond de carte">3D</button>
+          </div>
           <button class="btn" type="button" id="btn-save-lib" title="Enregistrer ce parcours dans la bibliothèque sous son nom (page d'accueil › Sélectionner un parcours)">Enregistrer</button>
           <label class="btn" title="Ouvrir un GPX : une simple trace, ou un parcours complet exporté par PaceYourRide (sprints, côtes, ravitaillements, météo…)">Importer<input type="file" id="input-gpx" accept=".gpx,application/gpx+xml" hidden></label>
           <div class="menu-wrap">
@@ -91,6 +95,22 @@
             <button class="tool danger" type="button" id="btn-clear" title="Effacer le parcours" aria-label="Effacer le parcours"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 11v5M14 11v5"/></svg></button>
           </div>
         </div>
+        <!-- page Parcours : le parcours en 3D (js/ui/route3d.js), à la place de la carte -->
+        <div class="route3d" id="route3d" hidden>
+          <div class="r3-panel">
+            <div class="seg-control" role="radiogroup" aria-label="Fond de carte">
+              <button type="button" role="radio" data-base="plan" aria-pressed="true" title="Fond de carte à plat : plan">Plan</button>
+              <button type="button" role="radio" data-base="topo" aria-pressed="false" title="Fond de carte à plat : carte topographique (courbes de niveau)">Topographique</button>
+            </div>
+            <label class="r3-exag" title="Exagération de la hauteur : à ×1 le relief est à l'échelle de la carte"><span>Relief</span><input type="range" id="r3-exag" min="1" max="10" step="0.5" value="1"><output id="r3-exag-out">×1</output></label>
+            <button class="btn" type="button" id="r3-reset" title="Revenir à la vue de départ (double clic sur la vue)">Recentrer</button>
+          </div>
+          <div class="r3-info" id="r3-info"></div>
+          <div class="r3-tip" id="r3-tip" hidden></div>
+          <div class="r3-msg" id="r3-msg" role="status" aria-live="polite" hidden></div>
+          <div class="r3-attr" id="r3-attr"></div>
+        </div>
+
         <!-- alerte de course (incident, fringale, arrivée…) : seul élément du jeu qui reste sur la carte -->
         <div class="hud-banner" id="hud-banner" hidden></div>
         <!-- mode jeu : décompte avant le départ (réglage « Décompte avant le départ »), au centre de l'écran de course -->

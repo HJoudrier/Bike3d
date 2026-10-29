@@ -1017,6 +1017,34 @@ details.manual[open] summary { margin-bottom: 6px; }
 .toast.error { background: var(--critical); color: #fff; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
+/* ---------- Page Parcours : vue 3D (route3d.js), à la place de la carte ---------- */
+.view-switch { margin-left: 0; }
+.view-switch button { font-size: 13px; padding: 5px 14px; }
+body[data-view3d="on"] #map, body[data-view3d="on"] .route-tools { visibility: hidden; pointer-events: none; }
+.route3d { position: absolute; inset: 0; z-index: 1002; overflow: hidden; background: var(--surface-2); user-select: none; -webkit-user-select: none; }
+.route3d[hidden] { display: none; }
+.r3-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+.r3-canvas:active { cursor: grabbing; }
+.r3-panel {
+  position: absolute; top: 10px; left: 10px; right: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; pointer-events: none;
+}
+.r3-panel > * { pointer-events: auto; box-shadow: var(--shadow); }
+.r3-panel .seg-control { margin-left: 0; background: var(--surface); border: 1px solid var(--border); padding: 3px; }
+.r3-panel .seg-control button { font-size: 13px; padding: 5px 12px; }
+.r3-panel .seg-control button[aria-pressed="true"] { background: var(--surface-2); }
+.r3-exag { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.r3-exag input { width: 110px; margin: 0; }
+.r3-exag output { min-width: 28px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.r3-info, .r3-attr, .r3-tip, .r3-msg { position: absolute; pointer-events: none; font-size: 12px; }
+.r3-info { left: 10px; bottom: 10px; padding: 4px 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; color: var(--ink-2); }
+.r3-info:empty { display: none; }
+.r3-attr { right: 6px; bottom: 4px; padding: 1px 6px; background: rgba(255, 255, 255, 0.75); color: #333; border-radius: 4px; font-size: 11px; }
+.r3-attr a { color: inherit; pointer-events: auto; }
+.r3-attr:empty { display: none; }
+.r3-tip { padding: 3px 8px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px; box-shadow: var(--shadow); font-weight: 600; white-space: nowrap; }
+.r3-msg { left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 80%; padding: 10px 16px; text-align: center; font-size: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--ink-2); }
+@media (max-width: 900px) { .r3-panel { right: 62px; } .r3-info { max-width: calc(100% - 140px); } }
+
 /* ---------- Mobile ---------- */
 @media (max-width: 900px) {
   :root { --top-h: 54px; }
