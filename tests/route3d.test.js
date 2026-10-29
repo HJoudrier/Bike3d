@@ -62,7 +62,7 @@ test('adresse d\'une tuile', () => {
 
 test('altitude Terrarium : R × 256 + V + B / 256 − 32768', () => {
   assert.equal(R3.terrarium(128, 0, 0), 0);
-  assert.equal(R3.terrarium(133, 232, 0), 1000);        // 133 × 256 + 232 − 32768
+  assert.equal(R3.terrarium(131, 232, 0), 1000);        // 131 × 256 + 232 − 32768
   assert.equal(R3.terrarium(128, 10, 128), 10.5);
 });
 
