@@ -25,19 +25,55 @@
   /* Cadres : couleur et liseré, hauteur du haut du tube de selle (st), pente du tube de selle (seat, dz/dy), hauteur du haut de la douille
      (ht) et bas de la douille (hb : [y, z]), recul de la selle (saddleZ), grosseur des tubes (k), profil des tubes (prof : profondeur
      sur largeur, 1 = rond), haubans abaissés (stays : hauteur sur le tube de selle), cintre (bar), évasement du cintre (flare), fourche,
-     garde-boue et porte-bagages. classic : le vélo du jeu, à la couleur imposée. */
-  const FRAME_BASE = { st: 0.815, seat: 0.3065, ht: 0.86, hb: [0.70, 0.45], k: 1, prof: 1, stays: 0, bar: 'drop', flare: 0, fork: 'road', bottle: true };
+     garde-boue et porte-bagages, bidon. hug : jeu (m) d'un tube oblique qui épouse la roue avant (contre-la-montre). classic : le vélo
+     du jeu, à la couleur imposée. */
+  const FRAME_BASE = { st: 0.815, seat: 0.3065, ht: 0.86, hb: [0.70, 0.41], k: 1, prof: 1, stays: 0, bar: 'drop', flare: 0, fork: 'road', bottle: true };
   const FRAMES = {
     classic: {},
     alu: { color: '#3d7be0', accent: '#ffffff', k: 1.3 },
     endurance: { color: '#e2463a', accent: '#ffffff', st: 0.80, ht: 0.895, k: 1.05 },
     climber: { color: '#f4f1ea', accent: '#e2463a', k: 0.78 },
     aero: { color: '#2a2833', accent: '#ff4d6d', st: 0.80, k: 1.1, prof: 2.3, stays: 0.6, bar: 'aero' },
-    tt: { color: '#2a2833', accent: '#ffd23a', st: 0.79, seat: 0.2126, saddleZ: -0.215, ht: 0.80, hb: [0.66, 0.462], k: 1.1, prof: 2.7, stays: 0.58, bar: 'tt', bottle: false },
-    gravel: { color: '#6f8f5a', accent: '#e9d8a6', st: 0.76, ht: 0.90, hb: [0.71, 0.447], k: 1.15, flare: 0.045 },
-    mtb: { color: '#ff7a1a', accent: '#26232f', st: 0.74, ht: 0.88, hb: [0.70, 0.46], k: 1.4, bar: 'flat', fork: 'susp' },
+    tt: { color: '#2a2833', accent: '#ffd23a', st: 0.79, seat: 0.2126, saddleZ: -0.215, ht: 0.80, hb: [0.66, 0.422], k: 1.1, prof: 2.7, stays: 0.58, bar: 'tt', bottle: false, hug: 0.02 },
+    gravel: { color: '#6f8f5a', accent: '#e9d8a6', st: 0.76, ht: 0.90, hb: [0.71, 0.407], k: 1.15, flare: 0.045 },
+    mtb: { color: '#ff7a1a', accent: '#26232f', st: 0.74, ht: 0.88, hb: [0.73, 0.41], k: 1.4, bar: 'flat', fork: 'susp' },
     city: { color: '#2f8f83', accent: '#f4f1ea', st: 0.75, ht: 0.92, k: 1.15, bar: 'city', fenders: true, rack: true }
   };
+  const HEAD = 0.3125; // pente de l'axe de direction (dz/dy, 72,6°)
+  const BOTTLE_R = 0.035;
+
+  /* Points du cadre dans le repère du vélo (y en haut, z vers l'avant) : axes des roues (la roue avant devant l'axe de direction, comme
+     avec le déport d'une vraie fourche), boîtier, tube de selle, douille, tube oblique et bidon. Le tube oblique est droit, ou (hug)
+     droit jusqu'à son point de tangence avec un cercle autour de l'axe avant, puis en arc sur ce cercle jusqu'à la douille : il
+     épouse la roue sans la toucher. dtHalf : demi-épaisseur du tube oblique dans le plan du cadre (un tube profilé est plus profond). */
+  function frameLayout(F) {
+    const rearAxle = V(0, R, -0.5), frontAxle = V(0, R, 0.57);
+    const BB = V(0, 0.28, -0.08);
+    const onSeat = (y) => V(0, y, BB.z - (y - BB.y) * F.seat); // point du tube de selle (ou de son prolongement) à la hauteur y
+    const onHead = (y) => V(0, y, F.hb[1] - (y - F.hb[0]) * HEAD); // point de l'axe de direction à la hauteur y
+    const L = { rearAxle, frontAxle, BB, onSeat, onHead, stTop: onSeat(F.st), htTop: onHead(F.ht), htBot: V(0, F.hb[0], F.hb[1]), saddle: onSeat(0.965) };
+    if (F.saddleZ) L.saddle.z = F.saddleZ;
+    L.dtHalf = 0.026 * F.k * (F.prof > 1.2 ? Math.sqrt(F.prof) : 1);
+    L.dt = [BB, onHead(F.hb[0] + 0.05)]; // partie droite (le liseré et le bidon s'y posent)
+    L.arc = null;
+    if (F.hug) {
+      const A = frontAxle, rc = R + L.dtHalf + F.hug, at = (a) => V(0, A.y + Math.sin(a) * rc, A.z + Math.cos(a) * rc);
+      // point de tangence depuis le boîtier, au-dessus de la roue (angles mesurés depuis l'avant, dans le plan z, y)
+      let a0 = Math.atan2(BB.y - A.y, BB.z - A.z);
+      if (a0 < 0) a0 += Math.PI * 2;
+      const from = a0 - Math.acos(rc / Math.hypot(BB.y - A.y, BB.z - A.z));
+      // arrivée sur l'axe de direction (y = hb + s), à la même distance de l'axe de roue : racine haute
+      const c0 = F.hb[0] - A.y, c1 = F.hb[1] - A.z, qa = 1 + HEAD * HEAD, qb = 2 * (c0 - c1 * HEAD), qc = c0 * c0 + c1 * c1 - rc * rc;
+      const s = (-qb + Math.sqrt(qb * qb - 4 * qa * qc)) / (2 * qa);
+      const to = Math.atan2(c0 + s, c1 - s * HEAD);
+      if (to < from) { L.dt = [BB, at(from)]; L.arc = { center: A, r: rc, from, to, at }; }
+    }
+    // bidon : contre le tube oblique, côté intérieur du cadre, parallèle au tube, bouchon vers la douille
+    const u = L.dt[1].clone().sub(BB).normalize(), inward = V(0, u.z, -u.y);
+    L.bottle = { center: BB.clone().addScaledVector(u, 0.25).addScaledVector(inward, L.dtHalf + BOTTLE_R + 0.003), dir: u };
+    return L;
+  }
+  const frameOf = (id) => Object.assign({}, FRAME_BASE, FRAMES[id]);
 
   /* Roues : hauteur de jante (depth, m), couleur, piste de freinage, nombre de rayons, rayons croisés ou radiaux, jante large (gravel).
      tri : les roues à trois bâtons du jeu ; disc : lenticulaire à l'arrière et 80 mm à l'avant. */
@@ -219,7 +255,7 @@
 
     _buildBike() {
       const G = this.gear;
-      const F = this.F = Object.assign({}, FRAME_BASE, FRAMES[G.frame]);
+      const F = this.F = frameOf(G.frame);
       if (G.frame === 'classic') { F.color = this.bikeColor; F.accent = this.bikeColor === '#1d1a2b' ? '#ffd23a' : '#ffffff'; }
       const frame = mat(F.color);
       const accent = mat(F.accent);
@@ -227,17 +263,16 @@
       const metal = mat('#c9ced8');
       const g = this.bikeGroup = new THREE.Group();
       this.body.add(g);
-      const rearAxle = V(0, R, -0.5), frontAxle = V(0, R, 0.52);
-      const BB = this.BB = V(0, 0.28, -0.08);
-      const onSeat = (y) => V(0, y, BB.z - (y - BB.y) * F.seat); // point du tube de selle (ou de son prolongement) à la hauteur y
-      const onHead = (y) => V(0, y, F.hb[1] - (y - F.hb[0]) * 0.3125); // point de l'axe de direction à la hauteur y
-      const stTop = onSeat(F.st), htTop = this.htTop = onHead(F.ht), htBot = V(0, F.hb[0], F.hb[1]);
-      const saddle = this.saddle = onSeat(0.965);
-      if (F.saddleZ) saddle.z = F.saddleZ;
+      const L = this.layout = frameLayout(F);
+      const { rearAxle, frontAxle, BB, onSeat, onHead, stTop, htTop, htBot, saddle } = L;
+      this.BB = BB;
+      this.htTop = htTop;
+      this.saddle = saddle;
       const k = F.k, pf = F.prof, aero = pf > 1.2;
       this._tube(BB, stTop, 0.022 * k, frame, null, pf);
       this._tube(stTop, onHead(F.ht - 0.02), 0.02 * k, frame, null, aero ? 1.5 : 1);
-      this._tube(BB, onHead(F.hb[0] + 0.03), 0.026 * k, frame, null, pf);
+      if (L.arc) this._downTubeHug(L, 0.026 * k, frame, pf);
+      else this._tube(L.dt[0], L.dt[1], 0.026 * k, frame, null, pf);
       this._tube(htBot, htTop, 0.028 * k, frame, null, aero ? 1.6 : 1);
       const stayTop = F.stays ? onSeat(F.stays) : stTop;
       for (const sx of [-1, 1]) {
@@ -245,7 +280,7 @@
         this._tube(BB, V(sx * 0.055, R, -0.5), 0.014 * Math.min(k, 1.2), frame);
       }
       this._fork(F, htBot, frontAxle, frame, dark, metal);
-      if (G.frame !== 'classic') this._decals(F, stTop, htTop, BB, accent);
+      if (G.frame !== 'classic') this._decals(F, stTop, L.dt, accent);
       // tige de selle + selle
       this._tube(stTop, V(0, saddle.y - 0.015, saddle.z + 0.003), 0.013 * (aero ? 1.3 : 1), aero ? frame : metal, null, aero ? 2 : 1);
       const sad = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), dark);
@@ -254,14 +289,7 @@
       g.add(sad);
       addOutline(sad, { width: 0.7, minW: 0.004, maxW: 0.03 });
       this._cockpit(F, frame, dark, metal);
-      // bidon
-      if (F.bottle) {
-        const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.2, 10), mat('#ffffff'));
-        bottle.position.set(0, 0.47, 0.15);
-        bottle.rotation.x = -1.05;
-        g.add(bottle);
-        addOutline(bottle, { width: 0.7, minW: 0.004, maxW: 0.03 });
-      }
+      if (F.bottle) this._bottle(L.bottle, dark);
       if (F.fenders) this._fenders(F, frame);
       if (F.rack) this._rack(stTop, dark);
 
@@ -308,9 +336,11 @@
     _fork(F, htBot, axle, frame, dark, metal) {
       for (const sx of [-1, 1]) {
         if (F.fork === 'susp') {
-          const crown = V(sx * 0.06, htBot.y - 0.03, htBot.z + 0.01), mid = V(sx * 0.06, 0.53, 0.495);
-          this._tube(crown, mid, 0.017, metal);
-          this._tube(V(sx * 0.06, 0.56, 0.49), V(sx * 0.06, R, axle.z), 0.024, dark);
+          // plongeurs du té jusqu'à y = 0,53, fourreaux de y = 0,56 jusqu'à l'axe
+          const crown = V(sx * 0.06, htBot.y - 0.03, htBot.z + 0.01), foot = V(sx * 0.06, R, axle.z);
+          const at = (y) => crown.clone().lerp(foot, (crown.y - y) / (crown.y - foot.y));
+          this._tube(crown, at(0.53), 0.017, metal);
+          this._tube(at(0.56), foot, 0.024, dark);
         } else {
           this._tube(V(sx * 0.04, htBot.y, htBot.z), V(sx * 0.05, R, axle.z), 0.014 * (F.prof > 1.2 ? 1.25 : 1), frame, null, F.prof > 1.2 ? 2 : 1);
         }
@@ -318,10 +348,10 @@
       if (F.fork === 'susp') this._box(0.15, 0.035, 0.05, dark, 0, htBot.y - 0.03, htBot.z + 0.01);
     }
 
-    // Liseré de couleur sur le tube oblique et le tube de selle
-    _decals(F, stTop, htTop, BB, accent) {
+    // Liseré de couleur sur le tube oblique (sa partie droite : [BB, fin]) et le tube de selle
+    _decals(F, stTop, [BB, end], accent) {
       const k = F.k, pf = F.prof;
-      const dt = V(0, F.hb[0] + 0.03, F.hb[1] - 0.009).sub(BB);
+      const dt = end.clone().sub(BB);
       const a = BB.clone().addScaledVector(dt, 0.42), b = BB.clone().addScaledVector(dt, 0.72);
       const m = this._tube(a, b, 0.0262 * k * 1.03, accent, null, pf);
       m.scale.x = 1.06;
@@ -336,7 +366,7 @@
       const ck = this.ck = {};
       if (F.bar === 'drop' || F.bar === 'aero') {
         const aero = F.bar === 'aero';
-        const by = ht.y + (aero ? 0.012 : 0.025), bz = ht.z + 0.1, w = 0.21, fl = F.flare;
+        const by = ht.y + (aero ? 0.012 : 0.025), bz = ht.z + 0.14, w = 0.21, fl = F.flare;
         if (aero) {
           // cintre et potence d'une pièce, haut du cintre plat
           this._tube(ht, V(0, by, bz - 0.01), 0.018, frame, null, 1.8);
@@ -359,7 +389,7 @@
         if (pads) this._clipOns(by + 0.012, bz - 0.03, P.pro, dark);
       } else if (F.bar === 'tt') {
         // cintre de base (aile) avec cornes et leviers, manchettes sur rehausses, prolongateurs
-        const by = ht.y - 0.015, bz = ht.z + 0.075;
+        const by = ht.y - 0.015, bz = ht.z + 0.115;
         this._tube(ht, V(0, by, bz), 0.02, frame, null, 1.8);
         this._box(0.3, 0.014, 0.05, frame, 0, by, bz);
         for (const sx of [-1, 1]) {
@@ -371,7 +401,7 @@
         ck.dropsE = 0.86;
         if (!pads) { ck.forearm = ck.pad; ck.forearmHand = ck.ext; }
       } else if (F.bar === 'flat') {
-        const by = ht.y + 0.05, bz = ht.z + 0.07;
+        const by = ht.y + 0.05, bz = ht.z + 0.11;
         this._tube(ht, V(0, by, bz), 0.018, dark);
         this._tube(V(-0.33, by, bz), V(0.33, by, bz), 0.013, dark);
         for (const sx of [-1, 1]) {
@@ -382,7 +412,7 @@
         if (pads) this._clipOns(by + 0.01, bz - 0.03, P.pro, dark);
       } else {
         // ville : cintre relevé, poignées ramenées vers le cycliste
-        const by = ht.y + 0.06, bz = ht.z + 0.03;
+        const by = ht.y + 0.06, bz = ht.z + 0.07;
         this._tube(ht, V(0, by, bz), 0.018, dark);
         for (const sx of [-1, 1]) {
           this._curve([V(0, by, bz), V(sx * 0.15, by + 0.01, bz + 0.012), V(sx * 0.24, by + 0.02, bz - 0.045), V(sx * 0.268, by + 0.025, bz - 0.12)], 0.013, dark);
@@ -407,9 +437,79 @@
       this.ck.ext = pro ? [0.045, py + 0.085, z + 0.25] : [0.055, py + 0.06, z + 0.27];
     }
 
+    // Tube oblique qui épouse la roue avant (L.arc) : un seul tube profilé, droit puis en arc, ses bouts fermés
+    _downTubeHug(L, r, m, prof) {
+      const [BB, T] = L.dt, { from, to, at } = L.arc;
+      const u = T.clone().sub(BB).normalize(), path = [[BB, u]];
+      const n = Math.max(2, Math.ceil((from - to) / 0.04));
+      for (let i = 0; i <= n; i++) {
+        const a = from + (to - from) * i / n; // tangente : sens de parcours, l'angle décroît
+        path.push([at(a), V(0, -Math.cos(a), Math.sin(a))]);
+      }
+      return this._sweep(path, r, m, prof);
+    }
+
+    // Tube le long d'un chemin du plan du cadre ([point, tangente unitaire], x = 0) ; section en ellipse comme _tube (prof), bouts fermés
+    _sweep(path, r, m, prof) {
+      const seg = 12, rx = prof > 1.2 ? r / Math.sqrt(prof) : r, rn = prof > 1.2 ? r * Math.sqrt(prof) : r;
+      const pos = [], idx = [];
+      const ring = (p, t) => {
+        for (let j = 0; j < seg; j++) {
+          const a = (j / seg) * Math.PI * 2, c = Math.cos(a) * rx, s = Math.sin(a) * rn; // s : le long de la normale (0, -tz, ty)
+          pos.push(p.x + c, p.y - t.z * s, p.z + t.y * s);
+        }
+      };
+      for (const [p, t] of path) ring(p, t);
+      for (let i = 0; i + 1 < path.length; i++) {
+        for (let j = 0; j < seg; j++) {
+          const a = i * seg + j, b = i * seg + (j + 1) % seg;
+          idx.push(a, a + seg, b, b, a + seg, b + seg);
+        }
+      }
+      // bouts : anneaux à part (arêtes vives, comme un cylindre) et un centre
+      for (const [end, sgn] of [[0, -1], [path.length - 1, 1]]) {
+        const [p, t] = path[end], o = pos.length / 3;
+        ring(p, t);
+        pos.push(p.x, p.y, p.z);
+        for (let j = 0; j < seg; j++) {
+          const a = o + j, b = o + (j + 1) % seg;
+          if (sgn < 0) idx.push(o + seg, a, b); else idx.push(o + seg, b, a);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, m);
+      this.bikeGroup.add(mesh);
+      addOutline(mesh, { width: 0.7, minW: 0.005, maxW: 0.03 });
+      return mesh;
+    }
+
+    // Bidon sur son porte-bidon, bouchon vers le haut du tube
+    _bottle(B, dark) {
+      const g = new THREE.Group();
+      g.position.copy(B.center);
+      g.quaternion.setFromUnitVectors(UP, B.dir);
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(BOTTLE_R, BOTTLE_R, 0.17, 12), mat('#ffffff'));
+      body.position.y = -0.015;
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.026, 0.03, 10), dark);
+      cap.position.y = 0.085;
+      // porte-bidon : deux arceaux sombres autour du bidon
+      for (const y of [-0.07, 0.035]) {
+        const hoop = new THREE.Mesh(new THREE.TorusGeometry(BOTTLE_R + 0.002, 0.0035, 4, 16), dark);
+        hoop.rotation.x = Math.PI / 2;
+        hoop.position.y = y;
+        g.add(hoop);
+      }
+      g.add(body, cap);
+      for (const o of [body, cap]) addOutline(o, { width: 0.7, minW: 0.004, maxW: 0.03 });
+      this.bikeGroup.add(g);
+    }
+
     _fenders(F, frame) {
       const m = mat(F.accent);
-      for (const [z, start] of [[-0.5, -0.35], [0.52, 1.3]]) {
+      for (const [z, start] of [[this.layout.rearAxle.z, -0.35], [this.layout.frontAxle.z, 1.3]]) {
         const geo = new THREE.TorusGeometry(R + 0.03, 0.016, 5, 28, 2.2);
         geo.rotateZ(start);
         geo.scale(1, 1, 1.9);
@@ -895,5 +995,10 @@
     helmets: Object.keys(HELMETS), clothing: Object.keys(CLOTHING), glasses: Object.keys(GLASSES), socks: Object.keys(SOCKS), shoes: Object.keys(SHOES)
   };
   Cyclist.normGear = normGear;
+  // géométrie d'un cadre (tests : la roue avant ne touche pas le cadre, le bidon est sur le tube oblique)
+  Cyclist.layout = (frame) => {
+    const F = frameOf(has(FRAMES, frame) ? frame : 'classic');
+    return Object.assign(frameLayout(F), { F, R, HEAD, BOTTLE_R });
+  };
   B3D.Cyclist = Cyclist;
 })(typeof window !== 'undefined' ? window : globalThis);

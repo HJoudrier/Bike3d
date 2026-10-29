@@ -167,7 +167,7 @@
       tube(P(-0.05, ry, rz), P(-0.3, 0.02, az - 0.2), 0.012, dark);
       // cale de la roue avant (la roue reste à la même hauteur que l'arrière)
       const block = new THREE.Mesh(new THREE.BoxGeometry(0.15, LIFT, 0.26), dark);
-      block.position.set(0, LIFT / 2, 0.52);
+      block.position.set(0, LIFT / 2, 0.57);
       block.castShadow = true;
       block.receiveShadow = true;
       g.add(block);

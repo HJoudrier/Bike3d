@@ -15,6 +15,7 @@
     'Pignon', 'Rouleur', 'Bidon', 'Cassette', 'Guidon', 'Rayon', 'Bordure', 'Musette', 'Socquette', 'Cuissard', 'Chambre-à-Air', 'Patate', 'Bonbon'];
 
   const WR = 0.34; // rayon de roue
+  const FRONT = 0.57; // axe de la roue avant (z)
   const GROUP_GAP = 10; // au-delà de cet écart (m), on forme un autre groupe
   const ROW = 1.85; // distance entre deux rangs (m)
   const COL = 0.72; // distance entre deux files (m)
@@ -67,13 +68,13 @@
     const W = '#ffffff', DK = '#26232f', SK = '#f1c29b';
     const parts = [];
     const tube = (a, b, r, color, tint) => parts.push({ geo: cyl, color, tint, matrix: tubeM(a, b, r) });
-    // vélo (cadre à la couleur de l'équipe)
-    const BB = V(0, 0.28, -0.08), stTop = V(0, 0.815, -0.244), htTop = V(0, 0.86, 0.40), htBot = V(0, 0.70, 0.45);
-    tube(BB, stTop, 0.026, W, 1); tube(stTop, htTop, 0.024, W, 1); tube(BB, htBot, 0.03, W, 1); tube(htBot, htTop, 0.032, W, 1);
+    // vélo (cadre à la couleur de l'équipe), le même que celui de B3D.Cyclist : roue avant devant l'axe de direction
+    const BB = V(0, 0.28, -0.08), stTop = V(0, 0.815, -0.244), htTop = V(0, 0.86, 0.36), htBot = V(0, 0.70, 0.41), dtTop = V(0, 0.75, 0.394);
+    tube(BB, stTop, 0.026, W, 1); tube(stTop, htTop, 0.024, W, 1); tube(BB, dtTop, 0.03, W, 1); tube(htBot, htTop, 0.032, W, 1);
     for (const sx of [-1, 1]) {
       tube(stTop, V(sx * 0.055, WR, -0.5), 0.014, W, 1);
       tube(BB, V(sx * 0.055, WR, -0.5), 0.016, W, 1);
-      tube(V(sx * 0.04, 0.7, 0.45), V(sx * 0.05, WR, 0.52), 0.016, W, 1);
+      tube(V(sx * 0.04, 0.7, 0.41), V(sx * 0.05, WR, FRONT), 0.016, W, 1);
     }
     tube(stTop, V(0, 0.95, -0.287), 0.014, '#c9ced8');
     parts.push({ geo: sph(), color: DK, matrix: tr(0, 0.965, -0.29, 0, 0, 0, 0.07, 0.03, 0.14) });
@@ -83,7 +84,11 @@
       tube(V(sx * 0.21, 0.885, 0.5), V(sx * 0.21, 0.9, 0.6), 0.015, DK);
       tube(V(sx * 0.21, 0.9, 0.6), V(sx * 0.21, 0.78, 0.6), 0.015, DK);
     }
-    parts.push({ geo: new THREE.CylinderGeometry(0.035, 0.035, 0.2, 8), color: W, matrix: tr(0, 0.47, 0.15, -1.05, 0, 0) });
+    // bidon contre le tube oblique, côté intérieur du cadre, bouchon vers la douille
+    const u = dtTop.clone().sub(BB).normalize(), bot = BB.clone().addScaledVector(u, 0.15).addScaledVector(V(0, u.z, -u.y), 0.068);
+    const neck = bot.clone().addScaledVector(u, 0.17);
+    tube(bot, neck, 0.035, W);
+    tube(neck, neck.clone().addScaledVector(u, 0.03), 0.022, DK);
     parts.push({ geo: new THREE.CylinderGeometry(0.1, 0.1, 0.014, 14), color: '#c9ced8', matrix: tr(-0.06, BB.y, BB.z, 0, 0, Math.PI / 2) });
     // coureur assis, mains sur les cocottes
     const pelvis = V(0, 1.0, -0.26), shoulder = V(0, 1.37, 0.2);
@@ -785,7 +790,7 @@
         r.wheelA += r.v / WR * dt;
         for (let w = 0; w < 2; w++) {
           ml.makeRotationX(r.wheelA);
-          ml.setPosition(0, WR, w ? 0.52 : -0.5);
+          ml.setPosition(0, WR, w ? FRONT : -0.5);
           mw.multiplyMatrices(m4, ml);
           this.mWheel.mesh.setMatrixAt(i * 2 + w, mw);
         }

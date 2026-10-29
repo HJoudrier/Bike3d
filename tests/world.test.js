@@ -413,6 +413,52 @@ test('vélo 3D : Bike3D connaît chaque cadre, roue, pneu, position, casque, ten
   assert.equal(C.normGear(null).wheels, 'tri', 'sans équipement : les roues à bâtons du jeu');
 });
 
+/** Distance (dans le plan du cadre : y, z) d'un point à un tube vu de profil : rectangle d'axe [a, b] et de demi-épaisseur h. */
+function toTube(p, a, b, h) {
+  const len = Math.hypot(b.y - a.y, b.z - a.z), uy = (b.y - a.y) / len, uz = (b.z - a.z) / len;
+  const py = p.y - a.y, pz = p.z - a.z, s = py * uy + pz * uz, w = Math.abs(pz * uy - py * uz);
+  return Math.hypot(Math.max(0, -s, s - len), Math.max(0, w - h));
+}
+
+test('vélo 3D : la roue avant ne touche pas le cadre, le bidon est posé sur le tube oblique', { skip: !hasBike3d && 'Bike3D absent' }, () => {
+  const C = bike3dCyclist();
+  for (const id of C.GEAR.frames) {
+    const L = C.layout(id), F = L.F, R = L.R, A = L.frontAxle;
+    const depth = (r, prof) => r * (prof > 1.2 ? Math.sqrt(prof) : 1); // demi-épaisseur d'un tube profilé dans le plan du cadre
+    // fourche : l'axe de roue devant l'axe de direction (déport), sinon la roue recule contre le tube oblique
+    const rake = A.z - L.onHead(R).z;
+    assert.ok(rake > 0.03 && rake < 0.07, `${id} : déport de fourche ${rake.toFixed(3)} m`);
+    // tube oblique : partie droite, puis arc éventuel autour de l'axe avant
+    const gapDt = toTube(A, L.dt[0], L.dt[1], L.dtHalf) - R;
+    assert.ok(gapDt >= 0.01, `${id} : pneu avant à ${(gapDt * 100).toFixed(1)} cm du tube oblique`);
+    if (L.arc) {
+      assert.ok(L.arc.r - L.dtHalf - R >= 0.01, `${id} : passage de roue trop serré`);
+      const end = L.arc.at(L.arc.to);
+      assert.ok(end.y > F.hb[0] && end.y < F.ht && Math.abs(end.z - L.onHead(end.y).z) < 1e-9, `${id} : le tube oblique arrive sur la douille`);
+    }
+    const gapHt = toTube(A, L.htBot, L.htTop, depth(0.028 * F.k, F.prof > 1.2 ? 1.6 : 1)) - R;
+    assert.ok(gapHt >= 0.008, `${id} : pneu avant à ${(gapHt * 100).toFixed(1)} cm de la douille`);
+    // roue arrière et tube de selle
+    const gapSt = toTube(L.rearAxle, L.BB, L.stTop, depth(0.022 * F.k, F.prof)) - R;
+    assert.ok(gapSt >= 0.005, `${id} : pneu arrière à ${(gapSt * 100).toFixed(1)} cm du tube de selle`);
+    if (!F.bottle) continue;
+    // bidon : parallèle au tube oblique, bouchon vers le haut, contre le tube sans le traverser, dans le triangle du cadre
+    const B = L.bottle, u = L.dt[1].clone().sub(L.dt[0]).normalize();
+    assert.ok(B.dir.dot(u) > 0.9999 && B.dir.y > 0, `${id} : bidon dans le sens du tube oblique`);
+    const off = toTube(B.center, L.dt[0], L.dt[1], 0);
+    assert.ok(off > L.dtHalf + L.BOTTLE_R && off < L.dtHalf + L.BOTTLE_R + 0.008, `${id} : bidon à ${off.toFixed(3)} m de l'axe du tube oblique`);
+    const n = { y: B.dir.z, z: -B.dir.y }; // vers l'intérieur du cadre (le tube de selle)
+    assert.ok((B.center.y - L.BB.y) * n.y + (B.center.z - L.BB.z) * n.z > 0, `${id} : bidon au-dessus du tube oblique`);
+    for (const [ka, kb] of [[-0.1, -1], [-0.1, 1], [0.1, -1], [0.1, 1]]) {
+      const p = { y: B.center.y + B.dir.y * ka + n.y * kb * L.BOTTLE_R, z: B.center.z + B.dir.z * ka + n.z * kb * L.BOTTLE_R };
+      assert.ok(toTube(p, L.BB, L.stTop, depth(0.022 * F.k, F.prof)) > 0.02, `${id} : bidon contre le tube de selle`);
+      assert.ok(toTube(p, L.stTop, L.onHead(F.ht - 0.02), depth(0.02 * F.k, F.prof > 1.2 ? 1.5 : 1)) > 0.02, `${id} : bidon contre le tube horizontal`);
+      assert.ok(Math.hypot(p.y - A.y, p.z - A.z) > R + 0.02, `${id} : bidon contre la roue avant`);
+    }
+  }
+  assert.ok(C.layout('tt').arc, 'contre-la-montre : le tube oblique épouse la roue avant');
+});
+
 test('vue 3D : l\'équipement du joueur part avec le parcours sans changer son empreinte', () => {
   const { course } = setupFor(makeProfile([{ len: 2000, grade: 0.02 }]));
   const gear = PYR.gearArt.gear3d({ rider: { position: 'tt' }, bike: { frame: 'tt', wheels: 'disc', tire: 'race' }, picks: {} });
