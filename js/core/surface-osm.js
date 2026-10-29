@@ -6,13 +6,14 @@
   'use strict';
 
   const ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
-  const TIMEOUT = 40000;
+  const TIMEOUT = 20000;        // ms par essai auprès d'un serveur
   const SAMPLE = 20;            // m : écart entre deux points examinés le long du parcours
   const MATCH = 25;             // m : distance maximale entre le tracé et la voie retenue
   const STICK = 6;              // m : une voie déjà suivie garde la priorité si elle n'est pas plus loin de plus de ça
   const MIN_RUN = 60;           // m : une portion plus courte est ignorée
   const MERGE_GAP = 120;        // m : deux portions de même revêtement plus proches que ça n'en font qu'une
-  const CHUNK = 15000;          // m de parcours par requête Overpass
+  const CHUNK = 10000;          // m de parcours par requête Overpass
+  const POLY = 80;              // m : écart entre les points de la ligne envoyée à Overpass
   const CELL = 0.0004;          // ° : cellule de l'index spatial (≈ 45 m)
 
   // revêtement OpenStreetMap (tag surface) → revêtement de l'application (Ph.SURFACES) ; 'asphalt' = pas de portion
@@ -45,17 +46,22 @@
   const ORDER = ['asphalt', 'smooth', 'rough', 'cobbles', 'gravel_hard', 'dirt', 'cobbles_hard', 'gravel_loose', 'grass'];
   const rank = (id) => ORDER.indexOf(id);
 
+  let good = 0;                 // dernier serveur qui a répondu : on commence par lui
+
   /** Requête Overpass avec repli sur un autre serveur. */
   async function overpass(ql, signal) {
     let last = null;
-    for (const url of ENDPOINTS) {
+    for (let k = 0; k < ENDPOINTS.length; k++) {
+      const url = ENDPOINTS[(good + k) % ENDPOINTS.length];
       const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), TIMEOUT);
       const onAbort = () => ctrl.abort();
       if (signal) signal.addEventListener('abort', onAbort);
       try {
         const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(ql), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctrl.signal });
         if (!r.ok) throw new Error('HTTP ' + r.status);
-        return await r.json();
+        const data = await r.json();
+        good = (good + k) % ENDPOINTS.length;
+        return data;
       } catch (e) {
         if (signal && signal.aborted) throw e;
         last = e;
@@ -72,14 +78,14 @@
     const pts = [];
     for (let i = i0; i <= i1; i += stride) pts.push(profile.lat[i].toFixed(5) + ',' + profile.lng[i].toFixed(5));
     pts.push(profile.lat[i1].toFixed(5) + ',' + profile.lng[i1].toFixed(5));
-    const ql = `[out:json][timeout:30];way["highway"](around:${MATCH + 5},${pts.join(',')});out tags geom;`;
+    const ql = `[out:json][timeout:25];way["highway"](around:${MATCH + 10},${pts.join(',')});out tags geom;`;
     const data = await overpass(ql, signal);
     return (data.elements || []).filter((e) => e.type === 'way' && Array.isArray(e.geometry) && e.geometry.length > 1);
   }
 
   /**
    * Revêtement de chaque point examiné du parcours (une voie OpenStreetMap par point), à partir des voies déjà chargées.
-   * Renvoie un tableau par échantillon : id du revêtement, ou null (aucune voie assez proche, ou revêtement inconnu).
+   * Renvoie un tableau par échantillon : id du revêtement, ou null (aucune voie assez proche : le revêtement précédent continue).
    */
   function matchWays(profile, ways, stride) {
     const lat0 = profile.lat[0], kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
@@ -102,7 +108,7 @@
         }
       }
     });
-    const kinds = ways.map((w) => classify(w.tags));
+    const kinds = ways.map((w) => classify(w.tags) || 'asphalt');      // voie sans renseignement : asphalte (null = aucune voie proche)
     const out = [];
     let cur = -1;               // voie suivie au point précédent
     for (let i = 0; i < profile.n; i += stride) {
@@ -172,13 +178,20 @@
     const ways = new Map();
     const chunks = [];
     for (let i = 0; i < profile.n - 1; i += per) chunks.push([i, Math.min(profile.n - 1, i + per)]);
+    let failed = 0;
     for (let c = 0; c < chunks.length; c++) {
       if (o.onProgress) o.onProgress(c, chunks.length);
-      for (const w of await fetchWays(profile, chunks[c][0], chunks[c][1], Math.max(1, Math.round(100 / profile.step)), o.signal)) ways.set(w.id, w);
+      try {
+        for (const w of await fetchWays(profile, chunks[c][0], chunks[c][1], Math.max(1, Math.round(POLY / profile.step)), o.signal)) ways.set(w.id, w);
+      } catch (e) {
+        if (o.signal && o.signal.aborted) throw e;
+        failed++;                                   // un morceau illisible ne fait pas perdre les autres
+      }
     }
+    if (failed === chunks.length) throw new Error('Overpass indisponible');
     if (o.onProgress) o.onProgress(chunks.length, chunks.length);
     const list = [...ways.values()];
-    return { portions: toPortions(matchWays(profile, list, stride), stride, profile.step, profile.length), ways: list.length };
+    return { portions: toPortions(matchWays(profile, list, stride), stride, profile.step, profile.length), ways: list.length, failed, chunks: chunks.length };
   }
 
   PYR.surfaceOsm = { detect, classify, matchWays, toPortions };

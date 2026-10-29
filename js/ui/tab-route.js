@@ -23,7 +23,7 @@
   let chart = null;
   let selection = null;
   let activeId = null;
-  let detecting = false;      // lecture des revêtements en cours
+  let detecting = null;       // lecture des revêtements en cours (AbortController)
 
   const T = {
     surfaceColor,
@@ -383,20 +383,25 @@
       chart.setBands(bands);
     },
 
-    /** Pré-remplit les portions de revêtement d'après OpenStreetMap (remplace celles qui existent, après confirmation). */
+    /**
+     * Pré-remplit les portions de revêtement d'après OpenStreetMap (remplace celles qui existent, après confirmation).
+     * Un second clic pendant la lecture l'annule : les boutons ne sont jamais bloqués.
+     */
     async detectSurfaces() {
       const p = store.profile;
       const status = $('#surface-detect-status');
-      if (!p) { D.toast('Trace d\'abord un parcours', 'error'); return; }
-      if (detecting) return;
-      if (store.state.surfaces.length && !confirm('Remplacer les portions de revêtement existantes par celles d\'OpenStreetMap ?')) return;
-      detecting = true;
-      const btns = ['#btn-detect-surfaces', '#btn-detect-surfaces-2'].map((id) => $(id));
-      btns.forEach((b) => { b.disabled = true; });
       const say = (m) => { if (status) status.textContent = m; };
+      if (detecting) { detecting.abort(); return; }
+      if (!p) { D.toast('Trace d\'abord un parcours', 'error'); return; }
+      if (store.state.surfaces.length && !confirm('Remplacer les portions de revêtement existantes par celles d\'OpenStreetMap ?')) return;
+      const ctrl = detecting = new AbortController();
+      const btns = ['#btn-detect-surfaces', '#btn-detect-surfaces-2'].map((id) => $(id));
+      const busy = (on) => btns.forEach((b) => { b.classList.toggle('busy', on); b.setAttribute('aria-busy', String(on)); });
+      busy(true);
+      const start = 'Lecture des revêtements dans OpenStreetMap… (un nouveau clic annule)';
+      say(start); D.toast('Lecture des revêtements dans OpenStreetMap…');
       try {
-        say('Lecture des revêtements dans OpenStreetMap…');
-        const res = await PYR.surfaceOsm.detect(p, { onProgress: (i, n) => { if (n > 1) say(`Lecture des revêtements dans OpenStreetMap… ${i}/${n}`); } });
+        const res = await PYR.surfaceOsm.detect(p, { signal: ctrl.signal, onProgress: (i, n) => { if (n > 1) say(`Lecture des revêtements dans OpenStreetMap… ${i}/${n} (un nouveau clic annule)`); } });
         if (!store.profile || Math.abs(store.profile.length - p.length) > 1) { say(''); return; }       // le tracé a changé pendant la lecture
         store.state.surfaces.splice(0, store.state.surfaces.length, ...res.portions.map((r) => Object.assign({ id: U.uid(), factor: Ph.SURFACES.find((s) => s.id === r.surface).f }, r)));
         activeId = null;
@@ -405,14 +410,16 @@
         T.renderPortions();
         const km = (ids) => res.portions.filter((r) => ids.includes(r.surface)).reduce((t, r) => t + r.endKm - r.startKm, 0);
         const parts = [['pavés', km(['cobbles', 'cobbles_hard'])], ['gravier', km(['gravel_hard', 'gravel_loose', 'rough'])], ['chemin', km(['dirt', 'grass'])]].filter((x) => x[1] > 0.05);
-        say(res.portions.length ? `${res.portions.length} portion(s) détectée(s) : ${parts.map((x) => U.fmt(x[1], 1) + ' km de ' + x[0]).join(', ')}. Le reste est de l'asphalte.`
-          : res.ways ? 'Aucun revêtement particulier : asphalte partout (ou revêtement non renseigné dans OpenStreetMap).' : 'Aucune voie trouvée près du tracé.');
+        const part = res.failed ? ` (${res.failed} morceau(x) sur ${res.chunks} illisible(s) : relance pour compléter)` : '';
+        const msg = (res.portions.length ? `${res.portions.length} portion(s) détectée(s) : ${parts.map((x) => U.fmt(x[1], 1) + ' km de ' + x[0]).join(', ')}. Le reste est de l'asphalte.`
+          : res.ways ? 'Aucun revêtement particulier : asphalte partout (ou revêtement non renseigné dans OpenStreetMap).' : 'Aucune voie trouvée près du tracé.') + part;
+        say(msg); D.toast(msg);
       } catch (e) {
-        say('');
-        D.toast('OpenStreetMap indisponible, réessaie dans un instant.', 'error');
+        if (ctrl.signal.aborted) { say('Détection annulée.'); D.toast('Détection annulée.'); }
+        else { say('OpenStreetMap n\'a pas répondu.'); D.toast('OpenStreetMap n\'a pas répondu (serveur Overpass occupé ou injoignable) : réessaie dans un instant.', 'error'); }
       } finally {
-        detecting = false;
-        btns.forEach((b) => { b.disabled = false; });
+        detecting = null;
+        busy(false);
       }
     },
 

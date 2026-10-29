@@ -55,6 +55,14 @@ test('portions : voie lointaine ou sans renseignement, aucune portion', () => {
   assert.deepEqual(S.toPortions(S.matchWays(p, [far, unknown], 2), 2, p.step, p.length), []);
 });
 
+test('portions : une voie sans renseignement après un chemin redevient asphalte', () => {
+  const p = makeProfile([{ len: 3000, grade: 0 }]);
+  const ways = [way(p, 1, 0, 1500, { highway: 'track', surface: 'gravel' }), way(p, 2, 1500, 3000, { highway: 'residential' })];
+  const portions = S.toPortions(S.matchWays(p, ways, 2), 2, p.step, p.length);
+  assert.equal(portions.length, 1);
+  assert.ok(Math.abs(portions[0].endKm - 1.5) < 0.05);
+});
+
 test('detect : requête Overpass puis portions', async () => {
   const p = makeProfile([{ len: 3000, grade: 0 }]);
   const calls = [];
