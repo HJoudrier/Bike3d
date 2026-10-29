@@ -286,23 +286,6 @@
       changed();
     },
 
-    /** Parcours d'exemple : montée de l'Alpe d'Huez depuis Le Bourg-d'Oisans. */
-    demo() {
-      snapshot();
-      const r = route();
-      r.fixed = null;
-      r.name = "Alpe d'Huez (exemple)";
-      const pts = [
-        { lat: 45.0558, lng: 6.0310 }, { lat: 45.0652, lng: 6.0437 }, { lat: 45.0733, lng: 6.0498 },
-        { lat: 45.0818, lng: 6.0590 }, { lat: 45.0910, lng: 6.0655 }, { lat: 45.0918, lng: 6.0712 },
-      ];
-      r.waypoints = pts;
-      r.legs = [];
-      for (let k = 0; k < pts.length - 1; k++) r.legs.push(newLeg(pts[k], pts[k + 1], 'fastbike'));
-      r.legs.forEach(computeLeg);
-      changed();
-    },
-
     /** Indice du tronçon le plus proche d'un point (pour l'insertion). */
     nearestLeg(p) {
       let best = -1, bestD = Infinity;

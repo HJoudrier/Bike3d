@@ -208,7 +208,6 @@
       $('#btn-clear').addEventListener('click', () => {
         if (!store.state.route.waypoints.length || confirm('Effacer tout le parcours ?')) PYR.routeModel.clear();
       });
-      $('#btn-demo').addEventListener('click', () => { RM.demo(); setTimeout(() => PYR.map.fit(), 50); });
       // Ctrl+Z annule, Ctrl+Y (ou Ctrl+Maj+Z) rétablit, sur la page Parcours et hors des champs de saisie
       document.addEventListener('keydown', (e) => {
         if (store.state.ui.tab !== 'route' || !(e.ctrlKey || e.metaKey) || e.altKey) return;
@@ -217,7 +216,7 @@
         if (k === 'z' && !e.shiftKey) { e.preventDefault(); RM.undo(); } else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); RM.redo(); }
       });
 
-      // boutons sans effet grisés ; tant que le tracé n'a pas deux points, une aide sur la carte dit par où commencer
+      // boutons sans effet grisés
       const refresh = () => {
         const r = store.state.route, wps = r.waypoints, n = wps.length;
         const looped = n > 2 && U.haversine(wps[0].lat, wps[0].lng, wps[n - 1].lat, wps[n - 1].lng) < 5;
@@ -227,10 +226,6 @@
         $('#btn-reverse').disabled = n < 2;
         $('#btn-fit').disabled = !n;
         $('#btn-clear').disabled = !n && !r.fixed;
-        $('#route-hint').hidden = n >= 2 || !!r.fixed;
-        $('#route-hint-text').textContent = n ? 'Clique sur la carte pour placer le point suivant : le tracé suit les routes (ou la ligne droite, selon le mode choisi en haut).'
-          : 'Clique sur la carte pour placer le départ, puis les points suivants. Tu peux aussi chercher un lieu ou importer un GPX.';
-        $('#route-hint-actions').hidden = n > 0;
       };
       store.on('route-geometry', refresh);
       refresh();
