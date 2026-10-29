@@ -39,7 +39,6 @@
         onHover: (s) => store.emit('hover', { s, from: 'profile' }),
         onBandClick: (kind, id) => T.focusPortion(kind, id),
       });
-      T.renderProfileLegend();
 
       $('#sel-add-surface').addEventListener('click', () => { if (selection) T.addSurface(selection.a / 1000, selection.b / 1000); T.cancelSelection(); });
       $('#sel-add-wind').addEventListener('click', () => { if (selection) T.addWind(selection.a / 1000, selection.b / 1000); T.cancelSelection(); });
@@ -303,13 +302,6 @@
       const what = PYR.routeFile.summary(data);
       D.flash(`Parcours « ${name} » importé${what ? ` : ${what}` : ''}.`);
       location.reload();
-    },
-
-    renderProfileLegend() {
-      const el = $('#profile-legend');
-      D.clear(el);
-      const cls = PYR.charts.GRADE_CLASSES.filter((c, i) => i % 2 === 0 || i === 3);
-      for (const c of cls) el.appendChild(h('span', { class: 'key' }, h('span', { class: 'sw', style: { background: c.color } }), c.label));
     },
 
     renderSelection() {

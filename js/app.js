@@ -20,7 +20,7 @@
   const { $, $$ } = D;
 
   const TABS = {
-    route: { mapMode: 'grade', module: () => PYR.tabRoute },
+    route: { mapMode: 'plain', module: () => PYR.tabRoute },
     rider: { mapMode: 'grade', module: () => PYR.tabRider },
     bike: { mapMode: 'grade', module: () => PYR.tabBike },
     shop: { mapMode: 'grade', module: () => PYR.tabShop },
