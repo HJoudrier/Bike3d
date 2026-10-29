@@ -54,8 +54,9 @@
         </div>
         <div class="rh-actions">
           <div class="seg-control view-switch" id="view-switch" role="radiogroup" aria-label="Vue du parcours">
-            <button type="button" role="radio" data-view="map" aria-pressed="true" title="Carte : tracer et modifier le parcours">Carte</button>
-            <button type="button" role="radio" data-view="3d" aria-pressed="false" title="Le parcours en 3D, à la hauteur de son altitude, au-dessus du fond de carte">3D</button>
+            <button type="button" role="radio" data-view="map" aria-pressed="true" title="2D : la carte, pour tracer et modifier le parcours">2D</button>
+            <button type="button" role="radio" data-view="flat" aria-pressed="false" title="2D + 3D : le fond de carte à plat, avec le tracé en 3D au-dessus, à la hauteur de son altitude">2D + 3D</button>
+            <button type="button" role="radio" data-view="terrain" aria-pressed="false" title="3D : le terrain en relief, la carte plaquée dessus et le tracé posé sur sa surface">3D</button>
           </div>
           <button class="btn" type="button" id="btn-save-lib" title="Enregistrer ce parcours dans la bibliothèque sous son nom (page d'accueil › Sélectionner un parcours)">Enregistrer</button>
           <label class="btn" title="Ouvrir un GPX : une simple trace, ou un parcours complet exporté par PaceYourRide (sprints, côtes, ravitaillements, météo…)">Importer<input type="file" id="input-gpx" accept=".gpx,application/gpx+xml" hidden></label>
@@ -98,10 +99,6 @@
         <!-- page Parcours : le parcours en 3D (js/ui/route3d.js), à la place de la carte -->
         <div class="route3d" id="route3d" hidden>
           <div class="r3-panel">
-            <div class="seg-control" role="radiogroup" aria-label="Vue 3D">
-              <button type="button" role="radio" data-mode="terrain" aria-pressed="true" title="Le terrain lui-même en relief, la carte plaquée dessus et le tracé posé sur sa surface">Terrain 3D</button>
-              <button type="button" role="radio" data-mode="flat" aria-pressed="false" title="Fond de carte à plat, le tracé flotte au-dessus à la hauteur de son altitude">À plat</button>
-            </div>
             <div class="seg-control" role="radiogroup" aria-label="Fond de carte">
               <button type="button" role="radio" data-base="plan" aria-pressed="true" title="Plan (OpenStreetMap)">Plan</button>
               <button type="button" role="radio" data-base="topo" aria-pressed="false" title="Carte topographique (courbes de niveau)">Topo</button>

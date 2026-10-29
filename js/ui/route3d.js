@@ -1,11 +1,12 @@
 /* author : Hugo Joudrier-Faure */
 /* PaceYourRide — page Parcours : le parcours en 3D. Deux vues, au choix :
- *   - « Terrain 3D » : le terrain lui-même en relief (un modèle numérique d'altitude, les tuiles Terrarium), la carte plaquée dessus,
+ *   - « 3D » : le terrain lui-même en relief (un modèle numérique d'altitude, les tuiles Terrarium), la carte plaquée dessus,
  *     et le tracé posé sur sa surface ;
- *   - « À plat » : le fond de carte posé à plat, et le tracé qui flotte au-dessus, chaque point à une hauteur proportionnelle à son
+ *   - « 2D + 3D » : le fond de carte posé à plat, et le tracé qui flotte au-dessus, chaque point à une hauteur proportionnelle à son
  *     altitude (un rideau le relie au fond, une ombre au sol rappelle son tracé).
  * Le fond de carte est au choix un plan, une carte topographique ou une image satellite. La vue remplace la carte (bouton
- * « Carte | 3D » de l'en-tête) ; la carte et ses outils de tracé reviennent avec « Carte ».
+ * « 2D / 2D + 3D / 3D » de l'en-tête : « 2D » est la carte, « 2D + 3D » le fond à plat, « 3D » le terrain) ; la carte et ses outils
+ * de tracé reviennent avec « 2D ».
  *
  * three.js n'est chargé qu'à la première ouverture (le fichier de Bike3D, Jeu/3D/univers/vendor/three.min.js). Le fond est une image
  * assemblée à partir des tuiles qui couvrent le parcours (au plus 8 × 8, au zoom le plus fin qui le permette) ; l'altitude vient de
@@ -190,7 +191,7 @@
     R.root.remove(R.ground); dispose(R.ground); R.ground = null; R.groundMat = null;
   }
 
-  /** Le terrain est-il affiché en relief (mode Terrain 3D, altitudes chargées) ? Sinon le fond est à plat. */
+  /** Le terrain est-il affiché en relief (vue « 3D », altitudes chargées) ? Sinon le fond est à plat. */
   const terrain = () => R.mode === 'terrain' && !!R.dem;
   /** Altitude exagérée. */
   function yOf(alt) { return alt * R.exag; }
@@ -467,7 +468,7 @@
     if (token !== R.demToken || !R.on || !R.lay) return;
     R.status.dem = dem ? 'ok' : 'fail';
     if (dem) R.dem = dem;
-    else { R.warn = 'Relief indisponible (connexion ?) : le terrain reste à plat.'; setMode('flat', true); }
+    else { R.warn = 'Relief indisponible (connexion ?) : affichage en 2D + 3D.'; setMode('flat', true); }
     refresh3d();
   }
 
@@ -483,7 +484,7 @@
 
   function setMode(mode, keepWarn) {
     R.mode = mode;
-    for (const b of el.box.querySelectorAll('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
+    syncSwitch();
     if (!R.lay || !R.on) return;
     R.exagUser = null;                     // l'exagération conseillée n'est pas la même à plat et sur un terrain
     if (!keepWarn) R.warn = '';
@@ -645,11 +646,23 @@
     R.raf = requestAnimationFrame(frame);
   }
 
+  /** Bouton de l'en-tête : 2D (la carte), 2D + 3D (fond à plat, tracé en relief au-dessus) ou 3D (le terrain en relief). */
+  function syncSwitch() {
+    const now = R.on ? R.mode : 'map';
+    for (const b of el.switch.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.view === now));
+  }
+
+  function setView(view) {
+    if (view === 'map') { setOn(false); return; }
+    if (R.on) setMode(view);
+    else { R.mode = view; R.exagUser = null; setOn(true); }
+  }
+
   async function setOn(on) {
     R.on = on;
     document.body.dataset.view3d = on ? 'on' : 'off';
     el.box.hidden = !on;
-    for (const b of el.switch.querySelectorAll('button')) b.setAttribute('aria-pressed', String((b.dataset.view === '3d') === on));
+    syncSwitch();
     if (!on) { emitHover(null); return; }
     say('Chargement de la vue 3D…');
     try {
@@ -671,7 +684,7 @@
     el.switch = D.$('#view-switch');
     el.msg = D.$('#r3-msg'); el.info = D.$('#r3-info'); el.tip = D.$('#r3-tip'); el.attr = D.$('#r3-attr');
     el.exag = D.$('#r3-exag'); el.exagOut = D.$('#r3-exag-out');
-    for (const b of el.switch.querySelectorAll('button')) b.addEventListener('click', () => setOn(b.dataset.view === '3d'));
+    for (const b of el.switch.querySelectorAll('button')) b.addEventListener('click', () => setView(b.dataset.view));
     for (const b of el.box.querySelectorAll('[data-base]')) {
       b.addEventListener('click', () => {
         R.base = b.dataset.base;
@@ -679,7 +692,6 @@
         if (R.on && R.lay) buildImagery();
       });
     }
-    for (const b of el.box.querySelectorAll('[data-mode]')) b.addEventListener('click', () => setMode(b.dataset.mode));
     el.exag.addEventListener('input', () => {
       R.exagUser = R.exag = parseFloat(el.exag.value);
       el.exagOut.textContent = '×' + U.fmt(R.exag, R.exag % 1 ? 1 : 0);
