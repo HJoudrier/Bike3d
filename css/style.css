@@ -135,7 +135,9 @@ button, input, select { font: inherit; color: inherit; }
 .tabs a {
   border: 0; background: transparent; padding: 6px 12px; border-radius: 7px; cursor: pointer;
   color: var(--ink-2); font-weight: 600; white-space: nowrap; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center;
 }
+.tabs a .ico { width: 20px; height: 20px; }
 .tabs a:hover { color: var(--ink); }
 .tabs a[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
 /* parties d'une même page (Équipements : réglages et magasin) */
@@ -146,8 +148,10 @@ button, input, select { font: inherit; color: inherit; }
 .game-display button { font-size: 13px; padding: 6px 16px; }
 .game-launch { margin: 10px 0 4px; }
 .game-display-name { font-weight: 500; color: var(--muted); font-size: 0.75em; }
-.top-actions { margin-left: auto; display: flex; gap: 6px; }
-.btn.menu-btn { display: none; font-size: 20px; line-height: 1; padding: 4px 12px; }
+/* en-tête : marque, pages et actions du projet (documentation, exporter, importer, réinitialiser) en icônes, sur une seule ligne */
+.top-actions { margin-left: auto; display: flex; gap: 2px; }
+.top-actions .btn { padding: 6px 9px; min-width: 36px; justify-content: center; }
+.top-actions .btn .ico { width: 20px; height: 20px; }
 
 /* ---------- Mention en bas de page ---------- */
 .credit {
@@ -1004,21 +1008,16 @@ details.manual[open] summary { margin-bottom: 6px; }
 
 /* ---------- Mobile ---------- */
 @media (max-width: 900px) {
-  :root { --top-h: 92px; }
+  :root { --top-h: 54px; }
   html, body { height: auto; min-height: 100%; }
   body { overflow: auto; min-height: 100dvh; font-size: 15px; }
-  /* barre du haut : marque + menu ⋯ sur une ligne, onglets (défilants) dessous ; elle reste visible */
-  .topbar { position: sticky; top: 0; flex-wrap: wrap; gap: 6px 8px; padding: 6px max(12px, env(safe-area-inset-right)) 6px max(12px, env(safe-area-inset-left)); padding-top: max(6px, env(safe-area-inset-top)); }
-  .brand { order: 1; margin-right: auto; }
-  .btn.menu-btn { display: inline-flex; order: 2; min-height: 38px; }
-  .tabs { order: 3; width: 100%; -webkit-overflow-scrolling: touch; }
-  .tabs a { flex: 1 0 auto; padding: 9px 13px; text-align: center; }
-  .top-actions {
-    display: none; order: 4; width: 100%; margin: 0; flex-direction: column; gap: 2px; padding: 4px; border-radius: 10px;
-    background: var(--surface-2);
-  }
-  .top-actions.open { display: flex; }
-  .top-actions .btn { justify-content: flex-start; padding: 11px 12px; font-size: 14px; }
+  /* barre du haut : logo, pages et actions du projet en icônes, sur une seule ligne ; elle reste visible */
+  .topbar { position: sticky; top: 0; gap: 4px; padding: 6px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left)); padding-top: max(6px, env(safe-area-inset-top)); }
+  .brand span { display: none; }
+  .tabs { flex: 0 1 auto; min-width: 0; -webkit-overflow-scrolling: touch; }
+  .tabs a { padding: 7px 6px; }
+  .tabs a .ico, .top-actions .btn .ico { width: 18px; height: 18px; }
+  .top-actions .btn { padding: 7px 6px; min-width: 30px; }
   .layout { flex-direction: column; flex: none; }
   .stage { flex: none; }
   .map-wrap { height: clamp(230px, 40dvh, 460px); flex: none; }
@@ -1065,16 +1064,24 @@ details.manual[open] summary { margin-bottom: 6px; }
   table.records input { width: 84px; }
 }
 
+/* très petit écran : les neuf icônes de l'en-tête tiennent encore sur la ligne */
+@media (max-width: 420px) {
+  .topbar { padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); gap: 2px; }
+  .brand svg { width: 24px; height: 24px; }
+  .tabs { gap: 0; padding: 2px; }
+  .tabs a { padding: 7px 4px; }
+  .top-actions { gap: 0; }
+  .top-actions .btn { padding: 7px 3px; min-width: 0; }
+}
+}
+
 /* téléphone en paysage : carte et profil à gauche, HUD et actions à droite, sans défiler */
 @media (max-width: 950px) and (max-height: 520px) and (orientation: landscape) {
   :root { --top-h: 46px; }
   .topbar { flex-wrap: nowrap; height: var(--top-h); padding-top: 4px; padding-bottom: 4px; }
-  .brand span { display: none; }
   .brand { margin-right: 0; }
-  .tabs { order: 2; flex: 1 1 auto; width: auto; min-width: 0; }
-  .tabs a { padding: 6px 11px; }
-  .btn.menu-btn { order: 3; min-height: 34px; }
-  .top-actions { position: absolute; right: 12px; top: calc(var(--top-h) - 2px); width: 220px; z-index: 1100; box-shadow: var(--shadow); background: var(--surface); border: 1px solid var(--border); }
+  .tabs a { padding: 4px 9px; }
+  .top-actions .btn { padding: 4px 7px; min-height: 0; }
   .stage {
     display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto;
     height: calc(100dvh - var(--top-h)); min-height: 240px;

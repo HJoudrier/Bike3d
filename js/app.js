@@ -138,17 +138,6 @@
     });
   }
 
-  /** Petit écran : Exporter / Importer / Réinitialiser sont repliés derrière le bouton ⋯. */
-  function bindMenu() {
-    const btn = $('#btn-menu'), box = $('#top-actions');
-    if (!btn || !box) return;
-    const set = (open) => { box.classList.toggle('open', open); btn.setAttribute('aria-expanded', String(open)); };
-    btn.addEventListener('click', (e) => { e.stopPropagation(); set(!box.classList.contains('open')); });
-    box.addEventListener('click', () => set(false));
-    document.addEventListener('click', (e) => { if (!box.contains(e.target)) set(false); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') set(false); });
-  }
-
   /** La carte change de taille avec la mise en page (bloc du jeu, rotation du téléphone…) : Leaflet doit le savoir. */
   function watchMapSize() {
     if (typeof ResizeObserver === 'undefined' || !hasMap()) return;
@@ -159,7 +148,7 @@
     }).observe($('#map'));
   }
 
-  /** Projet : export / import / réinitialisation (menu de l'en-tête, sur toutes les pages). */
+  /** Projet : export / import / réinitialisation (boutons de l'en-tête, sur toutes les pages). */
   function bindProject() {
     const exp = $('#btn-export-project'), imp = $('#input-import-project'), reset = $('#btn-reset');
     if (exp) exp.addEventListener('click', () => D.download('projet-paceyourride.json', store.exportProject(), 'application/json'));
@@ -233,7 +222,6 @@
     store.load();
     if ($('#map')) PYR.map.init();
     bindInputs();
-    bindMenu();
     bindProject();
     watchMapSize();
     $$('[data-section]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.section)));
