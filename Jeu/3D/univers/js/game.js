@@ -28,7 +28,7 @@
 
   const Game = {
     state: 'menu',
-    settings: { jersey: 'jaune', quality: 'medium', riders: 10, hour: 'auto', weather: 'variable', wind: 'auto', timeFlow: 30 },
+    settings: { jersey: 'jaune', quality: 'medium', riders: 10, hour: 'auto', weather: 'variable', wind: 'auto', timeFlow: 30, riderDetail: 'auto', sex: 'm' },
     phys: PHYS,
     input: { left: false, right: false, brake: false, pUp: false, pDown: false },
     camIndex: 0,
@@ -38,6 +38,8 @@
       try { Object.assign(this.settings, JSON.parse(localStorage.getItem('bike3d-settings') || '{}')); } catch (e) { /* stockage indisponible */ }
       if (!B3D.TileManager.QUALITY[this.settings.quality]) this.settings.quality = 'medium';
       if (!B3D.Cyclist.JERSEYS[this.settings.jersey]) this.settings.jersey = 'jaune';
+      if (this.settings.riderDetail !== 'auto' && !B3D.Cyclist.DETAILS.includes(this.settings.riderDetail)) this.settings.riderDetail = 'auto';
+      if (this.settings.sex !== 'f') this.settings.sex = 'm';
       if (!RIDER_COUNTS.includes(this.settings.riders)) this.settings.riders = 10;
       if (!SKY_OPTS.weather.some((o) => o[0] === this.settings.weather)) this.settings.weather = 'variable';
       if (!SKY_OPTS.wind.some((o) => o[0] === this.settings.wind)) this.settings.wind = 'auto';
@@ -83,6 +85,18 @@
       this.renderer.setAnimationLoop(() => this.loop());
       // vue 3D pilotée par PaceYourRide (index.html?pyr) : parcours et positions reçus de l'application
       if (B3D.bridge && B3D.bridge.wanted()) B3D.bridge.attach(this);
+    },
+
+    // Niveau de détail des cyclistes : choisi, ou selon la qualité (rapide : simple, normale : détaillé, belle : réaliste)
+    riderDetail() {
+      const d = this.settings.riderDetail;
+      return d !== 'auto' ? d : { low: 'simple', medium: 'detailed', high: 'realistic' }[this.settings.quality] || 'detailed';
+    },
+
+    // Le joueur est une cycliste : son profil de PaceYourRide (son équipement), sinon le menu
+    playerSex() {
+      const g = this.ext && this.ext.gear();
+      return g && (g.sex === 'f' || g.sex === 'm') ? g.sex : this.settings.sex;
     },
 
     saveSettings() {
@@ -154,6 +168,12 @@
       });
       document.querySelectorAll('#opt-riders .chip').forEach((b) => {
         b.onclick = () => { this.settings.riders = +b.dataset.n; this.saveSettings(); this.refreshChips(); };
+      });
+      document.querySelectorAll('#opt-detail .chip').forEach((b) => {
+        b.onclick = () => { this.settings.riderDetail = b.dataset.d; this.saveSettings(); this.refreshChips(); };
+      });
+      document.querySelectorAll('#opt-sex .chip').forEach((b) => {
+        b.onclick = () => { this.settings.sex = b.dataset.s; this.saveSettings(); this.refreshChips(); };
       });
       this.refreshChips();
       this.buildSkyControls();
@@ -256,6 +276,8 @@
       document.querySelectorAll('#opt-jersey .chip').forEach((b) => b.classList.toggle('active', b.dataset.j === this.settings.jersey));
       document.querySelectorAll('#opt-quality .chip').forEach((b) => b.classList.toggle('active', b.dataset.q === this.settings.quality));
       document.querySelectorAll('#opt-riders .chip').forEach((b) => b.classList.toggle('active', +b.dataset.n === this.settings.riders));
+      document.querySelectorAll('#opt-detail .chip').forEach((b) => b.classList.toggle('active', b.dataset.d === this.settings.riderDetail));
+      document.querySelectorAll('#opt-sex .chip').forEach((b) => b.classList.toggle('active', b.dataset.s === this.settings.sex));
     },
 
     // Commandes : ←/→ (ou Q/D) pour se déplacer, jauge de puissance (Z/S, molette, chiffres, glisser), Espace pour freiner.
@@ -623,6 +645,7 @@
     newCyclist(seed) {
       return new B3D.Cyclist({
         jersey: this.settings.jersey, custom: this.ext ? this.ext.jersey() : null, gear: this.ext ? this.ext.gear() : null,
+        sex: this.settings.sex, detail: this.riderDetail(),
         bikeColor: ['#e2463a', '#3d7be0', '#1d1a2b', '#4cc35a', '#ff7aa8'][seed % 5]
       });
     },
@@ -720,7 +743,8 @@
       if (this.settings.riders > 0) {
         this.peloton = new B3D.Peloton(this.scene, route, this.L, {
           count: this.settings.riders, phys: PHYS, teams: B3D.race.TEAMS,
-          playerColor: B3D.Cyclist.JERSEYS[this.settings.jersey].base
+          playerColor: B3D.Cyclist.JERSEYS[this.settings.jersey].base,
+          detail: B3D.Cyclist.detailLevel(this.riderDetail()), sex: this.playerSex() // une course de femmes quand on roule en cycliste
         });
         this.peloton.reset(this.playerProxy);
         this.peloton.render(0, this.camera);
@@ -1035,7 +1059,7 @@
       const bump = shake ? Math.sin(R.time * 37) * 0.025 * shake * Math.min(1, R.v / 5) : 0;
       cyc.root.rotation.set(-Math.atan(q.grade) + bump, heading, R.lean, 'YXZ');
       cyc.update(dt, {
-        speed: R.v, pedaling: R.effort > 25 && R.v > 0.3 && !R.tuck, standing: R.standing, tuck: R.tuck, steer: -steer
+        speed: R.v, pedaling: R.effort > 25 && R.v > 0.3 && !R.tuck, effort: clamp(R.effort / (PHYS.cp * 1.3), 0, 1), standing: R.standing, tuck: R.tuck, steer: -steer
       });
       // « woum » des roues carbone à chaque coup de pédale
       if (cyc.strokes !== R.lastStrokes) {

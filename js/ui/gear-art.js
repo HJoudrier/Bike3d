@@ -97,7 +97,8 @@
   /**
    * Équipement du vélo et du cycliste en 3D (le cycliste de Bike3D : vitrine du magasin et vue 3D du mode jeu) : le modèle de cadre et de
    * roues du magasin (ceux choisis, sinon ceux de référence pour le réglage), les pneus, la position, le casque, la tenue, les lunettes,
-   * les chaussettes et les chaussures. opts : {rider, bike, picks}.
+   * les chaussettes et les chaussures, et le sexe du cycliste (profil de la page Athlète : une cycliste a sa morphologie). opts :
+   * {rider, bike, picks}.
    */
   function gear3d(opts) {
     const r = opts.rider || {}, b = opts.bike || {}, picks = opts.picks || {}, Ph = PYR.physics;
@@ -106,7 +107,7 @@
     return {
       frame: b.frame === 'mtb' || b.frame === 'city' ? b.frame : frameKey(b, picks), wheels: wheelKey(b, picks), tire: id('TIRES', b.tire, 2),
       position: id('POSITIONS', r.position, 3), helmet: id('HELMETS', r.helmet, 0), clothing: id('CLOTHING', r.clothing, 1),
-      glasses: id('GLASSES', r.glasses, 1), socks: id('SOCKS', r.socks, 1), shoes: id('SHOES', b.shoes, 2),
+      glasses: id('GLASSES', r.glasses, 1), socks: id('SOCKS', r.socks, 1), shoes: id('SHOES', b.shoes, 2), sex: r.sex === 'f' ? 'f' : 'm',
     };
   }
 

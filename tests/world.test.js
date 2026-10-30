@@ -361,21 +361,26 @@ const fs = require('fs');
 const BIKE3D = path.join(__dirname, '..', 'Jeu', '3D', 'univers');   // l'univers 3D du jeu (Bike3D)
 const hasBike3d = fs.existsSync(path.join(BIKE3D, 'js', 'cyclist.js'));
 
-/** Le cycliste de Bike3D chargé à part (three.js, utilitaires, rendu cartoon) : ses listes d'équipement. */
-function bike3dCyclist() {
+/** Bike3D chargé à part (three.js, utilitaires, rendu cartoon, anatomie, cycliste ; peloton en plus si demandé), avec un faux
+ *  canevas pour les textures (maillot, inscriptions des jantes) : renvoie B3D. */
+function bike3d(more) {
   const vm = require('vm');
-  const ctx = { console: { log() {}, warn() {}, error() {} } };
+  const noop = new Proxy(function () {}, { get: (t, k) => (k === 'measureText' ? () => ({ width: 10 }) : noop), apply: () => undefined, set: () => true });
+  const ctx = { console: { log() {}, warn() {}, error() {} }, document: { createElement: () => ({ width: 0, height: 0, getContext: () => noop }) } };
   ctx.window = ctx;
   vm.createContext(ctx);
-  for (const f of ['vendor/three.min.js', 'js/util.js', 'js/toon.js', 'js/cyclist.js']) vm.runInContext(fs.readFileSync(path.join(BIKE3D, f), 'utf8'), ctx, { filename: f });
-  return ctx.B3D.Cyclist;
+  for (const f of ['vendor/three.min.js', 'js/util.js', 'js/toon.js', 'js/anatomy.js', 'js/cyclist.js'].concat(more || [])) vm.runInContext(fs.readFileSync(path.join(BIKE3D, f), 'utf8'), ctx, { filename: f });
+  return ctx.B3D;
 }
+/** Le cycliste de Bike3D : ses listes d'équipement, sa géométrie. */
+function bike3dCyclist() { return bike3d().Cyclist; }
 
 test('vélo 3D : modèle de cadre et de roues du magasin, cadre de VTT ou de ville, roues de 60 et 80 mm', () => {
   const G = PYR.gearArt.gear3d, Cat = PYR.catalog;
   const rider = { position: 'drops', helmet: 'aero', clothing: 'skinsuit', glasses: 'shield', socks: 'aero' };
   const g = G({ rider, bike: { frame: 'road', wheels: 'deep80', tire: 'race', shoes: 'carbon' }, picks: { frame: 'endurance', wheels: 'c80' } });
-  assert.deepEqual(g, { frame: 'endurance', wheels: 'c80', tire: 'race', position: 'drops', helmet: 'aero', clothing: 'skinsuit', glasses: 'shield', socks: 'aero', shoes: 'carbon' });
+  assert.deepEqual(g, { frame: 'endurance', wheels: 'c80', tire: 'race', position: 'drops', helmet: 'aero', clothing: 'skinsuit', glasses: 'shield', socks: 'aero', shoes: 'carbon', sex: 'm' });
+  assert.equal(G({ rider: Object.assign({ sex: 'f' }, rider), bike: {} }).sex, 'f', 'une cycliste (profil de la page Athlète)');
   // article du magasin qui ne correspond plus au réglage (modifié dans l'onglet Équipement) : le modèle de référence du réglage
   assert.equal(G({ bike: { frame: 'road', wheels: 'deep' }, picks: { frame: 'aero', wheels: 'c45' } }).frame, 'alu');
   assert.equal(G({ bike: { frame: 'road', wheels: 'deep' }, picks: { frame: 'aero', wheels: 'c45' } }).wheels, 'c65');
@@ -406,7 +411,9 @@ test('vélo 3D : Bike3D connaît chaque cadre, roue, pneu, position, casque, ten
   // l'équipement envoyé passe tel quel ; un pneu personnalisé ou une valeur inconnue prend celle du vélo du jeu
   const g = PYR.gearArt.gear3d({ rider: { position: 'tt_pro', helmet: 'tt', clothing: 'skinsuit_tt', glasses: 'none', socks: 'classic' }, bike: { frame: 'tt', wheels: 'disc', tire: 'tubeless', shoes: 'aero' }, picks: {} });
   assert.deepEqual(JSON.parse(JSON.stringify(C.normGear(g))), g); // (objet venu d'un autre contexte)
-  const n = C.normGear({ frame: 'gravel', tire: 'custom', position: 'superman' });
+  assert.equal(C.normGear(PYR.gearArt.gear3d({ rider: { sex: 'f' }, bike: {}, picks: {} })).sex, 'f');
+  const n = C.normGear({ frame: 'gravel', tire: 'custom', position: 'superman', sex: 'x' });
+  assert.equal(n.sex, 'm');
   assert.equal(n.frame, 'gravel');
   assert.equal(n.tire, 'road');
   assert.equal(n.position, 'hoods');
@@ -457,6 +464,95 @@ test('vélo 3D : la roue avant ne touche pas le cadre, le bidon est posé sur le
     }
   }
   assert.ok(C.layout('tt').arc, 'contre-la-montre : le tube oblique épouse la roue avant');
+});
+
+test('cyclistes 3D : trois niveaux de détail, la même pose, une cycliste', { skip: !hasBike3d && 'Bike3D absent' }, () => {
+  const B3D = bike3d(), C = B3D.Cyclist;
+  assert.deepEqual([...C.DETAILS], ['simple', 'detailed', 'realistic']);
+  assert.equal(C.detailLevel('realistic'), 2);
+  assert.equal(C.detailLevel('inconnu'), 0, 'valeur inconnue : le modèle simple');
+  const st = { speed: 9, pedaling: true, standing: false, tuck: false, steer: 0 };
+  const build = (detail, sex, gear) => {
+    const c = new C({ gear: Object.assign({ frame: 'alu', wheels: 'c45', sex }, gear), detail });
+    c.update(0.016, st);
+    let verts = 0;
+    c.root.traverse((o) => { if (o.isMesh && !o.userData.isOutline) verts += o.geometry.attributes.position.count; });
+    return { c, verts };
+  };
+  const simple = build('simple', 'm'), detailed = build('detailed', 'm'), real = build('realistic', 'm');
+  assert.ok(simple.verts < detailed.verts && detailed.verts < real.verts, `de plus en plus fin : ${simple.verts}, ${detailed.verts}, ${real.verts} sommets`);
+  // même pose quel que soit le niveau : mains sur le cintre, pieds sur les pédales
+  for (const x of [detailed, real]) {
+    for (let i = 0; i < 2; i++) {
+      assert.ok(x.c.arms[i].hand.position.distanceTo(simple.c.arms[i].hand.position) < 1e-9, 'mains au même endroit');
+      assert.ok(x.c.legs[i].shoe.position.distanceTo(simple.c.legs[i].shoe.position) < 1e-9, 'pieds au même endroit');
+    }
+  }
+  // tête à l'échelle réelle dans les modèles fins : de 18 à 25 cm du sommet du crâne au menton (27 cm dans le modèle simple)
+  const skull = real.c.head.children[0].geometry;
+  skull.computeBoundingBox();
+  const h = (skull.boundingBox.max.y - skull.boundingBox.min.y) * real.c.head.scale.y;
+  assert.ok(h > 0.18 && h < 0.25, `hauteur de la tête : ${h.toFixed(3)} m`);
+  // une cycliste : queue de cheval, buste plus étroit aux épaules ; le sexe vient de l'équipement (profil de PaceYourRide)
+  const f = build('realistic', 'f');
+  assert.ok(f.c.fem && f.c.tail, 'queue de cheval');
+  assert.ok(!real.c.tail, 'pas de queue de cheval chez un homme');
+  assert.ok(f.c.shoulderX < real.c.shoulderX);
+  assert.ok(new C({ sex: 'f', detail: 'detailed' }).fem, 'sans équipement : le sexe du menu de Bike3D');
+  assert.ok(!new C({ sex: 'f', gear: { sex: 'm' } }).fem, 'avec équipement : celui du profil');
+  // finitions du réaliste : lunettes, jugulaire et col en plus ; les yeux se voient sans lunettes ou derrière la visière du chrono
+  const A = B3D.anatomy;
+  assert.ok(A.headParts({ q: 2 }).straps.length > 0 && A.headParts({ q: 1 }).straps.length === 0);
+  assert.ok(A.headParts({ q: 1, eyes: true }).marks.length > A.headParts({ q: 1, eyes: false }).marks.length);
+});
+
+test('cyclistes 3D : anatomie (géométries valides, poitrine d\'une cycliste, couleurs des membres)', { skip: !hasBike3d && 'Bike3D absent' }, () => {
+  const A = bike3d().anatomy;
+  const finite = (geo) => [...geo.attributes.position.array, ...geo.attributes.normal.array].every(Number.isFinite);
+  for (const q of [1, 2]) {
+    for (const fem of [false, true]) {
+      const H = A.headParts({ q, fem, eyes: true });
+      for (const k of ['skull', 'features', 'marks', 'mouth', 'hair', 'tail', 'straps']) for (const p of H[k]) assert.ok(finite(p.geo), `tête (${k})`);
+      assert.ok(finite(A.torsoGeometry({ q, fem })) && finite(A.pelvisGeometry({ q, fem })));
+      for (const k of ['thigh', 'shin', 'upper', 'fore', 'neck']) for (const p of A.limbParts(k, { q, fem, side: -1, bands: [[0.6, '#000000'], [1, '#ffffff']] })) assert.ok(finite(p.geo), k);
+      for (const p of A.handParts({ q, side: 1, fem }).concat(A.shoeParts({ q, side: 1, kind: 'road', upper: '#fff', sole: '#000', detail: '#333' }))) assert.ok(finite(p.geo));
+    }
+  }
+  // poitrine : le devant du buste avance nettement plus chez une cycliste, à hauteur de poitrine (repère du buste : +z devant)
+  const chest = (fem) => {
+    const p = A.torsoGeometry({ q: 2, fem }).attributes.position;
+    let z = -1;
+    for (let i = 0; i < p.count; i++) if (p.getY(i) > 0.15 && p.getY(i) < 0.45) z = Math.max(z, p.getZ(i));
+    return z;
+  };
+  assert.ok(chest(true) > chest(false) + 0.2, `poitrine : ${chest(true).toFixed(2)} contre ${chest(false).toFixed(2)}`);
+  assert.ok(A.headParts({ q: 1, fem: true }).tail.length > 0 && A.headParts({ q: 1, fem: false }).tail.length === 0);
+  // un membre par couleur : cuissard jusqu'à 78 % de la cuisse, puis la peau, l'anneau de la limite en commun
+  const [shorts, skin] = A.limbParts('thigh', { q: 1, side: 1, bands: [[0.78, '#26232f'], [1, '#f1c29b']] });
+  shorts.geo.computeBoundingBox(); skin.geo.computeBoundingBox();
+  assert.equal(shorts.color, '#26232f');
+  assert.ok(Math.abs(shorts.geo.boundingBox.max.y - 0.28) < 1e-6 && Math.abs(skin.geo.boundingBox.min.y - 0.28) < 1e-6);
+});
+
+test('peloton 3D : modèle fin près de la caméra, simple au loin ; des coureuses', { skip: !hasBike3d && 'Bike3D absent' }, () => {
+  const B3D = bike3d(['js/peloton.js']);
+  const P = new B3D.Peloton({ add() {}, remove() {} }, { sStart: 0, sEnd: 1000 }, { seed: 1, race: null, roadHalf: 3 }, { count: 4, detail: 2, sex: 'f' });
+  assert.ok(P.riders.every((r) => r.fem), 'des coureuses quand le joueur est une cycliste');
+  assert.deepEqual([...P.bodies.keys()].sort(), ['0f', '2f']);
+  P.setLook(1, 'Léa', '#3d7be0', 'm');
+  assert.ok(!P.riders[1].fem, 'le sexe imposé de l\'extérieur (vue pilotée par PaceYourRide)');
+  // coureurs à 5 m et à 200 m de la caméra
+  P.route.sample = (s, q) => Object.assign(q, { x: 0, y: 0, z: s, tx: 0, tz: 1, rx: 1, rz: 0, grade: 0, curv: 0 });
+  P.riders.forEach((r, i) => Object.assign(r, { s: i < 2 ? 5 : 200, lat: i, latV: 0, lean: 0, rock: 0 }));
+  const cam = { getWorldPosition: (v) => v.set(0, 1.5, 0), getWorldDirection: (v) => v.set(0, 0, 1) };
+  P.render(0.016, cam);
+  assert.deepEqual([...P.riders.map((r) => r.fine)], [true, true, false, false]);
+  const count = (k) => P.bodies.get(k) ? P.bodies.get(k).k : 0;
+  assert.equal(count('2f') + count('2m'), 2);
+  assert.equal(count('0f') + count('0m'), 2);
+  assert.equal(P.legsL.k, 2);
+  assert.equal(P.legs0.k, 2);
+  assert.ok(P.bodies.has('2m'), 'corps créé au premier besoin');
 });
 
 test('vue 3D : l\'équipement du joueur part avec le parcours sans changer son empreinte', () => {

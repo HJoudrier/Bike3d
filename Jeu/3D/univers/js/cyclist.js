@@ -1,8 +1,9 @@
 /* Bike3D — cycliste cartoon et son vélo, animés (pédalage, roues, danseuse, position aéro).
    L'équipement se règle (opts.gear, le magasin de PaceYourRide) : cadre (route alu, endurance, grimpeur, aéro, contre-la-montre,
    gravel, VTT, ville), roues (jante plate, alu 25 mm, carbone 30, 45, 60 ou 80 mm, lenticulaire, gravel), pneus, position sur le vélo
-   (buste relevé, cocottes, bas du cintre, prolongateurs…), casque, tenue, lunettes, chaussettes et chaussures. Sans équipement : le
-   vélo de course du jeu, roues à bâtons. */
+   (buste relevé, cocottes, bas du cintre, prolongateurs…), casque, tenue, lunettes, chaussettes et chaussures, et le sexe (une cycliste a
+   sa morphologie). Sans équipement : le vélo de course du jeu, roues à bâtons. Trois niveaux de détail du cycliste (opts.detail) : simple
+   (le modèle cartoon, pour les petites configurations), détaillé et réaliste (js/anatomy.js), dans la même pose. */
 (function (root) {
   'use strict';
   const B3D = root.B3D = root.B3D || {};
@@ -115,6 +116,17 @@
   const GLASSES = { none: 1, sport: 1, shield: 1 };
   const SOCKS = { short: 0, classic: 0.11, aero: 0.2 }; // hauteur au-dessus de la cheville
   const SHOES = { flat: '#e3ddcf', mtb: '#3a3944', road: '#ffffff', carbon: '#26232f', aero: '#1d1a2b' };
+  // semelle et molettes (ou lacets) des chaussures des niveaux détaillé et réaliste
+  const SHOE_PARTS = { flat: ['#b9905e', '#f4f1ea'], mtb: ['#26232f', '#c9ced8'], road: ['#1d1a2b', '#26232f'], carbon: ['#1d1a2b', '#e2463a'], aero: ['#1d1a2b', '#3a3944'] };
+  const SEXES = { m: 1, f: 1 };
+
+  /* Niveaux de détail du cycliste : simple (le modèle cartoon d'origine, pour les petites configurations), détaillé et réaliste
+     (B3D.anatomy : visage, buste, jambes et pieds modelés, proportions réelles ; le réaliste est plus fin et ajoute les finitions). */
+  const DETAILS = ['simple', 'detailed', 'realistic'];
+  const detailLevel = (d) => (typeof d === 'number' ? clamp(Math.round(d), 0, 2) : Math.max(0, DETAILS.indexOf(d)));
+  const SKIN = '#f1c29b';
+  const HAIR = { m: '#4a3426', f: '#6b4423' };
+  const HEAD_FINE = 0.8; // tête à l'échelle réelle (le modèle simple a une grosse tête de dessin animé)
 
   const has = (t, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(t, k);
   /** Équipement complet et valide (les valeurs inconnues prennent celles du vélo du jeu). */
@@ -124,7 +136,8 @@
     return {
       frame: pick(FRAMES, g.frame, 'classic'), wheels: pick(WHEELS, g.wheels, 'tri'), tire: pick(TIRES, g.tire, 'road'),
       position: pick(POSITIONS, g.position, 'hoods'), helmet: pick(HELMETS, g.helmet, 'road'), clothing: pick(CLOTHING, g.clothing, 'fitted'),
-      glasses: pick(GLASSES, g.glasses, 'sport'), socks: pick(SOCKS, g.socks, 'short'), shoes: pick(SHOES, g.shoes, 'road')
+      glasses: pick(GLASSES, g.glasses, 'sport'), socks: pick(SOCKS, g.socks, 'short'), shoes: pick(SHOES, g.shoes, 'road'),
+      sex: pick(SEXES, g.sex, 'm')
     };
   }
 
@@ -175,12 +188,16 @@
   }
 
   class Cyclist {
+    /* opts : jersey (maillot du jeu) ou custom (maillot imposé {base, accent, style}, par exemple la couleur du joueur dans
+       PaceYourRide), bikeColor, gear (équipement, voir GEAR ; gear.sex : 'f' pour une cycliste), sex (sans équipement), detail (niveau de
+       détail : 'simple', 'detailed', 'realistic'). */
     constructor(opts = {}) {
-      // opts.custom : maillot imposé ({base, accent, style}), par exemple la couleur du joueur dans PaceYourRide
       this.jersey = opts.custom || JERSEYS[opts.jersey] || JERSEYS.jaune;
       this.bikeColor = opts.bikeColor || '#e2463a';
-      this.gear = normGear(opts.gear);
+      this.gear = normGear(Object.assign({ sex: opts.sex }, opts.gear)); // le sexe de l'équipement l'emporte (profil de PaceYourRide)
       this.custom = !!opts.gear; // équipement choisi (sinon le vélo du jeu)
+      this.detail = detailLevel(opts.detail);
+      this.fem = this.gear.sex === 'f';
       this.root = new THREE.Group(); // positionné / orienté dans le monde
       this.body = new THREE.Group(); // inclinaison (danseuse)
       this.root.add(this.body);
@@ -191,7 +208,10 @@
       this.standT = 0;
       this.tuckT = 0;
       this.time = 0;
+      this.effortT = 0;
       this._v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+      this._w = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+      this._m = new THREE.Matrix4();
       this._buildBike();
       this._buildRider();
       this.plan = this._plan(this.gear.position, false);
@@ -685,6 +705,14 @@
     }
 
     _buildRider() {
+      this.shoulderX = this.fem ? 0.18 : 0.19; // épaules (attache des bras)
+      this.headDist = 0.22; // de l'épaule au centre de la tête
+      if (this.detail) this._buildRiderFine();
+      else this._buildRiderSimple();
+    }
+
+    // Modèle simple : sphères et cylindres
+    _buildRiderSimple() {
       const G = this.gear, J = this.jersey;
       const skin = mat('#f1c29b');
       const suit = G.clothing === 'skinsuit' || G.clothing === 'skinsuit_tt';
@@ -719,6 +747,20 @@
       smile.rotation.z = Math.PI;
       this.head.add(smile);
       this.neck = this._limb(0.05, skin);
+      if (this.fem) {
+        // cycliste : poitrine (dans le repère de la sphère du buste) et queue de cheval sous le casque
+        for (const sx of [-1, 1]) {
+          const b = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 10), sleeve);
+          b.position.set(sx * 0.36, 0.28, 0.76);
+          b.scale.set(0.3, 0.17, 0.34);
+          this.torso.add(b);
+          addOutline(b, { width: 0.7, minW: 0.004, maxW: 0.03 });
+        }
+        const tail = this._ball(1, mat(HAIR.f), this.head);
+        tail.position.set(0, -0.08, -0.17);
+        tail.rotation.x = -0.35;
+        tail.scale.set(0.04, 0.095, 0.045);
+      }
 
       // bras / jambes : segments recalculés à chaque image ; manches longues (combinaison chrono) ou jusqu'au coude (maillot aéro)
       const longSleeves = G.clothing === 'skinsuit_tt';
@@ -746,12 +788,134 @@
       }
     }
 
+    // Pièces de B3D.anatomy fusionnées (couleurs par sommet) ; outline : épaisseur du contour (sans : pas de contour) ; pivot : la
+    // géométrie est recentrée sur ce point, où le mesh est placé (bouche qui s'ouvre, queue de cheval qui se balance)
+    _parts(parts, outline, parent, pivot) {
+      const geo = B3D.toon.merge(parts);
+      const mesh = new THREE.Mesh(geo, cached('vc', () => new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: B3D.toon.gradientMap() })));
+      if (pivot) { geo.translate(-pivot.x, -pivot.y, -pivot.z); mesh.position.copy(pivot); }
+      (parent || this.body).add(mesh);
+      if (outline) addOutline(mesh, { width: outline, minW: outline < 0.5 ? 0.0015 : 0.004, maxW: outline < 0.5 ? 0.004 : 0.03 });
+      else mesh.userData.noShadow = true;
+      return mesh;
+    }
+
+    // Modèles détaillé et réaliste (B3D.anatomy) : mêmes articulations que le modèle simple, posées par update
+    _buildRiderFine() {
+      const G = this.gear, J = this.jersey, q = this.detail, fem = this.fem, A = B3D.anatomy;
+      const suit = G.clothing === 'skinsuit' || G.clothing === 'skinsuit_tt';
+      const loose = G.clothing === 'loose';
+      const shorts = suit ? J.base : loose ? '#5a6b7d' : '#26232f';
+      const gripper = new THREE.Color(shorts).offsetHSL(0, 0, shorts === '#26232f' ? 0.1 : -0.12).getStyle();
+      const sleeve = J.base, glove = '#26232f';
+      this.shoulderX = fem ? 0.175 : 0.19;
+      this.headDist = 0.2;
+      this.torsoK = loose ? 1.14 : suit ? 0.97 : 1;
+      // buste au motif du maillot ; col, fermeture et poches en réaliste
+      this.torso = new THREE.Mesh(A.torsoGeometry({ q, fem }), toonMap(jerseyTexture(J)));
+      this.body.add(this.torso);
+      addOutline(this.torso, { width: 0.9, minW: 0.006, maxW: 0.04 });
+      if (q > 1) this._parts(A.torsoTrim({ q, fem, base: J.base, accent: J.accent }), 0, this.torso);
+      this.pelvis = new THREE.Mesh(A.pelvisGeometry({ q, fem }), mat(shorts));
+      this.body.add(this.pelvis);
+      addOutline(this.pelvis, { width: 0.8, minW: 0.005, maxW: 0.035 });
+      // tête : crâne et visage, nez et oreilles (contour fin), yeux et lèvres, cheveux, casque et lunettes
+      this.head = new THREE.Group();
+      this.head.scale.setScalar(HEAD_FINE);
+      this.body.add(this.head);
+      const H = A.headParts({ q, fem, skin: SKIN, hair: HAIR[G.sex], eyes: G.glasses === 'none' || G.helmet === 'tt', tie: J.accent === '#ffffff' ? J.base : J.accent });
+      this._parts(H.skull, 0.8, this.head);
+      this._parts(H.features, 0.35, this.head);
+      this._parts(H.marks, 0, this.head);
+      const mouth = H.mouth[0].matrix.elements;
+      this.mouth = this._parts(H.mouth, 0, this.head, new THREE.Vector3(mouth[12], mouth[13], mouth[14]));
+      this._parts(H.hair, 0.6, this.head);
+      this.tail = H.tail.length ? this._parts(H.tail, 0.6, this.head, H.tailRoot) : null;
+      if (H.straps.length) this._parts(H.straps, 0, this.head);
+      const helmetColor = !this.custom ? (this.jersey.style === 'plain' && this.jersey.base === '#ffd23a' ? '#ffd23a' : this.bikeColor)
+        : { road: '#f4f1ea', tt: '#2a2833' }[G.helmet] || J.base;
+      // casque du modèle simple, ajusté à la tête réduite (la visière du chrono passe devant le nez) ; lunettes à la forme du visage
+      this.gearGroup = new THREE.Group();
+      this.gearGroup.scale.set(0.87, 0.87, G.helmet === 'tt' ? 1 : 0.87);
+      this.gearGroup.position.set(0, 0.006, G.helmet === 'tt' ? 0.012 : -0.003);
+      this.head.add(this.gearGroup);
+      this._helmet(G.helmet, mat(helmetColor));
+      if (G.helmet !== 'tt' && G.glasses !== 'none') this._parts(A.glassesParts({ q, fem, type: G.glasses }), 0.35, this.head);
+      this.neck = this._parts(A.limbParts('neck', { q, fem, bands: [[1, SKIN]] }), 0.8);
+
+      // bras : manche courte (à mi-biceps), jusqu'au coude (maillot aéro) ou longue (combinaison chrono) ; mains gantées
+      const long = G.clothing === 'skinsuit_tt', toElbow = long || G.clothing === 'aero';
+      const hem = q > 1 ? J.accent : sleeve, cut = loose ? 0.58 : toElbow ? 0.93 : 0.5;
+      const upperBands = long ? [[1, sleeve]] : q > 1 ? [[cut - 0.05, sleeve], [cut, hem], [1, SKIN]] : [[cut, sleeve], [1, SKIN]];
+      this.arms = [];
+      for (const sx of [-1, 1]) {
+        this.arms.push({
+          sx,
+          upper: this._parts(A.limbParts('upper', { q, fem, side: sx, bands: upperBands, loose: loose ? 0.012 : 0 }), 0.8),
+          fore: this._parts(A.limbParts('fore', { q, fem, side: sx, bands: [[1, long ? sleeve : SKIN]] }), 0.8),
+          elbow: this._ball(0.034, mat(toElbow ? sleeve : SKIN)),
+          hand: this._parts(A.handParts({ q, side: sx, glove, skin: SKIN, fem }), 0.8),
+          shoulder: this._ball(loose ? 0.068 : fem ? 0.052 : 0.058, mat(sleeve))
+        });
+      }
+      // jambes : cuissard (bande élastique en réaliste), chaussettes ou couvre-chaussures dans le galbe du mollet, chaussures
+      const over = G.shoes === 'aero', sockH = SOCKS[G.socks], sockMat = G.socks === 'aero' ? '#1d1a2b' : '#ffffff';
+      const legLen = A.LENGTHS.shin, sockFrom = 1 - (sockH + 0.045) / legLen, coverFrom = 1 - 0.09 / legLen;
+      const shinBands = !over ? [[sockFrom, SKIN], [1, sockMat]]
+        : sockFrom < coverFrom ? [[sockFrom, SKIN], [coverFrom, sockMat], [1, SHOES.aero]] : [[coverFrom, SKIN], [1, SHOES.aero]];
+      const hemT = loose ? 0.86 : 0.78;
+      const thighBands = q > 1 ? [[hemT - 0.05, shorts], [hemT, gripper], [1, SKIN]] : [[hemT, shorts], [1, SKIN]];
+      const [sole, detail] = SHOE_PARTS[G.shoes];
+      this.sockH = 0;
+      this.legs = [];
+      for (const sx of [-1, 1]) {
+        this.legs.push({
+          sx,
+          thigh: this._parts(A.limbParts('thigh', { q, fem, side: sx, bands: thighBands, loose: loose ? 0.014 : 0 }), 0.8),
+          shin: this._parts(A.limbParts('shin', { q, fem, side: sx, bands: shinBands }), 0.8),
+          knee: this._ball(0.046, mat(SKIN)),
+          sock: null, sockTube: null, cover: null,
+          shoe: this._parts(A.shoeParts({ q, side: sx, kind: G.shoes, upper: SHOES[G.shoes], sole, detail }), 0.8)
+        });
+      }
+    }
+
+    // Membre galbé posé de a à b, sa face avant (+z) tournée vers front
+    _setLimbFront(mesh, a, b, front) {
+      const d = this._w[0].copy(b).sub(a), len = d.length();
+      d.multiplyScalar(1 / (len || 1));
+      const z = this._w[1].copy(front).addScaledVector(d, -front.dot(d));
+      if (z.lengthSq() < 1e-8) z.set(0, 0, 1).addScaledVector(d, -d.z);
+      z.normalize();
+      this._m.makeBasis(this._w[2].crossVectors(d, z), d, z);
+      mesh.quaternion.setFromRotationMatrix(this._m);
+      mesh.position.copy(a).add(b).multiplyScalar(0.5);
+      mesh.scale.set(1, len, 1);
+    }
+
+    // Côté vers lequel pointe l'articulation j (genou, coude) par rapport à la droite a-c, dans out
+    _bendDir(a, j, c, out) {
+      const d = this._w[3].copy(c).sub(a).normalize();
+      out.copy(j).sub(a);
+      return out.addScaledVector(d, -out.dot(d)).normalize();
+    }
+
+    // Main dans le prolongement de l'avant-bras, dos de la main vers le haut
+    _setHand(mesh, elbow, hand) {
+      const z = this._w[0].copy(hand).sub(elbow).normalize();
+      const y = this._w[1].set(0, 1, 0).addScaledVector(z, -z.y).normalize();
+      this._m.makeBasis(this._w[2].crossVectors(y, z), y, z);
+      mesh.quaternion.setFromRotationMatrix(this._m);
+      mesh.position.copy(hand);
+    }
+
     // Casques : route (aérations), urbain (visière), aéro route (coque lisse), chrono (goutte d'eau et visière)
     _helmet(type, m) {
+      const H = this.gearGroup || this.head;
       const dome = new THREE.Mesh(new THREE.SphereGeometry(0.155, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), m);
       dome.position.set(0, 0.03, -0.03);
       dome.rotation.x = -0.25;
-      this.head.add(dome);
+      H.add(dome);
       addOutline(dome, { width: 0.8, minW: 0.005, maxW: 0.035 });
       const dark = mat('#26232f');
       if (type === 'road') {
@@ -771,11 +935,11 @@
         const brim = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.012, 0.07), m);
         brim.position.set(0, 0.085, 0.15);
         brim.rotation.x = 0.35;
-        this.head.add(brim);
+        H.add(brim);
         addOutline(brim, { width: 0.8, minW: 0.005, maxW: 0.035 });
       } else {
         // coque en goutte d'eau (tournée autour de l'axe avant-arrière, ouverte dessous), la pointe sur le dos
-        this.head.remove(dome);
+        H.remove(dome);
         const prof = [[0, -0.15], [0.085, -0.125], [0.15, -0.055], [0.165, 0.03], [0.145, 0.12], [0.1, 0.22], [0.05, 0.31], [0.006, 0.37]];
         const geo = new THREE.LatheGeometry(prof.map((p) => new THREE.Vector2(p[0], p[1])), 24, -1.68, 3.36);
         geo.rotateX(-Math.PI / 2); // axe de révolution : vers l'arrière
@@ -783,25 +947,26 @@
         shell.position.set(0, 0.03, -0.02);
         shell.rotation.x = -0.38;
         shell.scale.set(0.98, 0.92, 1);
-        this.head.add(shell);
+        H.add(shell);
         addOutline(shell, { width: 0.8, minW: 0.005, maxW: 0.035 });
         // visière teintée
         const visor = new THREE.Mesh(new THREE.CylinderGeometry(0.153, 0.15, 0.1, 20, 1, true, -1.2, 2.4),
           cached('visor', () => new THREE.MeshBasicMaterial({ color: '#7fdcff', transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide })));
         visor.position.set(0, 0.012, -0.012);
         visor.userData.noShadow = true;
-        this.head.add(visor);
+        H.add(visor);
         const edge = new THREE.Mesh(new THREE.CylinderGeometry(0.156, 0.156, 0.016, 20, 1, true, -1.2, 2.4), m);
         edge.position.set(0, 0.064, -0.012);
-        this.head.add(edge);
+        H.add(edge);
       }
     }
 
     // Lunettes : sans (les yeux), de sport, écran panoramique
     _glasses(type) {
+      const H = this.head;
       if (type === 'none') {
         for (const sx of [-1, 1]) {
-          const eye = this._ball(0.018, mat('#1d1a2b'), this.head);
+          const eye = this._ball(0.018, mat('#1d1a2b'), H);
           eye.position.set(sx * 0.045, 0.025, 0.122);
           eye.scale.set(1, 1.35, 0.6);
         }
@@ -810,18 +975,18 @@
       if (type === 'shield') {
         const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.152, 0.148, 0.07, 20, 1, true, -1.15, 2.3), mat('#6b5ce0'));
         lens.position.set(0, 0.018, -0.008);
-        this.head.add(lens);
+        H.add(lens);
         const top = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.155, 0.014, 20, 1, true, -1.2, 2.4), mat('#f4f1ea'));
         top.position.set(0, 0.056, -0.008);
-        this.head.add(top);
+        H.add(top);
         return;
       }
       const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.05, 0.05), mat('#1d1a2b'));
       glasses.position.set(0, 0.02, 0.12);
-      this.head.add(glasses);
+      H.add(glasses);
       const lens = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.035, 0.02), new THREE.MeshBasicMaterial({ color: '#4fd0ff' }));
       lens.position.set(0, 0.02, 0.146);
-      this.head.add(lens);
+      H.add(lens);
     }
 
     /* Plan d'une position : bassin, épaules, mains et coudes posés (repère du corps, sans danseuse ni recroquevillement). L'angle du
@@ -844,7 +1009,7 @@
         let lo = 0.08, hi = 1.3;
         for (let k = 0; k < 22; k++) {
           a = (lo + hi) / 2;
-          const d = Math.hypot(Math.abs(h.x) - 0.19, h.y - (pelvis.y + TORSO * Math.sin(a) - 0.02), h.z - (pelvis.z + TORSO * Math.cos(a) - 0.02));
+          const d = Math.hypot(Math.abs(h.x) - this.shoulderX, h.y - (pelvis.y + TORSO * Math.sin(a) - 0.02), h.z - (pelvis.z + TORSO * Math.cos(a) - 0.02));
           if (d < reach) lo = a; else hi = a;
         }
       }
@@ -877,9 +1042,10 @@
       return out;
     }
 
-    // state : { speed (m/s), pedaling, power (0..1), standing, tuck, steer (-1..1), dt }
+    // state : { speed (m/s), pedaling, effort (0..1 : la bouche s'ouvre ; sinon d'après le pédalage), standing, tuck, steer (-1..1) }
     update(dt, st) {
       this.time += dt;
+      const fine = this.detail > 0;
       const v = st.speed;
       // roues
       this.wheelAngle += v / R * dt;
@@ -924,30 +1090,45 @@
       const back = Math.atan2(tdir.y, tdir.z);
       this.torso.position.copy(pelvis).addScaledVector(tdir, 0.5);
       this.torso.quaternion.setFromUnitVectors(UP, tdir.normalize());
-      this.torso.scale.set(0.2 * this.torsoK, tlen * 0.5 + 0.1, 0.16 * this.torsoK);
+      // respiration (modèles fins) : plus ample et plus rapide à l'effort ; la bouche s'ouvre
+      const effort = st.effort !== undefined ? clamp(st.effort, 0, 1) : st.standing ? 0.8 : st.pedaling ? 0.35 : 0.05;
+      this.effortT = lerp(this.effortT, effort, 1 - Math.exp(-dt * 2));
+      const breath = fine ? 1 + (0.008 + 0.018 * this.effortT) * Math.sin(this.time * (1.6 + 2.4 * this.effortT) * Math.PI) : 1;
+      this.torso.scale.set(0.2 * this.torsoK, tlen * 0.5 + 0.1, 0.16 * this.torsoK * breath);
+      if (this.mouth) this.mouth.scale.set(1, 1 + 1.7 * this.effortT * (0.8 + 0.2 * breath), 1);
+      if (this.tail) this.tail.rotation.set(0.1 * Math.sin(this.crank * 2) * (st.pedaling ? 1 : 0.3) + 0.15 * tk, 0, 0.1 * Math.sin(this.crank) + 0.2 * this.rock);
       // tête : dans le prolongement du dos (plus en avant quand le buste est couché ; rentrée dans les épaules en chrono optimisé)
       const pro = A.pro ? 1 - stand : 0;
       const ha = back + 0.21 - 0.12 * pro;
       const neckBase = shoulder.clone().add(new THREE.Vector3(0, 0.05, 0.03));
-      const headPos = shoulder.clone().add(new THREE.Vector3(0, Math.sin(ha) * 0.22 - 0.02 * pro, Math.cos(ha) * 0.22));
-      this._setLimb(this.neck, neckBase, headPos);
+      const headPos = shoulder.clone().add(new THREE.Vector3(0, Math.sin(ha) * this.headDist - 0.02 * pro, Math.cos(ha) * this.headDist));
+      if (fine) this._setLimbFront(this.neck, neckBase, headPos, this._v[2].set(0, -tdir.z, tdir.y)); // nuque côté dos
+      else this._setLimb(this.neck, neckBase, headPos);
       this.head.position.copy(headPos);
       this.head.rotation.set(-0.15 + 0.2 * tuck - 0.1 * stand + 0.1 * pro, st.steer * 0.25, 0);
 
       // bras : mains sur le cintre (qui suit le balancement du vélo), coudes posés sur les manchettes
       for (const arm of this.arms) {
         const i = arm.sx < 0 ? 0 : 1;
-        const sh = new THREE.Vector3(arm.sx * 0.19 + sway * 1.4, shoulder.y - 0.02, shoulder.z - 0.02);
+        const sh = new THREE.Vector3(arm.sx * this.shoulderX + sway * 1.4, shoulder.y - 0.02, shoulder.z - 0.02);
         const hand = A.hands[i].clone().lerp(B.hands[i], stand);
         if (A.drops && tk > 0.001) hand.lerp(A.drops[i], tk);
         if (stand > 0.01) hand.applyAxisAngle(ZAX, this.rock);
         let elbow = this._ik(sh, hand, 0.3, 0.3, new THREE.Vector3(arm.sx * 0.6, -0.3, -0.75).normalize(), new THREE.Vector3());
         if (A.elbows) elbow = A.elbows[i].clone().lerp(elbow, stand);
         arm.shoulder.position.copy(sh);
-        this._setLimb(arm.upper, sh, elbow);
-        this._setLimb(arm.fore, elbow, hand);
         arm.elbow.position.copy(elbow);
-        arm.hand.position.copy(hand);
+        if (fine) {
+          // biceps à l'intérieur du coude
+          const front = this._bendDir(sh, elbow, hand, this._v[2]).negate();
+          this._setLimbFront(arm.upper, sh, elbow, front);
+          this._setLimbFront(arm.fore, elbow, hand, front);
+          this._setHand(arm.hand, elbow, hand);
+        } else {
+          this._setLimb(arm.upper, sh, elbow);
+          this._setLimb(arm.fore, elbow, hand);
+          arm.hand.position.copy(hand);
+        }
       }
       // jambes : pédales dans le repère du vélo (avec balancement)
       for (const leg of this.legs) {
@@ -958,10 +1139,17 @@
         const ankle = pedal.clone().add(new THREE.Vector3(0, 0.07, -0.05));
         const hip = new THREE.Vector3(leg.sx * 0.095 + pelvis.x, pelvis.y - 0.03, pelvis.z + 0.02);
         const knee = this._ik(hip, ankle, 0.46, 0.45, new THREE.Vector3(leg.sx * 0.12, 0.25, 1).normalize(), new THREE.Vector3());
-        this._setLimb(leg.thigh, hip, knee);
-        this._setLimb(leg.shin, knee, ankle);
         leg.knee.position.copy(knee);
-        leg.sock.position.copy(ankle);
+        if (fine) {
+          // quadriceps et tibia du côté où pointe le genou, mollet derrière
+          const front = this._bendDir(hip, knee, ankle, this._v[2]);
+          this._setLimbFront(leg.thigh, hip, knee, front);
+          this._setLimbFront(leg.shin, knee, ankle, front);
+        } else {
+          this._setLimb(leg.thigh, hip, knee);
+          this._setLimb(leg.shin, knee, ankle);
+          leg.sock.position.copy(ankle);
+        }
         const up = this._v[2].copy(knee).sub(ankle).normalize();
         if (leg.sockTube) this._setLimb(leg.sockTube, ankle, ankle.clone().addScaledVector(up, this.sockH));
         if (leg.cover) this._setLimb(leg.cover, ankle, ankle.clone().addScaledVector(up, 0.075));
@@ -995,6 +1183,8 @@
     helmets: Object.keys(HELMETS), clothing: Object.keys(CLOTHING), glasses: Object.keys(GLASSES), socks: Object.keys(SOCKS), shoes: Object.keys(SHOES)
   };
   Cyclist.normGear = normGear;
+  Cyclist.DETAILS = DETAILS;
+  Cyclist.detailLevel = detailLevel;
   // géométrie d'un cadre (tests : la roue avant ne touche pas le cadre, le bidon est sur le tube oblique)
   Cyclist.layout = (frame) => {
     const F = frameOf(has(FRAMES, frame) ? frame : 'classic');

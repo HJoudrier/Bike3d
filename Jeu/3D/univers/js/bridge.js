@@ -12,11 +12,11 @@
                 surfaces : [{s, end, kind ('smooth' | 'asphalt' | 'rough' | 'cobbles' | 'cobbles_hard' | 'gravel_hard' |
                 'gravel_loose' | 'dirt' | 'wet' | 'grass'), w (largeur, m)}] (portions de revêtement), roadW (largeur hors portions, m) }
      frame  : { t (temps de course, s), k (secondes de course par seconde réelle : ×1 … ×50), run (la course avance),
-                me (identifiant du joueur), riders : [{id, name, color, kind ('avatar' | 'trainer' | 'road' | 'bot' | 'ghost'),
+                me (identifiant du joueur), riders : [{id, name, color, sex ('m' | 'f' ; absent : celui du joueur), kind ('avatar' | 'trainer' | 'road' | 'bot' | 'ghost'),
                 s (m depuis le départ), y (m, + à droite ; absent : file unique), v (m/s), P (W), w (W′ restant, 0–1),
                 dr (abri : part de la traînée économisée), st (arrêté), fin (arrivé)}],
                 env : {hour (heure locale, si la météo est connue), T (°C), rain (mm/h), ws (m/s), wd (° d'où vient le vent)} }
-     gear   : { gear : {frame, wheels, tire, position, helmet, clothing, glasses, socks, shoes} } (vélo et tenue du joueur, ceux de
+     gear   : { gear : {frame, wheels, tire, position, helmet, clothing, glasses, socks, shoes, sex} } (vélo et tenue du joueur, ceux de
                 la vitrine du magasin, voir B3D.Cyclist.GEAR ; un nouvel équipement change le cycliste sans reconstruire le paysage)
      cmd    : { cmd: 'camera' | 'sound' | 'reroll' | 'hud', on }
    Bike3D → PaceYourRide
@@ -396,7 +396,10 @@
         const old = g.peloton;
         g.peloton = null;
         if (list.length) {
-          const P = new B3D.Peloton(g.scene, g.route, g.L, { count: list.length, phys: g.phys, teams: B3D.race.TEAMS, playerColor: this.jersey().base });
+          const P = new B3D.Peloton(g.scene, g.route, g.L, {
+            count: list.length, phys: g.phys, teams: B3D.race.TEAMS, playerColor: this.jersey().base,
+            detail: B3D.Cyclist.detailLevel(g.riderDetail()), sex: g.playerSex()
+          });
           const prev = new Map(old ? old.riders.map((r) => [r.pid, r]) : []);
           P.riders.forEach((r, i) => {
             const o = list[i], p = prev.get(o.id);
@@ -415,7 +418,7 @@
         if (g.convoy) g.convoy.peloton = g.peloton;
       }
       const P = g.peloton;
-      if (P) list.forEach((o, i) => P.setLook(i, (KIND_ICON[o.kind] || '') + String(o.name || 'Cycliste').slice(0, 30), o.color));
+      if (P) list.forEach((o, i) => P.setLook(i, (KIND_ICON[o.kind] || '') + String(o.name || 'Cycliste').slice(0, 30), o.color, o.sex));
     },
 
     // groupes (écart de moins de 10 m) : la caravane suit celui du joueur et celui de tête
