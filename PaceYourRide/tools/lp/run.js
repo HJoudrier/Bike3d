@@ -1,7 +1,7 @@
 /* author : Hugo Joudrier-Faure */
 /* Prototype : allure optimale par programmation lineaire (GAMS + HiGHS), rejouee dans le vrai simulateur.
  *
- *   node tools/lp/run.js [parcours] [--seg 100] [--iters 6] [--compare]
+ *   node PaceYourRide/tools/lp/run.js [parcours] [--seg 100] [--iters 6] [--compare]
  *
  * Boucle de programmation lineaire sequentielle :
  *   1. les donnees du troncon (pente, vent, densite, roulement, limite de vitesse) viennent du contexte du simulateur ;
@@ -15,7 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const cp = require('child_process');
-const ROOT = path.join(__dirname, '..', '..');
+const ROOT = path.join(__dirname, '..', '..', '..');
 const { PYR, makeProfile, setupFor } = require(path.join(ROOT, 'tests', 'helpers.js'));
 
 const G = 9.80665;

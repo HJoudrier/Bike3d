@@ -47,7 +47,7 @@
     if (!jsqrPromise) {
       jsqrPromise = new Promise((resolve, reject) => {
         const s = document.createElement('script');
-        s.src = (PYR.root || '') + 'vendor/jsqr/jsQR.js';
+        s.src = (PYR.root || '') + 'Commun/vendor/jsqr/jsQR.js';
         s.onload = () => resolve();
         s.onerror = () => { jsqrPromise = null; reject(new Error('Lecteur de QR code indisponible')); };
         document.head.appendChild(s);

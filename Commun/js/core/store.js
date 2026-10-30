@@ -7,7 +7,7 @@
   // (PaceYourRide garde les clés historiques 'paceyourride.v1…'). Les applications ne s'échangent leurs données que par Dropbox (cloud.js).
   const NS = PYR.storageNs || 'paceyourride';
   const KEY = NS + '.v1';
-  const MTIME_KEY = NS + '.v1.mtime';   // date de la dernière modification du projet : la synchronisation (js/core/cloud.js) garde le plus récent
+  const MTIME_KEY = NS + '.v1.mtime';   // date de la dernière modification du projet : la synchronisation (Commun/js/core/cloud.js) garde le plus récent
   /** Réglages sans effet sur la physique : un événement à part, pour ne pas invalider le plan ni relancer le jeu. */
   const EVENT_OF = { 'rider.name': 'name', 'perf.formRef': 'formref' };
   /** Réglages de la page Équipements rangés dans `rider` : position sur le vélo et tenue. */
@@ -25,7 +25,7 @@
     checkpoints: [],   // points en jeu : sprints intermédiaires et côtes classées [{id, type, km, startKm, cat, pts}] (page Parcours)
     road: { width: 6 }, // largeur de route par défaut (m), hors portions de revêtement : place du peloton dans le mode jeu (page Parcours)
     rider: {
-      name: '', avatar: '',    // avatar : photo carrée en adresse data: (js/core/avatar.js), '' sans photo
+      name: '', avatar: '',    // avatar : photo carrée en adresse data: (Commun/js/core/avatar.js), '' sans photo
       sex: 'm', birthDate: '', age: 35, weight: 72, height: 178, position: 'hoods_bent', helmet: 'road', clothing: 'fitted',
       glasses: 'sport', socks: 'classic', shave: 'none',
       outfitName: '',          // nom de la tenue et position (pour la retrouver dans la bibliothèque de l'accueil)
@@ -179,7 +179,7 @@
       this.saveNow();
     },
 
-    /** Parcours complet lu d'un fichier (GPX enrichi, js/core/route-file.js) : il remplace le tracé, les sprints et les côtes, les ravitaillements,
+    /** Parcours complet lu d'un fichier (GPX enrichi, Commun/js/core/route-file.js) : il remplace le tracé, les sprints et les côtes, les ravitaillements,
      *  les revêtements, le vent, la météo et la largeur de route du projet (ce qui manque repart des valeurs par défaut), champs vérifiés comme
      *  à l'ouverture ; le cycliste, l'équipement et les réglages sont conservés. */
     importRoute(data) {

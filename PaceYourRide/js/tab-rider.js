@@ -1,5 +1,5 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — page Athlète (athlete.html) : morphologie, intestin, seuils, courbe de puissance record, zones de
+/* PaceYourRide — page Athlète (PaceYourRide/athlete.html) : morphologie, intestin, seuils, courbe de puissance record, zones de
  * puissance et niveau par rapport à des valeurs de référence publiées (la courbe remplace la carte). */
 (function (PYR) {
   'use strict';
@@ -26,7 +26,7 @@
       ['name', 'rider'].forEach((e) => store.on(e, showTitle));
       showTitle();
 
-      // photo d'avatar : choisie, recadrée au centre en carré (js/core/avatar.js), enregistrée dans le profil sans relancer les calculs
+      // photo d'avatar : choisie, recadrée au centre en carré (Commun/js/core/avatar.js), enregistrée dans le profil sans relancer les calculs
       const avPrev = $('#r-avatar-preview'), avFile = $('#r-avatar-file'), avDel = $('#btn-avatar-del'), avBtn = $('#btn-avatar');
       const showAvatar = () => {
         const url = PYR.avatar.get();

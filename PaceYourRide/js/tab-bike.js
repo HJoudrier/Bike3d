@@ -1,5 +1,5 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — page Équipements (equipement.html) : vélo (masse, aérodynamisme, roulement, transmission), tenue et position du cycliste + synthèse. */
+/* PaceYourRide — page Équipements (PaceYourRide/equipement.html) : vélo (masse, aérodynamisme, roulement, transmission), tenue et position du cycliste + synthèse. */
 (function (PYR) {
   'use strict';
 

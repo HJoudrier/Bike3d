@@ -80,7 +80,7 @@ a { color: inherit; }
 }
 .hm-chip:hover { border-color: var(--hub); background: color-mix(in srgb, var(--hub) 12%, var(--surface)); }
 
-/* aperçu du parcours du projet (js/ui/route-preview.js) */
+/* aperçu du parcours du projet (PaceYourRide/js/route-preview.js) */
 .hm-route { margin-bottom: 2px; }
 .hm-rfull { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 12px; color: inherit; text-decoration: none; }
 .hm-rfull:hover { border-color: var(--hub); background: color-mix(in srgb, var(--hub) 6%, var(--surface)); }

@@ -1,5 +1,5 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — page Équipements (equipement.html) : calibration du CdA et du Crr depuis une sortie réelle (GPX / TCX avec puissance). */
+/* PaceYourRide — page Équipements (PaceYourRide/equipement.html) : calibration du CdA et du Crr depuis une sortie réelle (GPX / TCX avec puissance). */
 (function (PYR) {
   'use strict';
 

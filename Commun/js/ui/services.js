@@ -223,7 +223,7 @@
     }
     if (points.length < 2) throw new Error('Aucune trace trouvée dans le GPX');
     const nameNode = doc.querySelector('trk > name, rte > name, metadata > name');
-    // parcours complet exporté par PaceYourRide (js/core/route-file.js) : sprints, côtes, ravitaillements, météo… dans une extension
+    // parcours complet exporté par PaceYourRide (Commun/js/core/route-file.js) : sprints, côtes, ravitaillements, météo… dans une extension
     const ext = doc.getElementsByTagNameNS(PYR.routeFile.NS, 'route')[0];
     let data = null;
     if (ext) { try { data = JSON.parse(ext.textContent); } catch (e) { /* extension illisible : simple trace */ } }

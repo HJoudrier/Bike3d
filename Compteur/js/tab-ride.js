@@ -5,8 +5,8 @@
  * La page affiche l'avance ou le retard sur le plan (position lissée sur quelques secondes), la puissance à tenir sur le tronçon en
  * cours, les réserves (W′, glycogène, hydratation) et les rappels d'alimentation. Quand on s'écarte du plan (écart de temps, consigne non
  * respectée, W′ qui s'éloigne de celui du plan), le plan du reste du parcours est recalculé depuis l'état réel : le passé est figé
- * (js/engine/ride.js, optimizer.js avec `start`).
- * La logique est dans js/engine/ride.js et nutrition.js ; ce module ne fait que relier les capteurs, l'état et l'affichage. */
+ * (Commun/js/engine/ride.js, optimizer.js avec `start`).
+ * La logique est dans Commun/js/engine/ride.js et nutrition.js ; ce module ne fait que relier les capteurs, l'état et l'affichage. */
 (function (PYR) {
   'use strict';
 

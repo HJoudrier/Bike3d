@@ -131,7 +131,7 @@ button, input, select { font: inherit; color: inherit; }
 @keyframes deeplink-flash { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 4px var(--accent); } }
 @media (prefers-reduced-motion: reduce) { .deeplink-flash { animation: none; box-shadow: 0 0 0 3px var(--accent); } }
 .tabs { display: flex; gap: 2px; background: var(--surface-2); padding: 3px; border-radius: 9px; overflow-x: auto; scrollbar-width: none; }
-/* menu des pages du site (parcours.html, athlete.html…) : des liens ; la page ouverte porte aria-current */
+/* menu des pages du site (PaceYourRide/parcours.html, PaceYourRide/athlete.html…) : des liens ; la page ouverte porte aria-current */
 .tabs a {
   border: 0; background: transparent; padding: 6px 12px; border-radius: 7px; cursor: pointer;
   color: var(--ink-2); font-weight: 600; white-space: nowrap; text-decoration: none;
@@ -317,7 +317,7 @@ body[data-tab="shop"] .side, body[data-tab="bike"] .side { flex: 1 1 auto; width
 .shop-top .shop-pages button { font-size: 13px; padding: 5px 16px; }
 .shop-page { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(330px, 1fr); gap: 22px; align-items: start; }
 .shop-figure { position: sticky; top: 0; margin: 0; }
-/* illustration : photos détourées superposées (js/ui/gear-art.js), dans une fenêtre aux proportions des photos */
+/* illustration : photos détourées superposées (Commun/js/ui/gear-art.js), dans une fenêtre aux proportions des photos */
 .shop-art .art-frame {
   position: relative; overflow: hidden; border-radius: 14px; margin: 0 auto; background: #ebebea;
   width: min(100%, calc((100vh - 290px) * var(--ratio, 1.6)));
@@ -544,7 +544,7 @@ body[data-tab="route"] .chart-box.is-zoomed canvas { cursor: crosshair; } /* sur
 .leaflet-container { font-family: inherit; }
 .wp-icon { display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 700; font-size: 11px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
 .wp-mid { width: 14px; height: 14px; background: #fff; border: 3px solid #2a78d6; }
-/* photo d'avatar (js/core/avatar.js) : formulaire de l'onglet Cycliste, marqueur de la carte et classements du mode course */
+/* photo d'avatar (Commun/js/core/avatar.js) : formulaire de l'onglet Cycliste, marqueur de la carte et classements du mode course */
 .avatar-edit { display: flex; align-items: center; gap: 14px; margin: 4px 0 14px; }
 .avatar-preview { flex: none; width: 72px; height: 72px; border-radius: 50%; background: var(--surface-2) center / cover no-repeat; border: 2px solid var(--border-strong); display: flex; align-items: center; justify-content: center; font-size: 30px; cursor: pointer; }
 .avatar-preview.has-photo { border-color: #eb6834; }

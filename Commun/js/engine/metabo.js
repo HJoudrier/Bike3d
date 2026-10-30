@@ -1,6 +1,6 @@
 /* author : Hugo Joudrier-Faure */
 /* PaceYourRide — modèle physiologique et métabolique couplé du cycliste (pas de 1 s), d'après le rapport « Modèle physiologique
- * du cycliste » (v1.1, `DocModelePhysioCycliste.html` ; voir aussi `documentation.html`). La signature de puissance (Pmax, W′, CP2 ≡ puissance critique,
+ * du cycliste » (v1.1, `PaceYourRide/DocModelePhysioCycliste.html` ; voir aussi `PaceYourRide/documentation.html`). La signature de puissance (Pmax, W′, CP2 ≡ puissance critique,
  * CP1 ≈ premier seuil SV1) est modulée par une couche lente et par la commande centrale :
  *   - recrutement (principe de taille de Henneman) : la puissance aérobie se partage entre fibres I (jusqu'à CP1e), IIa et IIx ;
  *   - coût : un rendement par groupe de fibres (qui baisse avec leur fatigue), part anaérobie au-dessus de CP2e, métabolisme de base ;

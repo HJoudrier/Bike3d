@@ -1,5 +1,5 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — page Athlète (athlete.html), modèle physiologique (metabo.js) :
+/* PaceYourRide — page Athlète (PaceYourRide/athlete.html), modèle physiologique (metabo.js) :
  *   - la carte athlète dans le formulaire (panneau de droite) : champs vides = valeurs estimées, affichées en gris ;
  *   - sa synthèse au-dessus du niveau (signature, seuils, carburants, chaleur) ;
  *   - lipides et glucides selon la puissance, avec les zones de puissance (d'après la FTP), les seuils CP1 et CP2 et FATmax ;

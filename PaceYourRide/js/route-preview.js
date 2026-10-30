@@ -26,7 +26,7 @@
     const note = h('p', { class: 'hm-rnote', hidden: true });
     const empty = h('div', { class: 'hm-rempty', hidden: true },
       h('b', null, 'Aucun parcours'), h('small', null, 'Trace-en un, charge un GPX ou choisis-en un dans ta bibliothèque.'));
-    const full = h('a', { class: 'hm-rfull', href: 'parcours.html', title: "Modifier le parcours sur la page Parcours" }, title, stats, mapBox, canvas, note);
+    const full = h('a', { class: 'hm-rfull', href: 'PaceYourRide/parcours.html', title: "Modifier le parcours sur la page Parcours" }, title, stats, mapBox, canvas, note);
     root.append(empty, full);
 
     let map = null, layers = null, sig = '', lastW = 0, cur = null, cps = [];

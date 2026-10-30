@@ -2,7 +2,7 @@
 /* PaceYourRide — bibliothèque de l'accueil : parcours, athlètes, vélos et tenues mis de côté pour être recombinés.
  * Le projet de l'application (store.js) ne contient qu'un parcours, un cycliste, un vélo et une tenue ; la bibliothèque en garde
  * plusieurs et sait en recopier un dans le projet (« appliquer »). Fonctions pures sur des objets simples : aucun accès au DOM.
- * Le stockage (localStorage) est fait par la page d'accueil (js/home.js). */
+ * Le stockage (localStorage) est fait par la page d'accueil (PaceYourRide/js/home.js). */
 (function (PYR) {
   'use strict';
 
@@ -89,7 +89,7 @@
   }
 
   /** Un nouvel athlète pour la bibliothèque, à partir de ce que l'accueil demande : { rider } avec les réglages par défaut de l'éditeur
-   *  (js/core/store.js) pour le reste. Chaque champ est borné comme sur la page Athlète. */
+   *  (Commun/js/core/store.js) pour le reste. Chaque champ est borné comme sur la page Athlète. */
   function newAthlete(f) {
     const src = f || {};
     const num = (v, min, max, dflt, dec) => {

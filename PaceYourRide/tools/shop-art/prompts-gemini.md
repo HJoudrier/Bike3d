@@ -12,7 +12,7 @@ cadrage. Méthode :
 
 1. coller le **prompt maître** de la série au début d'une conversation (une seule fois) ;
 2. demander les images **une par une** en joignant l'**image guide** quand il y en a une
-   (`tools/shop-art/guides/`) ;
+   (`PaceYourRide/tools/shop-art/guides/`) ;
 3. détourer le fond vert, vérifier l'alignement, puis remplacer les fichiers.
 
 Gemini ne produit pas de transparence : les calques sont demandés sur un fond vert chroma uni, à détourer
@@ -22,7 +22,7 @@ ensuite (Photoshop, remove.bg, rembg…). Pour les éléments verts, le fond est
 
 ## 0. Test rapide (un vélo)
 
-Joindre `tools/shop-art/guides/velo-aero-guide.png` :
+Joindre `PaceYourRide/tools/shop-art/guides/velo-aero-guide.png` :
 
 ```
 Voici une image guide (un dessin) d'un vélo de route aéro vu de profil. Transforme-la en photographie de
@@ -37,7 +37,7 @@ Fond de studio gris clair neutre, lumière douce venant d'en haut à gauche, omb
 Aucune autre marque, aucun autre texte.
 ```
 
-Puis, pour tester un calque, joindre `tools/shop-art/guides/velo-aero-cadre-guide.png` :
+Puis, pour tester un calque, joindre `PaceYourRide/tools/shop-art/guides/velo-aero-cadre-guide.png` :
 
 ```
 Même vélo, même cadrage. À partir de cette image guide, produis uniquement le cadre (avec la fourche, la tige
@@ -267,7 +267,7 @@ Ordre d'empilement, du fond vers l'avant : jambes, bras, chaussettes, chaussures
 ## 3. Après la génération
 
 - Format : `.png` avec transparence après détourage.
-- Vélo : dans `img/bike/<nom>.png` ; les axes de roue (480, 888) et (1680, 888)
+- Vélo : dans `Commun/img/bike/<nom>.png` ; les axes de roue (480, 888) et (1680, 888)
   doivent tomber au même endroit que sur le guide.
 - Coureur : la page « Cycliste » du magasin montrera le coureur seul, debout (à adapter dans
-  `js/ui/gear-art.js`, qui n'affiche aujourd'hui que les photos du vélo).
+  `Commun/js/ui/gear-art.js`, qui n'affiche aujourd'hui que les photos du vélo).

@@ -1,17 +1,17 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — illustration du magasin : superposition de photos détourées (PNG transparents de img/bike/),
+/* PaceYourRide — illustration du magasin : superposition de photos détourées (PNG transparents de Commun/img/bike/),
  * toutes au même cadre (PHOTO) : les roues (la paire, recalée sur les axes du cadre), puis le cadre. Si le
  * cadre ou les roues montés n'ont pas d'image (voir PHOTOS), la silhouette par défaut (default.png) la remplace.
  * Ce module choisit les images selon l'équipement monté et les affiche ; une nouvelle combinaison ne remplace
  * l'ancienne qu'une fois toutes ses images chargées.
- * Pour ajouter une photo : un PNG au cadre PHOTO dans img/bike/ et une entrée dans PHOTOS.
+ * Pour ajouter une photo : un PNG au cadre PHOTO dans Commun/img/bike/ et une entrée dans PHOTOS.
  * gear3d donne le même équipement au vélo en 3D de Bike3D (vitrine du magasin, vue 3D du mode jeu). */
 (function (PYR) {
   'use strict';
 
   const Cat = PYR.catalog;
 
-  const BASE = (PYR.root || '') + 'img/bike/', DEFAULT = 'default';
+  const BASE = (PYR.root || '') + 'Commun/img/bike/', DEFAULT = 'default';
   /** Cadre commun des photos (px). */
   const PHOTO = { w: 1304, h: 800 };
   /** Photos par article du magasin (nom du fichier PNG, sans extension) : cadres, et paires de roues. */

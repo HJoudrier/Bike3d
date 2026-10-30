@@ -1,5 +1,5 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — écran de course (voir js/ui/game-mobile.js). Rien ne s'applique tant que <body> n'a pas l'attribut
+/* PaceYourRide — écran de course (voir Commun/js/jeu/game-mobile.js). Rien ne s'applique tant que <body> n'a pas l'attribut
  * data-race, posé du décompte à « Quitter » : "phone" = plein écran sur téléphone, "wide" = grand écran (la page est conservée :
  * barre du haut, profil sous la carte, panneau de droite avec le classement en temps réel). */
 

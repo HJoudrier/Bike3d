@@ -1,5 +1,5 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — page Équipements, partie Magasin (equipement.html), en deux rayons :
+/* PaceYourRide — page Équipements, partie Magasin (PaceYourRide/equipement.html), en deux rayons :
  *   Vélo : cadre, roues, pneus, transmission ;
  *   Cycliste : position sur le vélo (un réglage, gratuit), casque, lunettes, maillot ou combinaison, chaussettes,
  *   chaussures, épilation.

@@ -1,5 +1,5 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — page Athlète (athlete.html) : profil estimé depuis l'historique des sorties (archive d'export d'un compte Strava, dossier ou
+/* PaceYourRide — page Athlète (PaceYourRide/athlete.html) : profil estimé depuis l'historique des sorties (archive d'export d'un compte Strava, dossier ou
  * fichiers FIT / GPX / TCX, éventuellement compressés en .gz), sur le modèle de la calibration (calibration.js) : lire, estimer, afficher,
  * puis « Appliquer » ce qui est coché (records, CP2, W′, FC maximale, VO₂max). Les fichiers sont lus sur l'appareil (zip.js, replay.load,
  * history.js), par lots, sans bloquer la page ; rien n'est envoyé. */

@@ -78,7 +78,7 @@
     return n || 'Cycliste anonyme';
   }
 
-  /** Les liens de défi s'ouvrent sur la page Jeu (Jeu/index.html), où l'on choisit le défi avant de le courir. */
+  /** Les liens de défi s'ouvrent sur la page Jeu (Jeu2D/index.html), où l'on choisit le défi avant de le courir. */
   function shareUrlBase() {
     return /^https?:$/.test(location.protocol) ? PYR.app.url('game') : null;
   }

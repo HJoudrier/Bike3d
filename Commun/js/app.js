@@ -66,7 +66,7 @@
   const has = (tab) => (tab === 'ride' ? !!$('#ride') : !!$(`.panel[data-panel="${tab}"]`));
   const hasMap = () => !!(PYR.map && PYR.map.map);
 
-  /** Écran de course (Jeu2D, Jeu3D) : la partie configurée dans Jeu/index.html s'y joue. */
+  /** Écran de course (Jeu2D, Jeu3D) : la partie configurée dans Jeu2D/index.html s'y joue. */
   const racePage = () => !!document.body.dataset.display;
 
   let current = null;

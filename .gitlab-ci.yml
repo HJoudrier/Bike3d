@@ -4,11 +4,11 @@ create-pages:
   stage: deploy
   script:
     - mkdir -p public
-    # Le site tel quel, depuis sa racine : l'accueil (index.html), une page par section, les dossiers Jeu (configuration, écrans de
-    # course Map2D et 3D, univers 3D de Bike3D) et Compteur, la documentation et le rapport du modèle physiologique
-    - cp -r index.html parcours.html athlete.html equipement.html pacing.html documentation.html DocModelePhysioCycliste.html css js vendor img Jeu Compteur public/
-    # sources de développement de l'univers 3D, inutiles en ligne
-    - rm -rf public/Jeu3D/univers/tools
+    # Le site tel quel, depuis sa racine : le portail (index.html) et les quatre applications indépendantes, PaceYourRide, Jeu2D, Jeu3D (avec
+    # l'univers 3D de Bike3D) et Compteur, qui partagent le dossier Commun (moteur, interface, styles, bibliothèques)
+    - cp -r index.html Commun PaceYourRide Jeu2D Jeu3D Compteur public/
+    # sources de développement, inutiles en ligne
+    - rm -rf public/Jeu3D/univers/tools public/PaceYourRide/tools public/PaceYourRide/img_bike
   pages:
     # The folder that contains the files to be exposed at the Page URL
     publish: public

@@ -1,5 +1,5 @@
 /* author : Hugo Joudrier-Faure */
-/* Tests de la bibliothèque de l'accueil (js/core/library.js) : extraction, application et résumés. */
+/* Tests de la bibliothèque de l'accueil (Commun/js/core/library.js) : extraction, application et résumés. */
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');

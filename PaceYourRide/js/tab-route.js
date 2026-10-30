@@ -1,5 +1,5 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — page Parcours (parcours.html) : tracé, profil, portions de revêtement et de vent. */
+/* PaceYourRide — page Parcours (PaceYourRide/parcours.html) : tracé, profil, portions de revêtement et de vent. */
 (function (PYR) {
   'use strict';
 
@@ -275,7 +275,7 @@
       D.download(`${T.fileBase()}.gpx`, PYR.services.toGpx(store.state.route.name || 'Parcours PaceYourRide', p.lat, p.lng, p.ele, p.n), 'application/gpx+xml');
     },
 
-    /** Parcours complet : GPX enrichi des sprints, côtes, ravitaillements, portions et de la météo (js/core/route-file.js). */
+    /** Parcours complet : GPX enrichi des sprints, côtes, ravitaillements, portions et de la météo (Commun/js/core/route-file.js). */
     exportRoute() {
       const p = store.profile;
       if (!p) { D.toast(PYR.routeModel.pending ? 'Le tracé est en cours de calcul : réessaie dans un instant.' : 'Aucun parcours à exporter', 'error'); return; }

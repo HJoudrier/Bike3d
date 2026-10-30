@@ -1,5 +1,5 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — page Pacing optimal (pacing.html) : calcul et restitution de la stratégie optimale. */
+/* PaceYourRide — page Pacing optimal (PaceYourRide/pacing.html) : calcul et restitution de la stratégie optimale. */
 (function (PYR) {
   'use strict';
 
@@ -63,6 +63,17 @@
     };
   }
 
+  /** Envoie le projet et son plan à Dropbox, puis ouvre l'application (jeu ou compteur) qui le lira. */
+  async function openApp(page) {
+    if (!PYR.cloud.status().connected) { D.toast("Connecte Dropbox depuis l'accueil de PaceYourRide : c'est par lui que le plan arrive dans le jeu et le compteur.", 'error', 7000); return; }
+    D.toast('Envoi du plan à Dropbox…');
+    store.saveNow();
+    await PYR.cloud.sync(true);
+    const err = PYR.cloud.status().error;
+    if (err) { D.toast(err, 'error', 7000); return; }
+    location.href = PYR.app.url(page);
+  }
+
   const T = {
     buildInputs: (machine, opts) => PYR.simInputs.build(machine, opts),   // aussi utilisé par le jeu et le compteur (Commun/js/ui/sim-inputs.js)
 
@@ -103,8 +114,9 @@
       $('#btn-export-plan-gpx').addEventListener('click', () => T.exportGpx());
       $('#btn-export-plan-tcx').addEventListener('click', () => T.exportTcx());
       for (const kind of ['fit', 'zwo', 'mrc']) $(`#btn-export-plan-${kind}`).addEventListener('click', () => T.exportWorkout(kind));
-      $('#btn-play-plan').addEventListener('click', () => { store.state.game.ghost = true; PYR.app.showTab('game'); });
-      $('#btn-ride-plan').addEventListener('click', () => PYR.app.showTab('ride'));
+      // le jeu et le compteur sont d'autres applications : le plan leur arrive par Dropbox, qu'on met à jour avant d'y aller
+      $('#btn-play-plan').addEventListener('click', () => openApp('game'));
+      $('#btn-ride-plan').addEventListener('click', () => openApp('ride'));
       $('#sec-range').addEventListener('input', (e) => { secPage = Number(e.target.value); T.renderSeconds(); });
       $('#sec-prev').addEventListener('click', () => { secPage = Math.max(0, secPage - 1); T.renderSeconds(); });
       $('#sec-next').addEventListener('click', () => { secPage = Math.min(Number($('#sec-range').max), secPage + 1); T.renderSeconds(); });
