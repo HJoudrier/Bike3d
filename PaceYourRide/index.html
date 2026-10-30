@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<!-- author : Hugo Joudrier-Faure -->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
+  <title>PaceYourRide — Accueil</title>
+  <meta name="description" content="Trace un parcours, décris ton athlète, calcule le plan optimal, joue seul ou à plusieurs, ou suis ton plan en vraie sortie.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a78d6'/%3E%3Cpath d='M10 44 L24 26 L32 36 L42 20 L54 44 Z' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../Commun/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="../Commun/css/style.css">
+  <link rel="stylesheet" href="css/home.css">
+</head>
+<body class="home">
+  <header class="hm-top">
+    <a class="brand" href="index.html" aria-label="PaceYourRide — accueil">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor"/><path d="M10 44 L24 26 L32 36 L42 20 L54 44 Z" fill="#fff"/></svg>
+      <span>PaceYourRide</span>
+    </a>
+    <div class="hm-top-acts">
+      <button class="btn ghost" type="button" id="hm-cloud" title="Retrouver tes données sur tous tes appareils, avec ton compte Dropbox"><span class="hm-cloud-ico" aria-hidden="true">☁</span> <span id="hm-cloud-txt">Synchronisation</span></button>
+      <a class="btn ghost" href="documentation.html" target="_blank" rel="noopener" title="Guide d'utilisation, modèles mécanique et physiologique, simulation et algorithmes d'optimisation">Documentation</a>
+    </div>
+    <!-- les pages du site (les mêmes liens en tête de chaque page) -->
+    <nav class="tabs hm-nav" aria-label="Sections">
+      <a href="parcours.html">Parcours</a>
+      <a href="athlete.html">Athlète</a>
+      <a href="equipement.html">Équipements</a>
+      <a href="pacing.html">Pacing optimal</a>
+      <a href="../index.html" title="Les applications : PaceYourRide, jeux, compteur">Applications</a>
+    </nav>
+  </header>
+
+  <main class="hm-main">
+    <section class="hm-hero">
+      <h1>Que veux-tu faire&nbsp;?</h1>
+      <p>Prépare ton parcours et ton athlète, calcule le plan idéal, puis roule&nbsp;: en jeu, entre amis, ou au guidon.</p>
+    </section>
+
+    <div class="hm-grid">
+
+      <div class="hm-col">
+
+      <!-- ============ 1. PARCOURS ============ -->
+      <article class="hm-hub" style="--hub: var(--series-1)" aria-labelledby="hub-route">
+        <header class="hm-hub-head">
+          <span class="hm-num" aria-hidden="true">1</span>
+          <svg class="hm-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg>
+          <div>
+            <h2 id="hub-route">Parcours</h2>
+            <p>Crée-le, modifie-le, choisis-le.</p>
+          </div>
+        </header>
+        <!-- aperçu du parcours du projet : distance, D+/D-, carte et profil (js/ui/route-preview.js) -->
+        <div class="hm-route" id="hm-route" aria-live="polite"></div>
+        <div class="hm-acts">
+          <button class="hm-act primary" type="button" id="hm-new-route"><span><b>Créer un parcours</b><small>Un parcours vide, nommé d'après la date et l'heure. Clique sur la carte ; le tracé suit les routes. Tu peux aussi charger un GPX.</small></span><i aria-hidden="true">›</i></button>
+          <button class="hm-act" type="button" id="hm-pick-route"><span><b>Sélectionner un parcours</b><small>Un parcours de ta bibliothèque, ou celui du projet en cours.</small></span><i aria-hidden="true">›</i></button>
+        </div>
+      </article>
+
+        <!-- ============ 2. MÉTÉO ============ -->
+        <article class="hm-hub" style="--hub: #0a7ea4" aria-labelledby="hub-weather">
+          <header class="hm-hub-head">
+            <span class="hm-num" aria-hidden="true">2</span>
+            <svg class="hm-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 10.5a3.75 3.75 0 0 1-.5 7.5z"/><path d="M9 21l1-2M13 21l1-2"/></svg>
+            <div>
+              <h2 id="hub-weather">Météo</h2>
+              <p>Vent, pluie et température le long du parcours.</p>
+            </div>
+          </header>
+          <div class="hm-athlete" id="hm-weather" aria-live="polite"></div>
+          <div class="hm-acts">
+            <a class="hm-act primary" href="parcours.html?focus=w-custom-on"><span><b>Météo personnalisée</b><small>Décris toi-même les portions de vent, de pluie et de température, sur la page Parcours.</small></span><i aria-hidden="true">›</i></a>
+            <a class="hm-act" href="pacing.html?focus=w-start-perf"><span><b>Prévisions Open-Meteo</b><small>Récupère la météo du jour de départ pour la stratégie et pour le jeu, solo ou multi.</small></span><i aria-hidden="true">›</i></a>
+          </div>
+        </article>
+
+      </div>
+
+      <div class="hm-col">
+
+        <!-- ============ 3. ATHLÈTE ============ -->
+        <article class="hm-hub" style="--hub: var(--series-3)" aria-labelledby="hub-athlete">
+          <header class="hm-hub-head">
+            <span class="hm-num" aria-hidden="true">3</span>
+            <svg class="hm-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg>
+            <div>
+              <h2 id="hub-athlete">Athlète</h2>
+              <p>Ajoute-le, modifie-le, choisis-le.</p>
+            </div>
+          </header>
+          <!-- profil de l'athlète du projet (rempli par js/home.js) -->
+          <div class="hm-athlete" id="hm-athlete" aria-live="polite"></div>
+          <div class="hm-acts">
+            <button class="hm-act primary" type="button" id="hm-add-athlete"><span><b>Ajouter un athlète</b><small>Nom, âge, poids, taille et FTP : il rejoint ta bibliothèque.</small></span><i aria-hidden="true">›</i></button>
+            <button class="hm-act" type="button" id="hm-pick-athlete"><span><b>Sélectionner un athlète</b><small>Un athlète de ta bibliothèque, ou celui du projet en cours.</small></span><i aria-hidden="true">›</i></button>
+          </div>
+        </article>
+
+        <!-- ============ 4. MATÉRIEL ============ -->
+        <article class="hm-hub" style="--hub: var(--series-2)" aria-labelledby="hub-gear">
+          <header class="hm-hub-head">
+            <span class="hm-num" aria-hidden="true">4</span>
+            <svg class="hm-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="16" r="3.5"/><circle cx="18" cy="16" r="3.5"/><path d="M6 16l4-8h5l3 8M10 8l3 8"/></svg>
+            <div>
+              <h2 id="hub-gear">Matériel</h2>
+              <p>Le vélo, la tenue, la position.</p>
+            </div>
+          </header>
+          <div class="hm-athlete" id="hm-gear" aria-live="polite"></div>
+          <div class="hm-acts">
+            <a class="hm-act primary" href="equipement.html"><span><b>Vélo</b><small>Cadre, roues, pneus, transmission, CdA mesuré.</small></span><i aria-hidden="true">›</i></a>
+            <a class="hm-act" href="equipement.html?focus=r-position"><span><b>Tenue &amp; position</b><small>Casque, combinaison, chaussures, position sur le vélo.</small></span><i aria-hidden="true">›</i></a>
+            <button class="hm-act" type="button" id="hm-pick-bike"><span><b>Sélectionner un vélo</b><small>Un vélo de ta bibliothèque, ou celui du projet en cours.</small></span><i aria-hidden="true">›</i></button>
+            <button class="hm-act" type="button" id="hm-pick-outfit"><span><b>Sélectionner une tenue</b><small>Une tenue et une position de ta bibliothèque, ou celles du projet en cours.</small></span><i aria-hidden="true">›</i></button>
+            <a class="hm-act" href="equipement.html?vue=magasin"><span><b>Magasin</b><small>Cadres, roues, pneus, tenues : vois ton vélo en 3D, tel qu'il roulera dans le jeu.</small></span><i aria-hidden="true">›</i></a>
+            <a class="hm-act" href="equipement.html?focus=cal-box"><span><b>Estimation</b><small>Estimer le CdA et le Crr du vélo et de la tenue d'après une sortie réelle (GPX, TCX).</small></span><i aria-hidden="true">›</i></a>
+          </div>
+        </article>
+
+      </div>
+    </div>
+
+    <div class="hm-grid hm-wide">
+
+      <!-- ============ 5. STRATÉGIE ============ -->
+      <article class="hm-hub" style="--hub: var(--series-7)" aria-labelledby="hub-plan">
+        <header class="hm-hub-head">
+          <span class="hm-num" aria-hidden="true">5</span>
+          <svg class="hm-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+          <div>
+            <h2 id="hub-plan">Stratégie</h2>
+            <p>La puissance idéale à chaque seconde.</p>
+          </div>
+        </header>
+        <div class="hm-acts">
+          <button class="hm-act primary" type="button" id="hm-plan"><span><b>Calculer la stratégie</b><small>Choisis un parcours, un athlète, un vélo, une tenue et une position, puis calcule.</small></span><i aria-hidden="true">›</i></button>
+          <a class="hm-act" href="../Compteur/index.html"><span><b>Le compteur</b><small>Application à part : en vraie sortie, sur ton téléphone, il récupère le plan enregistré par Dropbox.</small></span><i aria-hidden="true">›</i></a>
+        </div>
+        <p class="hm-note">Le plan s'exporte pour ton compteur&nbsp;: GPX, TCX, FIT (Garmin, Wahoo, Karoo), ZWO (Zwift) ou MRC.</p>
+      </article>
+
+      <!-- ============ 6. JEUX ============ -->
+      <article class="hm-hub" style="--hub: var(--series-4); --hub-dark: color-mix(in srgb, var(--series-4) 58%, #000)" aria-labelledby="hub-play">
+        <header class="hm-hub-head">
+          <span class="hm-num" aria-hidden="true">6</span>
+          <svg class="hm-ico hm-ico-fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+          <div>
+            <h2 id="hub-play">Jeux</h2>
+            <p>Applications à part : elles lisent ta bibliothèque dans Dropbox.</p>
+          </div>
+        </header>
+        <div class="hm-acts">
+          <a class="hm-act primary" href="../Jeu2D/index.html"><span><b>Jeu 2D</b><small>La course sur la carte : choisis un parcours et un athlète de ta bibliothèque, la météo, puis roule.</small></span><i aria-hidden="true">›</i></a>
+          <a class="hm-act" href="../Jeu3D/index.html"><span><b>Jeu 3D</b><small>La même course dans le paysage cartoon de Bike3D.</small></span><i aria-hidden="true">›</i></a>
+        </div>
+      </article>
+
+    </div>
+  </main>
+
+  <footer class="credit">Réalisée par <a href="mailto:hugo.joudrier@gmail.com">Hugo Joudrier-Faure</a></footer>
+
+  <!-- sélecteur d'un élément du projet, et assistant « plan optimal » (js/home.js) -->
+  <dialog class="modal wide hm-dialog" id="wiz" aria-labelledby="wiz-title">
+    <header class="wz-head">
+      <h3 id="wiz-title"></h3>
+      <button class="btn ghost icon" type="button" id="wiz-close" aria-label="Fermer">✕</button>
+    </header>
+    <ol class="wz-steps" id="wiz-steps" aria-label="Étapes"></ol>
+    <div class="wz-body" id="wiz-body"></div>
+    <div class="modal-actions wz-foot">
+      <button class="btn" type="button" id="wiz-back">Retour</button>
+      <button class="btn primary" type="button" id="wiz-next">Suivant</button>
+    </div>
+  </dialog>
+  <!-- ajout d'un athlète à la bibliothèque (js/home.js) -->
+  <dialog class="modal hm-dialog" id="ath-dlg" aria-labelledby="ath-title">
+    <form method="dialog" id="ath-form" novalidate>
+      <header class="wz-head">
+        <h3 id="ath-title">Ajouter un athlète</h3>
+        <button class="btn ghost icon" type="button" id="ath-close" aria-label="Fermer">✕</button>
+      </header>
+      <div class="wz-body ath-body">
+        <div class="field"><label for="ath-name">Nom</label><input type="text" id="ath-name" maxlength="30" autocomplete="off" placeholder="Athlète #aaaammjjhhmmss (par défaut)"></div>
+        <div class="grid2">
+          <div class="field"><label for="ath-sex">Sexe (références de niveau)</label><select id="ath-sex"><option value="m">Homme</option><option value="f">Femme</option></select></div>
+          <div class="field"><label for="ath-birth">Date de naissance</label><input type="date" id="ath-birth" min="1900-01-01"></div>
+        </div>
+        <div class="grid3">
+          <div class="field"><label for="ath-weight">Poids (kg)</label><input type="number" id="ath-weight" min="25" max="200" step="0.1" value="72"></div>
+          <div class="field"><label for="ath-height">Taille (cm)</label><input type="number" id="ath-height" min="120" max="230" step="1" value="178"></div>
+          <div class="field"><label for="ath-ftp">FTP (W)</label><input type="number" id="ath-ftp" min="50" max="600" step="1" value="250"></div>
+        </div>
+        <p class="wz-hint">La puissance critique, le W′ et la courbe de puissance record se règlent ensuite dans le profil physiologique.</p>
+        <p class="wz-warn" id="ath-err" role="alert" hidden></p>
+      </div>
+      <div class="modal-actions wz-foot">
+        <button class="btn" type="button" id="ath-cancel">Annuler</button>
+        <button class="btn primary" type="submit">Ajouter à ma bibliothèque</button>
+      </div>
+    </form>
+  </dialog>
+  <!-- synchronisation avec Dropbox (js/core/cloud.js) -->
+  <dialog class="modal hm-dialog" id="cloud-dlg" aria-labelledby="cloud-title">
+    <header class="wz-head">
+      <h3 id="cloud-title">Synchronisation Dropbox</h3>
+      <button class="btn ghost icon" type="button" id="cloud-close" aria-label="Fermer">✕</button>
+    </header>
+    <div class="wz-body" id="cloud-body"></div>
+  </dialog>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="../Commun/js/boot.js" data-app="pro-home"></script>
+</body>
+</html>

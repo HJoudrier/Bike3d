@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { PYR } = require('./helpers.js');
-require(path.join(__dirname, '..', 'js/engine/tilt.js'));
+require(path.join(__dirname, '..', 'Commun/js/engine/tilt.js'));
 
 const T = PYR.tilt;
 const near = (a, b, eps) => Math.abs(a - b) <= (eps || 0.05);

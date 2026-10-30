@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { PYR, makeProfile } = require('./helpers.js');
-require(path.join(__dirname, '..', 'js/core/route-file.js'));
+require(path.join(__dirname, '..', 'Commun/js/core/route-file.js'));
 
 const RF = PYR.routeFile;
 

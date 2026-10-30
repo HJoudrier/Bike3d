@@ -4,8 +4,8 @@
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-for (const f of ['js/core/util.js', 'js/engine/physio.js', 'js/engine/physics.js', 'js/engine/weather.js', 'js/engine/course.js', 'js/engine/sim.js', 'js/engine/optimizer.js', 'js/engine/gradient.js',
-  'js/engine/benchmarks.js', 'js/engine/draft.js', 'js/engine/peloton.js', 'js/engine/metabo.js', 'js/engine/fuel.js', 'js/engine/classif.js', 'js/engine/feed.js', 'js/engine/tactics.js', 'js/engine/race.js', 'js/engine/catalog.js', 'js/engine/plan-gpx.js', 'js/engine/plan-workout.js', 'js/engine/activity.js', 'js/engine/nutrition.js', 'js/engine/ride.js', 'js/engine/ride-mixed.js', 'js/engine/activity-export.js', 'js/engine/replay.js', 'js/engine/history.js', 'js/engine/presence.js', 'js/core/zip.js', 'js/ui/sensors.js']) {
+for (const f of ['Commun/js/core/util.js', 'Commun/js/engine/physio.js', 'Commun/js/engine/physics.js', 'Commun/js/engine/weather.js', 'Commun/js/engine/course.js', 'Commun/js/engine/sim.js', 'Commun/js/engine/optimizer.js', 'Commun/js/engine/gradient.js',
+  'Commun/js/engine/benchmarks.js', 'Commun/js/engine/draft.js', 'Commun/js/engine/peloton.js', 'Commun/js/engine/metabo.js', 'Commun/js/engine/fuel.js', 'Commun/js/engine/classif.js', 'Commun/js/engine/feed.js', 'Commun/js/engine/tactics.js', 'Commun/js/engine/race.js', 'Commun/js/engine/catalog.js', 'Commun/js/engine/plan-gpx.js', 'Commun/js/engine/plan-workout.js', 'Commun/js/engine/activity.js', 'Commun/js/engine/nutrition.js', 'Commun/js/engine/ride.js', 'Commun/js/engine/ride-mixed.js', 'Commun/js/engine/activity-export.js', 'Commun/js/engine/replay.js', 'Commun/js/engine/history.js', 'Commun/js/engine/presence.js', 'Commun/js/core/zip.js', 'Commun/js/ui/sensors.js']) {
   require(path.join(ROOT, f));
 }
 const PYR = globalThis.PYR;

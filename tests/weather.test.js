@@ -242,8 +242,8 @@ test('optimiseur : plus lent avec vent de face et sous la pluie, plan valide', a
 
 /* ---------- partage : la météo est figée avec le parcours ---------- */
 const path = require('path');
-require(path.join(__dirname, '..', 'js/core/codec.js'));
-require(path.join(__dirname, '..', 'js/core/race-data.js'));
+require(path.join(__dirname, '..', 'Commun/js/core/codec.js'));
+require(path.join(__dirname, '..', 'Commun/js/core/race-data.js'));
 const R = PYR.raceData, Cd = PYR.codec;
 
 function shareState(profile, over) {

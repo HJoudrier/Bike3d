@@ -6,7 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { PYR, makeProfile, setupFor } = require('./helpers.js');
-require(path.join(__dirname, '..', 'js', 'ui', 'view3d.js'));
+require(path.join(__dirname, '..', 'Commun', 'js', 'jeu', 'view3d.js'));
 
 const Race = PYR.race, Pr = PYR.presence, Sx = PYR.sensors, V3 = PYR.view3d;
 
@@ -356,9 +356,9 @@ test('crevaisons : en course, bien plus sur le gravier et les pavés, et bien mo
 
 /* ---------- vélo en 3D : le magasin et la vue 3D montrent le même cycliste (B3D.Cyclist de Bike3D) ---------- */
 
-require(path.join(__dirname, '..', 'js', 'ui', 'gear-art.js'));
+require(path.join(__dirname, '..', 'Commun', 'js', 'ui', 'gear-art.js'));
 const fs = require('fs');
-const BIKE3D = path.join(__dirname, '..', 'Jeu', '3D', 'univers');   // l'univers 3D du jeu (Bike3D)
+const BIKE3D = path.join(__dirname, '..', 'Jeu3D', 'univers');   // l'univers 3D du jeu (Bike3D)
 const hasBike3d = fs.existsSync(path.join(BIKE3D, 'js', 'cyclist.js'));
 
 /** Le cycliste de Bike3D chargé à part (three.js, utilitaires, rendu cartoon) : ses listes d'équipement. */

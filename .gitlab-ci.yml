@@ -8,7 +8,7 @@ create-pages:
     # course Map2D et 3D, univers 3D de Bike3D) et Compteur, la documentation et le rapport du modèle physiologique
     - cp -r index.html parcours.html athlete.html equipement.html pacing.html documentation.html DocModelePhysioCycliste.html css js vendor img Jeu Compteur public/
     # sources de développement de l'univers 3D, inutiles en ligne
-    - rm -rf public/Jeu/3D/univers/tools
+    - rm -rf public/Jeu3D/univers/tools
   pages:
     # The folder that contains the files to be exposed at the Page URL
     publish: public

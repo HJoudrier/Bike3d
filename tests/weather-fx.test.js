@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { PYR } = require('./helpers.js');
-require(path.join(__dirname, '..', 'js/ui/weather-fx.js'));
+require(path.join(__dirname, '..', 'Commun/js/ui/weather-fx.js'));
 
 const Fx = PYR.weatherFx;
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
