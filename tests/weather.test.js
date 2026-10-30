@@ -242,8 +242,8 @@ test('optimiseur : plus lent avec vent de face et sous la pluie, plan valide', a
 
 /* ---------- partage : la météo est figée avec le parcours ---------- */
 const path = require('path');
-require(path.join(__dirname, '..', 'js/core/codec.js'));
-require(path.join(__dirname, '..', 'js/core/race-data.js'));
+require(path.join(__dirname, '..', 'Commun/js/core/codec.js'));
+require(path.join(__dirname, '..', 'Commun/js/core/race-data.js'));
 const R = PYR.raceData, Cd = PYR.codec;
 
 function shareState(profile, over) {
@@ -380,4 +380,41 @@ test('météo personnalisée : sans portion, une seule pièce ; de nombreuses po
   assert.ok(w.stations.length <= W.MAX_STATIONS);
   for (let k = 1; k < w.stations.length; k++) assert.ok(w.stations[k].s > w.stations[k - 1].s);
   assert.equal(W.fromCustom(null, {}, [], {}), null, 'pas de parcours');
+});
+
+/* ---------- météo aléatoire évolutive (weather.randomEvolving) ---------- */
+test('météo aléatoire : valide, déterministe pour une graine, différente d\'une graine à l\'autre', () => {
+  const p = makeProfile([{ len: 30000, grade: 0.02 }, { len: 20000, grade: -0.02 }]);
+  const start = Date.UTC(2026, 5, 20, 8, 0) / 1000;
+  const a = PYR.weather.randomEvolving(p, 42, { start, hours: 12 });
+  const b = PYR.weather.randomEvolving(p, 42, { start, hours: 12 });
+  const c = PYR.weather.randomEvolving(p, 43, { start, hours: 12 });
+  assert.ok(a && a.n === 12 && a.stations.length >= 2);
+  assert.deepEqual(a, b);
+  assert.notDeepEqual(a.rain, c.rain);
+  for (const f of PYR.weather.FIELDS) assert.equal(a[f].length, a.stations.length);
+  // lisible par le moteur, à toute distance et à toute heure
+  for (const s of [0, 12000, 49999]) for (const t of [0, 3600, 5 * 3600]) {
+    const x = PYR.weather.at(a, s, a.start + t);
+    assert.ok(Number.isFinite(x.T) && x.rain >= 0 && x.ws >= 0);
+  }
+});
+
+test('météo aléatoire : évolue au fil des heures (la pluie n\'est pas constante) et plus de pluie avec le goût du temps humide', () => {
+  const p = makeProfile([{ len: 40000, grade: 0 }]);
+  const start = Date.UTC(2026, 3, 2, 7, 0) / 1000;
+  let varies = 0, dry = 0, wetSum = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const w = PYR.weather.randomEvolving(p, seed, { start, hours: 24, wet: 0.5 });
+    const r = w.rain[0];
+    if (Math.max(...r) - Math.min(...r) > 0.2) varies++;
+    const d = PYR.weather.randomEvolving(p, seed, { start, hours: 24, wet: 0 }), m = PYR.weather.randomEvolving(p, seed, { start, hours: 24, wet: 1 });
+    dry += d.rain[0].reduce((x, y) => x + y, 0); wetSum += m.rain[0].reduce((x, y) => x + y, 0);
+  }
+  assert.ok(varies >= 15, 'la pluie varie dans au moins la moitié des tirages (' + varies + ')');
+  assert.ok(wetSum > dry, 'plus de pluie avec wet = 1 qu\'avec wet = 0');
+});
+
+test('météo aléatoire : pas de parcours, pas de météo', () => {
+  assert.equal(PYR.weather.randomEvolving(null, 1), null);
 });

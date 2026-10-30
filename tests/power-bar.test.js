@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { PYR } = require('./helpers.js');
-require(path.join(__dirname, '..', 'js/engine/power-bar.js'));
+require(path.join(__dirname, '..', 'Commun/js/engine/power-bar.js'));
 
 const B = PYR.powerBar;
 

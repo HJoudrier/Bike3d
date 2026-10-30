@@ -1,0 +1,511 @@
+/* Bike3D — rendu cartoon : matériaux toon, contours "inverted hull", fusion de géométries. */
+(function (root) {
+  'use strict';
+  const B3D = root.B3D = root.B3D || {};
+
+  // Uniformes partagés par tous les matériaux animés / contours.
+  const shared = {
+    uTime: { value: 0 },
+    uOutlineScale: { value: 0.0022 }, // épaisseur (m) par mètre de distance à la caméra
+    uRider: { value: new THREE.Vector3(0, -1e5, 0) }, // position du coureur (le public s'excite à son passage)
+    // météo : direction (x, z) et force (0..1,6) du vent, route mouillée, nuit, teinte d'ensemble (eau, panneaux)
+    uWind: { value: new THREE.Vector3(0, 1, 0) },
+    uWet: { value: 0 },
+    uNight: { value: 0 },
+    uSkyTint: { value: new THREE.Color('#ffffff') },
+    uSnow: { value: 0 } // manteau neigeux (0..1)
+  };
+
+  // Neige sur les faces tournées vers le ciel : injectée dans un matériau toon (avant l'éclairage).
+  // amount : facteur (1 = sommets des arbres, toits…). Se combine avec un onBeforeCompile existant.
+  const SNOW_FRAG = [
+    '{',
+    '  vec3 snN = (vec4(normal, 0.0) * viewMatrix).xyz;', // normale dans le monde
+    '  float snK = uSnow * smoothstep(0.2, 0.62, snN.y);',
+    '  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.97, 1.0), snK * SNOW_AMOUNT);',
+    '}'
+  ].join('\n');
+  function snowPatch(m, amount) {
+    const prev = m.onBeforeCompile;
+    const prevKey = m.customProgramCacheKey;
+    m.onBeforeCompile = (shader, renderer) => {
+      if (prev) prev.call(m, shader, renderer);
+      shader.uniforms.uSnow = shared.uSnow;
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uSnow;')
+        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + SNOW_FRAG.replace('SNOW_AMOUNT', Number(amount || 1).toFixed(3)));
+    };
+    m.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|snow' + (amount || 1);
+    return m;
+  }
+
+  // --- Animation du public : chaque spectateur applaudit, lève les bras ou fait coucou.
+  // Les bras sont modélisés tendus vers l'avant (+z) depuis l'épaule ; l'attribut armSide vaut -1/+1 sur les bras.
+  const PEOPLE_PARS = [
+    'attribute float armSide;',
+    'uniform vec3 uRider;',
+    'mat3 b3dRotX(float a){ float c = cos(a), s = sin(a); return mat3(1.0,0.0,0.0, 0.0,c,s, 0.0,-s,c); }',
+    'mat3 b3dRotY(float a){ float c = cos(a), s = sin(a); return mat3(c,0.0,-s, 0.0,1.0,0.0, s,0.0,c); }',
+    'mat3 b3dRotZ(float a){ float c = cos(a), s = sin(a); return mat3(c,s,0.0, -s,c,0.0, 0.0,0.0,1.0); }'
+  ].join('\n');
+  // phaseAttr : la phase vient d'un attribut d'instance (aPhase) au lieu de la position,
+  // pour les spectateurs qui se déplacent (sinon leur geste changerait en marchant).
+  const peopleSetup = (phaseAttr) => [
+    'mat3 armM = mat3(1.0);',
+    'vec3 armPiv = vec3(0.27 * armSide, 1.42, 0.0);',
+    'float jump = 0.0;',
+    '#ifdef USE_INSTANCING',
+    '{',
+    '  vec3 ip = instanceMatrix[3].xyz;',
+    phaseAttr ? '  float ph = aPhase;' : '  float ph = ip.x * 0.37 + ip.z * 0.23;',
+    '  float kind = floor(fract(ph * 0.618) * 3.0);',
+    '  float ex = 1.0 - smoothstep(10.0, 45.0, distance(ip, uRider));',
+    '  float t = uTime * (1.0 + 0.6 * ex) + ph;',
+    '  if (armSide != 0.0) {',
+    '    if (kind < 0.5) {',
+    '      float a = 0.27 + (0.12 + 0.05 * ex) * sin(t * (13.0 + 5.0 * ex));',
+    '      armM = b3dRotY(-armSide * a) * b3dRotX(-0.3 - 0.6 * ex);',
+    '    } else if (kind < 1.5) {',
+    '      armM = b3dRotZ(-armSide * (0.35 + 0.25 * sin(t * 7.0))) * b3dRotX(-1.75);',
+    '    } else {',
+    '      if (armSide > 0.0) armM = b3dRotZ(-0.55 * sin(t * 8.0) - 0.3) * b3dRotX(-1.85);',
+    '      else armM = b3dRotX(1.15 - 2.9 * ex);',
+    '    }',
+    '  }',
+    '  jump = abs(sin(t * 5.0)) * (kind > 0.5 ? 0.05 + 0.26 * ex : 0.04 * ex);',
+    '}',
+    '#endif'
+  ].join('\n');
+  const PEOPLE_SETUP = peopleSetup(false);
+  const PHASE_PARS = 'attribute float aPhase;';
+
+  let gradientTex = null;
+  function gradientMap() {
+    if (gradientTex) return gradientTex;
+    // 5 paliers : ombre propre, ombre, transition, éclairé, plein soleil.
+    const vals = [105, 112, 165, 220, 255];
+    const data = new Uint8Array(vals.length * 4);
+    vals.forEach((v, i) => { data[i * 4] = v; data[i * 4 + 1] = v; data[i * 4 + 2] = v; data[i * 4 + 3] = 255; });
+    gradientTex = new THREE.DataTexture(data, vals.length, 1, THREE.RGBAFormat);
+    gradientTex.minFilter = THREE.NearestFilter;
+    gradientTex.magFilter = THREE.NearestFilter;
+    gradientTex.generateMipmaps = false;
+    gradientTex.needsUpdate = true;
+    return gradientTex;
+  }
+
+  // Rampe plus douce pour le terrain : évite les taches sombres sur les petites bosses quand le soleil est bas.
+  let terrainGradientTex = null;
+  function terrainGradientMap() {
+    if (terrainGradientTex) return terrainGradientTex;
+    const vals = [150, 155, 175, 205, 232, 250, 255, 255];
+    const data = new Uint8Array(vals.length * 4);
+    vals.forEach((v, i) => { data[i * 4] = v; data[i * 4 + 1] = v; data[i * 4 + 2] = v; data[i * 4 + 3] = 255; });
+    terrainGradientTex = new THREE.DataTexture(data, vals.length, 1, THREE.RGBAFormat);
+    terrainGradientTex.minFilter = THREE.NearestFilter;
+    terrainGradientTex.magFilter = THREE.NearestFilter;
+    terrainGradientTex.generateMipmaps = false;
+    terrainGradientTex.needsUpdate = true;
+    return terrainGradientTex;
+  }
+
+  const matCache = new Map();
+  // Matériau toon simple (mis en cache par couleur/options).
+  function mat(color, opts = {}) {
+    const key = color + '|' + JSON.stringify(opts);
+    if (matCache.has(key)) return matCache.get(key);
+    const m = new THREE.MeshToonMaterial(Object.assign({ color: new THREE.Color(color), gradientMap: gradientMap() }, opts));
+    matCache.set(key, m);
+    return m;
+  }
+
+  // --- Battement d'ailes des oiseaux : les ailes (attribut wingSide = -1/+1) tournent autour de l'axe du corps.
+  // f : { freq (rad/s), amp (rad), glide (0..1 : part du temps en vol plané), pivot (x de l'épaule) }
+  function flapGLSL(f) {
+    const n = (v) => Number(v).toFixed(4);
+    return {
+      pars: [
+        'attribute float wingSide;',
+        'mat3 b3dFlapRotZ(float a){ float c = cos(a), s = sin(a); return mat3(c,s,0.0, -s,c,0.0, 0.0,0.0,1.0); }'
+      ].join('\n'),
+      setup: [
+        'mat3 wingM = mat3(1.0);',
+        'vec3 wingPiv = vec3(' + n(f.pivot) + ' * wingSide, 0.0, 0.0);',
+        '#ifdef USE_INSTANCING',
+        '{',
+        '  float ph = float(gl_InstanceID) * 2.39;', // phase propre à chaque oiseau (stable quand il se déplace)
+        '  float gl = ' + n(f.glide || 0) + ' * smoothstep(0.1, 0.6, sin(uTime * 0.5 + ph * 0.3));',
+        '  float a = mix(' + n(f.amp) + ' * sin(uTime * ' + n(f.freq) + ' + ph), 0.1, gl);',
+        '  if (wingSide != 0.0) wingM = b3dFlapRotZ(a * wingSide);',
+        '}',
+        '#endif'
+      ].join('\n')
+    };
+  }
+
+  // Matériau toon pour instances : teinte par instance appliquée seulement là où tintMask = 1,
+  // et léger balancement au vent (sway) proportionnel à la hauteur.
+  function instancedMat(opts = {}) {
+    const m = new THREE.MeshToonMaterial(Object.assign({ vertexColors: true, gradientMap: gradientMap() }, opts.material || {}));
+    const sway = opts.sway || 0;
+    const bounce = opts.bounce || 0;
+    const people = !!opts.people;
+    const phase = !!opts.peoplePhase;
+    const flap = opts.flap ? flapGLSL(opts.flap) : null;
+    const snow = opts.snow || 0;
+    m.onBeforeCompile = (shader) => {
+      if (snow) {
+        shader.uniforms.uSnow = shared.uSnow;
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\nuniform float uSnow;')
+          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + SNOW_FRAG.replace('SNOW_AMOUNT', Number(snow).toFixed(3)));
+      }
+      shader.uniforms.uTime = shared.uTime;
+      shader.uniforms.uRider = shared.uRider;
+      shader.uniforms.uWind = shared.uWind;
+      let vs = shader.vertexShader;
+      if (flap) {
+        vs = vs
+          .replace('#include <common>', '#include <common>\n' + flap.pars)
+          .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + flap.setup + '\nobjectNormal = wingM * objectNormal;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = wingPiv + wingM * (transformed - wingPiv);');
+      }
+      if (people) {
+        vs = vs
+          .replace('#include <common>', '#include <common>\n' + PEOPLE_PARS + (phase ? '\n' + PHASE_PARS : ''))
+          .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + peopleSetup(phase) + '\nobjectNormal = armM * objectNormal;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = armPiv + armM * (transformed - armPiv);\ntransformed.y += jump;');
+      }
+      shader.vertexShader = vs
+        .replace('#include <common>', '#include <common>\nattribute float tintMask;\nuniform float uTime;\nuniform vec3 uWind;')
+        .replace('#include <color_vertex>', [
+          '#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )',
+          '  vColor = vec3( 1.0 );',
+          '#endif',
+          '#ifdef USE_COLOR',
+          '  vColor *= color;',
+          '#endif',
+          '#ifdef USE_INSTANCING_COLOR',
+          '  vColor.xyz *= mix(vec3(1.0), instanceColor.xyz, tintMask);',
+          '#endif'
+        ].join('\n'))
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + swayGLSL(sway, bounce));
+    };
+    m.customProgramCacheKey = () => 'inst-' + sway + '-' + bounce + '-' + people + phase + '-' + snow + '-' + (opts.flap ? JSON.stringify(opts.flap) : '');
+    return m;
+  }
+
+  // Balancement au vent : plus ample et plus rapide quand le vent forcit, et la plante penche dans le sens du vent
+  // (uWind.xy = direction dans le monde, ramenée dans le repère de l'instance ; uWind.z = force).
+  function swayGLSL(sway, bounce) {
+    let s = '';
+    if (sway > 0 || bounce > 0) {
+      s += '#ifdef USE_INSTANCING\n';
+      s += 'float phase_ = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.23;\n';
+      if (sway > 0) {
+        s += 'float h_ = max(position.y, 0.0);\n';
+        s += 'float ws_ = uWind.z;\n';
+        s += 'float amp_ = ' + sway.toFixed(4) + ' * (0.6 + 1.4 * ws_);\n';
+        s += 'transformed.x += sin(uTime * (1.7 + 1.6 * ws_) + phase_) * amp_ * h_ * h_;\n';
+        s += 'transformed.z += cos(uTime * (1.3 + 1.3 * ws_) + phase_ * 1.3) * amp_ * 0.6 * h_ * h_;\n';
+        s += 'vec3 wl_ = transpose(mat3(instanceMatrix)) * vec3(uWind.x, 0.0, uWind.y);\n';
+        s += 'wl_ /= max(length(wl_), 1e-4);\n';
+        s += 'transformed.xz += wl_.xz * ' + (sway * 2.6).toFixed(4) + ' * ws_ * ws_ * h_ * h_ * (0.85 + 0.15 * sin(uTime * 2.3 + phase_));\n';
+      }
+      if (bounce > 0) {
+        s += 'transformed.y += abs(sin(uTime * 5.0 + phase_ * 3.0)) * ' + bounce.toFixed(4) + ';\n';
+      }
+      s += '#endif\n';
+    }
+    return s;
+  }
+
+  // Matériau de contour : on gonfle la géométrie le long des normales lissées et on dessine les faces arrière.
+  const outlineCache = new Map();
+  function outlineMat(opts = {}) {
+    const color = opts.color || '#1d1a2b';
+    const width = opts.width || 1;
+    const sway = opts.sway || 0;
+    const bounce = opts.bounce || 0;
+    const people = !!opts.people;
+    const phase = !!opts.peoplePhase;
+    const flap = opts.flap ? flapGLSL(opts.flap) : null;
+    const hip = opts.hip || null; // fessiers qui suivent les cuisses : {uniforms, instanced}
+    const key = [color, width, sway, bounce, opts.minW, opts.maxW, people, phase, opts.flap ? JSON.stringify(opts.flap) : ''].join('|');
+    if (!hip && outlineCache.has(key)) return outlineCache.get(key);
+    const m = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(color) },
+        uWidth: { value: width },
+        uMinW: { value: opts.minW !== undefined ? opts.minW : 0.006 },
+        uMaxW: { value: opts.maxW !== undefined ? opts.maxW : 0.5 },
+        uOutlineScale: shared.uOutlineScale,
+        uTime: shared.uTime,
+        uRider: shared.uRider,
+        uWind: shared.uWind,
+        fogColor: { value: new THREE.Color() },
+        fogNear: { value: 1 },
+        fogFar: { value: 1000 },
+        fogDensity: { value: 0.0 }
+      },
+      vertexShader: [
+        hip && hip.instanced ? '#define HIP_INSTANCED' : '',
+        '#include <common>',
+        '#include <fog_pars_vertex>',
+        'attribute vec3 outlineNormal;',
+        hip ? HIP_PARS : '',
+        'uniform float uWidth, uMinW, uMaxW, uOutlineScale, uTime;',
+        'uniform vec3 uWind;',
+        people ? PEOPLE_PARS + (phase ? '\n' + PHASE_PARS : '') : '',
+        flap ? flap.pars : '',
+        'void main() {',
+        '  vec3 transformed = position;',
+        '  vec3 n = outlineNormal;',
+        flap ? flap.setup + '\ntransformed = wingPiv + wingM * (transformed - wingPiv);\nn = wingM * n;' : '',
+        people ? peopleSetup(phase) + '\ntransformed = armPiv + armM * (transformed - armPiv);\ntransformed.y += jump;\nn = armM * n;' : '',
+        hip ? (HIP_NORMAL + '\n' + HIP_POS).replace(/objectNormal/g, 'n') : '',
+        swayGLSL(sway, bounce),
+        '  vec4 p = vec4(transformed, 1.0);',
+        '  #ifdef USE_INSTANCING',
+        '    p = instanceMatrix * p;',
+        '    n = mat3(instanceMatrix) * n;',
+        '  #endif',
+        '  vec4 mvPosition = modelViewMatrix * p;',
+        '  vec3 vn = normalize(mat3(modelViewMatrix) * n);',
+        '  float w = clamp(-mvPosition.z * uOutlineScale * uWidth, uMinW * uWidth, uMaxW);',
+        '  mvPosition.xyz += vn * w;',
+        '  gl_Position = projectionMatrix * mvPosition;',
+        '  #include <fog_vertex>',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        '#include <common>',
+        '#include <fog_pars_fragment>',
+        'uniform vec3 uColor;',
+        'void main() {',
+        '  gl_FragColor = vec4(uColor, 1.0);',
+        '  #include <fog_fragment>',
+        '  #include <colorspace_fragment>',
+        '}'
+      ].join('\n'),
+      side: THREE.BackSide,
+      fog: true
+    });
+    if (hip) Object.assign(m.uniforms, hip.uniforms);
+    else outlineCache.set(key, m);
+    return m;
+  }
+
+  // Normales lissées (moyennées par position) pour que le contour reste continu sur les arêtes vives.
+  function computeOutlineNormals(geo) {
+    if (geo.attributes.outlineNormal) return geo;
+    if (!geo.attributes.normal) geo.computeVertexNormals();
+    const pos = geo.attributes.position, nor = geo.attributes.normal;
+    const n = pos.count;
+    const acc = new Map();
+    const keys = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const k = Math.round(pos.getX(i) * 500) + ',' + Math.round(pos.getY(i) * 500) + ',' + Math.round(pos.getZ(i) * 500);
+      keys[i] = k;
+      let a = acc.get(k);
+      if (!a) { a = [0, 0, 0]; acc.set(k, a); }
+      a[0] += nor.getX(i); a[1] += nor.getY(i); a[2] += nor.getZ(i);
+    }
+    const out = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const a = acc.get(keys[i]);
+      const l = Math.hypot(a[0], a[1], a[2]) || 1;
+      out[i * 3] = a[0] / l; out[i * 3 + 1] = a[1] / l; out[i * 3 + 2] = a[2] / l;
+    }
+    geo.setAttribute('outlineNormal', new THREE.BufferAttribute(out, 3));
+    return geo;
+  }
+
+  // Ajoute un contour à un mesh (enfant partageant la géométrie).
+  function addOutline(mesh, opts = {}) {
+    computeOutlineNormals(mesh.geometry);
+    const o = new THREE.Mesh(mesh.geometry, outlineMat(opts));
+    o.castShadow = false;
+    o.receiveShadow = false;
+    o.name = 'outline';
+    o.userData.isOutline = true;
+    mesh.add(o);
+    return o;
+  }
+
+  // Ajoute des contours à tous les meshes d'un groupe.
+  function outlineAll(group, opts = {}) {
+    const meshes = [];
+    group.traverse((o) => { if (o.isMesh && !o.userData.isOutline && !o.userData.noOutline) meshes.push(o); });
+    for (const m of meshes) addOutline(m, opts);
+  }
+
+  // Fusion de géométries (position, normal, color, tintMask[, armSide]) avec couleurs par partie.
+  // parts : [{ geo, color, matrix?, tint? (0/1), arm? (-1/+1 pour les bras animés) }]
+  function merge(parts) {
+    let vCount = 0, iCount = 0;
+    const prepared = parts.map((p) => {
+      let g = p.geo;
+      if (p.matrix) { g = g.clone(); g.applyMatrix4(p.matrix); }
+      if (!g.attributes.normal) g.computeVertexNormals();
+      const idx = g.index ? g.index.array : null;
+      const cnt = g.attributes.position.count;
+      vCount += cnt;
+      iCount += idx ? idx.length : cnt;
+      return { g, idx, cnt, color: new THREE.Color(p.color || '#ffffff'), tint: p.tint ? 1 : 0, arm: p.arm || 0, wing: p.wing || 0, glow: p.glow || 0, sheen: p.sheen || 0 };
+    });
+    const hasGlow = prepared.some((p) => p.glow !== 0);
+    const glow = hasGlow ? new Float32Array(vCount) : null;
+    const hasSheen = prepared.some((p) => p.sheen !== 0);
+    const sheen = hasSheen ? new Float32Array(vCount) : null;
+    const hasHip = prepared.some((p) => p.g.attributes.hipW);
+    const hip = hasHip ? new Float32Array(vCount) : null;
+    const hasArm = prepared.some((p) => p.arm !== 0);
+    const arm = hasArm ? new Float32Array(vCount) : null;
+    const hasWing = prepared.some((p) => p.wing !== 0);
+    const wing = hasWing ? new Float32Array(vCount) : null;
+    const pos = new Float32Array(vCount * 3), nor = new Float32Array(vCount * 3), col = new Float32Array(vCount * 3);
+    const tint = new Float32Array(vCount);
+    const index = vCount > 65535 ? new Uint32Array(iCount) : new Uint16Array(iCount);
+    let vo = 0, io = 0;
+    for (const p of prepared) {
+      const pa = p.g.attributes.position, na = p.g.attributes.normal;
+      for (let i = 0; i < p.cnt; i++) {
+        pos[(vo + i) * 3] = pa.getX(i); pos[(vo + i) * 3 + 1] = pa.getY(i); pos[(vo + i) * 3 + 2] = pa.getZ(i);
+        nor[(vo + i) * 3] = na.getX(i); nor[(vo + i) * 3 + 1] = na.getY(i); nor[(vo + i) * 3 + 2] = na.getZ(i);
+        col[(vo + i) * 3] = p.color.r; col[(vo + i) * 3 + 1] = p.color.g; col[(vo + i) * 3 + 2] = p.color.b;
+        tint[vo + i] = p.tint;
+        if (arm) arm[vo + i] = p.arm;
+        if (wing) wing[vo + i] = p.wing;
+        if (glow) glow[vo + i] = p.glow;
+        if (sheen) sheen[vo + i] = p.sheen;
+        if (hip && p.g.attributes.hipW) hip[vo + i] = p.g.attributes.hipW.getX(i);
+      }
+      if (p.idx) { for (let k = 0; k < p.idx.length; k++) index[io + k] = p.idx[k] + vo; io += p.idx.length; }
+      else { for (let k = 0; k < p.cnt; k++) index[io + k] = vo + k; io += p.cnt; }
+      vo += p.cnt;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('tintMask', new THREE.BufferAttribute(tint, 1));
+    if (arm) geo.setAttribute('armSide', new THREE.BufferAttribute(arm, 1));
+    if (wing) geo.setAttribute('wingSide', new THREE.BufferAttribute(wing, 1));
+    if (glow) geo.setAttribute('glow', new THREE.BufferAttribute(glow, 1));
+    if (sheen) geo.setAttribute('sheen', new THREE.BufferAttribute(sheen, 1));
+    if (hip) geo.setAttribute('hipW', new THREE.BufferAttribute(hip, 1));
+    geo.setIndex(new THREE.BufferAttribute(index, 1));
+    geo.computeBoundingSphere();
+    return geo;
+  }
+
+  // Petite aide pour construire des matrices de transformation.
+  const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
+  function tr(x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx) {
+    _e.set(rx, ry, rz);
+    _q.setFromEuler(_e);
+    _p.set(x, y, z);
+    _s.set(sx, sy, sz);
+    return new THREE.Matrix4().compose(_p, _q, _s);
+  }
+
+  // Texture canvas avec du texte (panneaux, banderoles…).
+  function textTexture(draw, w, h) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    draw(ctx, w, h);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    return t;
+  }
+
+  /* Reflet d'un tissu tendu (lycra du cuissard des cyclistes détaillés) sur les sommets marqués « sheen » (0..1) : un reflet en deux
+     paliers de la lumière principale et un liseré lumineux sur les bords tournés vers elle. L'ombrage toon aplatit un tissu sombre ;
+     le reflet en montre les formes, comme sur une photo. */
+  const SHEEN_FRAG = [
+    '#if NUM_DIR_LIGHTS > 0',
+    'if (vSheen > 0.0) {',
+    '  vec3 shL = directionalLights[0].direction;',
+    '  float shNL = max(dot(normal, shL), 0.0);',
+    '  float shS = pow(max(dot(normal, normalize(shL + geometryViewDir)), 0.0), 20.0) * step(0.001, shNL);',
+    '  float shB = 0.5 * smoothstep(0.22, 0.3, shS) + 0.5 * smoothstep(0.62, 0.7, shS);',
+    '  float shR = smoothstep(0.6, 0.78, 1.0 - max(dot(normal, geometryViewDir), 0.0)) * smoothstep(0.0, 0.3, shNL);',
+    '  outgoingLight += vSheen * (0.06 * shB + 0.03 * shR) * directionalLights[0].color;',
+    '}',
+    '#endif'
+  ].join('\n');
+  function sheenPatch(m) {
+    const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
+    m.onBeforeCompile = (shader, renderer) => {
+      if (prev) prev.call(m, shader, renderer);
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float sheen;\nvarying float vSheen;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSheen = sheen;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vSheen;')
+        .replace('#include <opaque_fragment>', SHEEN_FRAG + '\n#include <opaque_fragment>');
+    };
+    m.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|sheen';
+    return m;
+  }
+
+  /* Fessiers qui suivent les cuisses (cyclistes détaillés) : les sommets marqués hipW (signe : côté -x ou +x ; valeur : part du
+     mouvement de la cuisse) tournent autour de l'axe des hanches (uHipP : y, z dans le repère du maillage) de cette part de l'écart
+     d'angle de la cuisse de leur côté (uHipA, ou aHip par instance : gauche -x, droite +x ; + quand le genou monte), et se gonflent
+     quand la jambe pousse (contraction du grand fessier). Le pédalage part des fessiers. */
+  const HIP_PARS = [
+    'attribute float hipW;',
+    'uniform vec2 uHipP;',
+    '#ifdef HIP_INSTANCED',
+    'attribute vec2 aHip;',
+    '#define HIP_A aHip',
+    '#else',
+    'uniform vec2 uHipA;',
+    '#define HIP_A uHipA',
+    '#endif',
+    'vec3 hipRot(vec3 v, float a, vec2 piv) { vec2 p = v.yz - piv; float c = cos(a), s = sin(a); v.yz = piv + vec2(p.x * c - p.y * s, p.x * s + p.y * c); return v; }',
+    'vec3 hipDir(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(v.x, v.y * c - v.z * s, v.y * s + v.z * c); }'
+  ].join('\n');
+  // la normale d'abord (objectNormal ; n dans le contour), puis la position
+  const HIP_NORMAL = [
+    'float hipD_ = hipW < 0.0 ? HIP_A.x : HIP_A.y, hipK_ = abs(hipW);',
+    'float hipA_ = -hipD_ * hipK_;',
+    'float hipB_ = 0.05 * max(0.0, -hipD_) * hipK_ * (1.0 - hipK_) * 2.5;',
+    'objectNormal = hipDir(objectNormal, hipA_);'
+  ].join('\n');
+  const HIP_POS = 'transformed = hipRot(transformed, hipA_, uHipP) + normalize(objectNormal) * hipB_;';
+  function hipPatch(m, uniforms, instanced) {
+    const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
+    m.onBeforeCompile = (shader, renderer) => {
+      if (prev) prev.call(m, shader, renderer);
+      Object.assign(shader.uniforms, uniforms);
+      shader.vertexShader = (instanced ? '#define HIP_INSTANCED\n' : '') + shader.vertexShader
+        .replace('#include <common>', '#include <common>\n' + HIP_PARS)
+        .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + HIP_NORMAL)
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + HIP_POS);
+    };
+    m.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|hip' + (instanced ? 'i' : '');
+    return m;
+  }
+
+  // Matériau toon dont les pièces marquées « glow » (fenêtres, lampes) s'allument la nuit (lumière chaude).
+  function glowMat(opts) {
+    const m = new THREE.MeshToonMaterial(Object.assign({ vertexColors: true, gradientMap: gradientMap() }, opts || {}));
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.uNight = shared.uNight;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float glow;\nvarying float vGlow;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glow;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vGlow;\nuniform float uNight;')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.78, 0.42) * vGlow * uNight * 1.6;');
+    };
+    m.customProgramCacheKey = () => 'glow';
+    return m;
+  }
+
+  B3D.toon = { shared, snowPatch, sheenPatch, hipPatch, glowMat, gradientMap, terrainGradientMap, mat, instancedMat, outlineMat, computeOutlineNormals, addOutline, outlineAll, merge, tr, textTexture, _m };
+})(typeof window !== 'undefined' ? window : globalThis);

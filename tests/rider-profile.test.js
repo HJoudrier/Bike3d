@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { PYR } = require('./helpers.js');
-require(path.join(__dirname, '..', 'js/core/store.js'));
+require(path.join(__dirname, '..', 'Commun/js/core/store.js'));
 
 const store = PYR.store;
 store.save = () => {};                       // pas de stockage local dans les tests

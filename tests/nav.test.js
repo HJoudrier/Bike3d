@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { PYR } = require('./helpers.js');
-require(path.join(__dirname, '..', 'js/engine/nav.js'));
+require(path.join(__dirname, '..', 'Commun/js/engine/nav.js'));
 
 const N = PYR.nav;
 const R = 6371008.8, DEG = Math.PI / 180, LAT0 = 45, LNG0 = 5;

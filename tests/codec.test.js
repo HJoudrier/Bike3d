@@ -5,11 +5,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { PYR, makeProfile } = require('./helpers.js');
-require(path.join(__dirname, '..', 'js/core/codec.js'));
-require(path.join(__dirname, '..', 'js/core/race-data.js'));
-require(path.join(__dirname, '..', 'js/ui/relay.js'));
-const qrcode = require(path.join(__dirname, '..', 'vendor/qrcode-generator/qrcode.js'));
-const jsQR = require(path.join(__dirname, '..', 'vendor/jsqr/jsQR.js'));
+require(path.join(__dirname, '..', 'Commun/js/core/codec.js'));
+require(path.join(__dirname, '..', 'Commun/js/core/race-data.js'));
+require(path.join(__dirname, '..', 'Commun/js/jeu/relay.js'));
+const qrcode = require(path.join(__dirname, '..', 'Commun/vendor/qrcode-generator/qrcode.js'));
+const jsQR = require(path.join(__dirname, '..', 'Commun/vendor/jsqr/jsQR.js'));
 
 const C = PYR.codec, R = PYR.raceData;
 

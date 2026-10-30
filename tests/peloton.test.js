@@ -6,8 +6,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { PYR, makeProfile, setupFor, DEFAULT_RIDER, DEFAULT_BIKE } = require('./helpers.js');
-require(path.join(__dirname, '..', 'js/core/codec.js'));
-require(path.join(__dirname, '..', 'js/core/race-data.js'));
+require(path.join(__dirname, '..', 'Commun/js/core/codec.js'));
+require(path.join(__dirname, '..', 'Commun/js/core/race-data.js'));
 
 const Dr = PYR.draft, Pel = PYR.peloton, Race = PYR.race, Tac = PYR.tactics, Sim = PYR.sim, Ph = PYR.physics, R = PYR.raceData;
 

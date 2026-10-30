@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<!-- author : Hugo Joudrier-Faure -->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="strict-origin-when-cross-origin"> <!-- requis par la politique d'usage des tuiles OSM -->
+  <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
+  <title>Pacing optimal — PaceYourRide</title>
+  <meta name="description" content="La puissance à développer à chaque seconde pour boucler ton parcours le plus vite possible, et ses exports.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a78d6'/%3E%3Cpath d='M10 44 L24 26 L32 36 L42 20 L54 44 Z' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../Commun/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="../Commun/css/style.css">
+  <link rel="stylesheet" href="../Commun/css/game-mobile.css">
+  <link rel="stylesheet" href="../Commun/css/ride.css">
+</head>
+<body data-page="perf" data-tab="perf">
+  <header class="topbar">
+    <a class="brand" href="index.html" title="Retour à l'accueil">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor"/><path d="M10 44 L24 26 L32 36 L42 20 L54 44 Z" fill="#fff"/></svg>
+      <span>PaceYourRide</span>
+    </a>
+        <div class="top-actions" id="top-actions">
+      <a class="btn ghost" href="documentation.html" target="_blank" rel="noopener" title="Documentation : guide d'utilisation, modèles mécanique et physiologique, simulation et algorithmes d'optimisation" aria-label="Documentation"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></a>
+      <button class="btn ghost" id="btn-export-project" type="button" title="Exporter : enregistrer tout le projet dans un fichier" aria-label="Exporter le projet"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></button>
+      <label class="btn ghost" title="Importer : ouvrir un projet enregistré" aria-label="Importer un projet"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg><input type="file" id="input-import-project" accept=".json,application/json" hidden></label>
+      <button class="btn ghost" id="btn-reset" type="button" title="Réinitialiser : tout effacer et repartir des valeurs par défaut" aria-label="Réinitialiser"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+    </div>
+    <div class="burger-wrap">
+      <button class="btn ghost burger" id="btn-menu" type="button" title="Menu : les pages du site" aria-label="Menu" aria-haspopup="true" aria-expanded="false" aria-controls="site-menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <nav class="site-menu" id="site-menu" aria-label="Sections" hidden>
+        <a href="parcours.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-5h6.5"/></svg><span>Parcours</span></a>
+        <a href="athlete.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Athlète</span></a>
+        <a href="equipement.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17 9.5 8h5l4 9M9.5 8 12.5 17H5.5M14.5 5h2.5"/></svg><span>Équipements</span></a>
+        <a href="pacing.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4"/><path d="m12 14 3-3"/><circle cx="12" cy="14" r="8"/></svg><span>Pacing optimal</span></a>
+        <a href="../Jeu2D/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h4M8 10v4"/><path d="M15 11.5h.01M18 13.5h.01"/><path d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5z"/></svg><span>Jeu 2D</span></a>
+        <a href="../Jeu3D/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h4M8 10v4"/><path d="M15 11.5h.01M18 13.5h.01"/><path d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5z"/></svg><span>Jeu 3D</span></a>
+        <a href="../Compteur/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg><span>Compteur</span></a>
+        <a href="../index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Applications</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="map-wrap">
+        <div id="map" aria-label="Carte"></div>
+
+        <!-- alerte de course (incident, fringale, arrivée…) : seul élément du jeu qui reste sur la carte -->
+        <div class="hud-banner" id="hud-banner" hidden></div>
+        <!-- mode jeu : décompte avant le départ (réglage « Décompte avant le départ »), au centre de l'écran de course -->
+        <div class="game-countdown" id="game-countdown" role="status" aria-live="polite" hidden></div>
+
+        <div class="map-status" id="map-status" hidden></div>
+        <!-- course en direct : demandes d'accès à valider (organisateur) -->
+        <div class="live-requests" id="live-requests" hidden aria-live="polite"></div>
+      </div>
+
+      <div class="bottom" id="bottom">
+        <div class="bottom-view" data-view="perf">
+          <div class="chart-head">
+            <h3>Stratégie seconde par seconde</h3>
+            <div class="seg-control" role="radiogroup" aria-label="Axe horizontal">
+              <button data-xaxis="dist" aria-pressed="true">Distance</button>
+              <button data-xaxis="time" aria-pressed="false">Temps</button>
+            </div>
+          </div>
+          <div class="chart-box tall" id="perf-chart"></div>
+        </div>
+        <div class="bottom-view" data-view="pweather">
+          <div class="chart-head">
+            <h3>Météo le long du parcours</h3>
+            <span class="hint">Aux heures de passage de la stratégie calculée (sinon à 30 km/h) : température, sens et vitesse du vent, pluie.</span>
+          </div>
+          <div class="chart-box tall" id="weather-chart-perf"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side" id="side">
+      <!-- ============ PERFORMANCE ============ -->
+      <section class="panel" data-panel="perf">
+        <h2>Meilleure performance possible</h2>
+        <p class="hint">L'algorithme calcule la puissance à développer à chaque seconde pour boucler le parcours le plus vite possible, sans dépasser ta courbe record, ton W′ (HIE) ni ton endurance.</p>
+        <div class="grid2">
+          <div class="field"><label for="p-v0">Vitesse de départ (km/h)</label><input type="number" id="p-v0" min="0" max="80" step="1" data-bind="perf.startSpeedKmh"></div>
+          <div class="field"><label for="p-temp">Température (°C)</label><input type="number" id="p-temp" min="-20" max="45" step="1" data-bind="env.temperature"><small class="hint" id="p-temp-note" hidden>Remplacée par la météo (onglet Météo).</small></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="p-corner">Virages</label>
+            <select id="p-corner" data-bind="perf.cornering">
+              <option value="off">Ignorés</option>
+              <option value="safe">Prudent (0,3 g)</option>
+              <option value="normal">Normal (0,45 g)</option>
+              <option value="racing">Engagé (0,6 g)</option>
+            </select>
+          </div>
+          <div class="field"><label for="p-vmax">Vitesse max en descente (km/h)</label><input type="number" id="p-vmax" min="20" max="130" step="1" data-bind="perf.vmaxKmh"></div>
+        </div>
+        <div class="field"><label for="p-margin">Forme (% de mes capacités)</label><input type="number" id="p-margin" min="10" max="300" step="1" data-bind="perf.formPct"></div>
+        <div class="field" id="p-formref-row" hidden><label for="p-formref">W′bal et temps avant épuisement calculés sur</label>
+          <select id="p-formref">
+            <option value="athlete">Le profil de l'athlète à 100 %</option>
+            <option value="form">Le profil ajusté à la forme</option>
+          </select>
+          <small class="hint">La forme règle la puissance du plan. Avec le profil à 100 %, W′bal et le temps avant épuisement se lisent sur les vraies capacités de l'athlète : au-dessus de 100 % de forme, le plan les dépasse.</small>
+        </div>
+        <div class="field"><label for="p-algo">Algorithme de calcul</label>
+          <select id="p-algo" data-bind="perf.algo">
+            <option value="analytic">Analytique — équations d'optimalité (rapide)</option>
+            <option value="gradient">Descente de gradient — par tronçons, jusqu'à la seconde</option>
+            <option value="hybrid">Hybride — analytique et gradient, on garde le meilleur</option>
+          </select>
+          <small class="hint">Gradient : part de la puissance constante, mesure ce que coûte ou rapporte chaque watt sur chaque tronçon et en déplace d'un tronçon à l'autre, en affinant le découpage de 32 s jusqu'à 1 s. Hybride : lance la descente depuis le plan analytique et depuis la puissance constante, et garde le meilleur ; jamais plus lent que l'analytique. Plus long à calculer.</small>
+        </div>
+        <div class="field checks">
+          <label><input type="checkbox" id="p-physio" data-bind="perf.physio"> Tenir compte du modèle physiologique (glycogène, chaleur, eau, fatigue)</label>
+          <small class="hint">Chaque plan est rejoué seconde par seconde avec le modèle physiologique (carte athlète de la page Athlète), la météo et le plan d'alimentation du matériel du compteur. Si la PC effective passe sous la puissance du plan (le W′ se viderait), l'endurance du jour est réduite et la capacité suit le modèle le long du parcours, puis le plan est recalculé (quelques calculs de plus). La chaleur n'est alors plus appliquée en moyenne. Les graphiques montrent la PC effective prévue et la température centrale.</small>
+        </div>
+
+        <h3>Météo</h3>
+        <div data-wx-api></div>
+
+        <button class="btn primary big" id="btn-optimize">Calculer la stratégie optimale</button>
+        <div class="progress" id="opt-progress" hidden><div class="progress-fill" id="opt-progress-fill"></div></div>
+        <div class="status-line" id="perf-status" role="status" aria-live="polite"></div>
+        <p class="hint" id="p-weather-note" hidden></p>
+
+        <div id="perf-results" hidden>
+          <div class="hero">
+            <span class="hero-label">Temps optimal</span>
+            <strong class="hero-value" id="res-time">–</strong>
+            <span class="hero-sub" id="res-compare"></span>
+          </div>
+          <div class="tiles" id="res-tiles"></div>
+          <h3>Temps par zone de puissance</h3>
+          <div class="zones-bar" id="res-zones"></div>
+          <div class="zones-legend" id="res-zones-legend"></div>
+          <h3>Temps intermédiaires</h3>
+          <div class="table-wrap"><table class="simple num" id="res-splits"></table></div>
+          <h3>Puissance seconde par seconde</h3>
+          <div class="pager">
+            <button class="btn small" id="sec-prev">◀</button>
+            <input type="range" id="sec-range" min="0" max="0" step="1" value="0" aria-label="Minute affichée">
+            <button class="btn small" id="sec-next">▶</button>
+            <span id="sec-label"></span>
+          </div>
+          <div class="table-wrap"><table class="simple num" id="res-seconds"></table></div>
+          <div class="toolbar">
+            <button class="btn" id="btn-export-csv">Exporter le plan (CSV, chaque seconde)</button>
+            <button class="btn" id="btn-split" title="Découpe le plan en tronçons à puissance constante ; les limites se modifient ensuite sur le profil d'élévation et sur la carte, avant l'export">Découper en tronçons</button>
+            <button class="btn" id="btn-export-plan-gpx" title="Trace du parcours avec un repère de puissance à chaque changement d'allure, à charger sur un compteur vélo">Exporter le plan (GPX, compteur vélo)</button>
+            <button class="btn" id="btn-export-plan-tcx" title="Parcours TCX : un tour par tronçon avec son temps et sa distance, et un point de parcours donnant la puissance cible, la vitesse moyenne et le temps du tronçon, pour suivre le plan sur le vélo">Exporter le plan (TCX, tronçons)</button>
+            <button class="btn" id="btn-export-plan-fit" title="Entraînement structuré FIT (Garmin Edge, Wahoo, Karoo…) : une étape par tronçon, longueur en mètres et plage de puissance cible en watts">Entraînement (FIT)</button>
+            <button class="btn" id="btn-export-plan-zwo" title="Entraînement ZWO (Zwift, Rouvy…) : étapes de durée donnée, puissance en % de la PMA">Entraînement (ZWO)</button>
+            <button class="btn" id="btn-export-plan-mrc" title="Entraînement MRC (TrainerRoad, Golden Cheetah…) : minutes et % de la PMA">Entraînement (MRC)</button>
+            <button class="btn ghost" id="btn-play-plan">Jouer contre ce plan</button>
+            <button class="btn ghost" id="btn-ride-plan" title="Suivre ce plan pendant une vraie sortie, avec le GPS et un capteur de puissance : compteur du téléphone">Suivre ce plan en sortie</button>
+          </div>
+          <div class="toolbar" id="seg-bar" hidden>
+            <span class="hint" id="seg-note"></span>
+            <button class="btn small" id="btn-seg-edit">Modifier le découpage</button>
+            <button class="btn small ghost" id="btn-seg-auto" hidden title="Recalcule un découpage automatique et abandonne les limites modifiées">Découpage automatique</button>
+            <button class="btn small ghost" id="btn-hide-segments">Masquer les tronçons</button>
+            <div class="table-wrap seg-table-wrap" id="seg-table-wrap" hidden><table class="simple num" id="seg-table"></table></div>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="credit">Réalisée par <a href="mailto:hugo.joudrier@gmail.com">Hugo Joudrier-Faure</a></footer>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="../Commun/js/menu.js"></script>
+
+  <!-- scripts de l'application (une seule liste pour toutes les pages) puis démarrage de cette page : Commun/js/boot.js, Commun/js/app.js -->
+  <script src="../Commun/js/boot.js" data-app="pro"></script>
+</body>
+</html>
