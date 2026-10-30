@@ -59,6 +59,7 @@
       physio: true,            // modèle physiologique (avec l'alimentation) : glycogène par fibres, glycémie, chaleur, eau, fatigue, caféine
       fx: true,                // animations météo sur la carte (pluie, battement des manches à air)
       pick: { route: '', athlete: '', bike: '', outfit: '' },   // jeux : éléments de la bibliothèque choisis (identifiants ; '' : réglages par défaut, ou le premier proposé)
+      gearEdit: {},            // Jeu3D : matériel modifié sur la vue 3D (catégorie du catalogue, ou 'position' → article), repris après chaque choix (gear-edit.js)
       weatherMode: 'random',   // jeux : météo 'random' (aléatoire évolutive) ou 'date' (celle d'un jour et d'une heure)
       weatherSeed: 0,          // jeux : graine du temps aléatoire
       display: '2d',           // écran de course : '2d' la carte (Jeu2D), '3d' l'univers de Bike3D (Jeu3D)

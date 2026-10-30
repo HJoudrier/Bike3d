@@ -37,7 +37,7 @@
   // interface commune aux deux jeux (carte 2D, 3D) : la page de choix et l'écran de course
   const GAME_UI = [
     'Commun/vendor/qrcode-generator/qrcode.js',
-    'Commun/js/jeu/view3d.js', 'Commun/js/jeu/game-source.js', 'Commun/js/jeu/route-thumb.js', 'Commun/js/jeu/game-setup.js', 'Commun/js/jeu/tab-game.js', 'Commun/js/jeu/game-mobile.js',
+    'Commun/js/jeu/view3d.js', 'Commun/js/jeu/game-source.js', 'Commun/js/jeu/route-thumb.js', 'Commun/js/jeu/gear-edit.js', 'Commun/js/jeu/game-setup.js', 'Commun/js/jeu/tab-game.js', 'Commun/js/jeu/game-mobile.js',
     'Commun/js/jeu/challenges.js', 'Commun/js/jeu/qr.js', 'Commun/js/jeu/relay.js', 'Commun/js/jeu/live.js',
   ];
 

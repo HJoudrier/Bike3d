@@ -197,6 +197,7 @@
     const bike = G.pick.bike === NONE ? null : find('bike', pickId('bike')), outfit = G.pick.outfit === NONE ? null : find('outfit', pickId('outfit'));
     if (bike) L.apply('bike', st, bike.data);
     if (outfit) L.apply('outfit', st, outfit.data);
+    if (PYR.gearEdit) PYR.gearEdit.reapply();         // matériel modifié sur la vue 3D (Jeu3D)
     // réglages de stratégie et plan optimal du projet de PaceYourRide : le fantôme n'est repris que s'il correspond au choix (plan-link.js)
     const pj = S.project;
     if (pj) {
@@ -220,9 +221,11 @@
         c.querySelector('.gs-pick').textContent = on ? '✓ Parcours choisi' : 'Choisir ce parcours';
       });
     }
+    if ((kind === 'bike' || kind === 'outfit') && PYR.gearEdit) PYR.gearEdit.clear(kind);     // un autre vélo ou une autre tenue : on repart de la bibliothèque
     if (kind === 'athlete') $$('#gs-athletes .gs-ath').forEach((c, i) => c.setAttribute('aria-selected', String(items('athlete')[i] && items('athlete')[i].id === id)));
     compose();
     renderSummary();
+    if (PYR.gearEdit) PYR.gearEdit.refresh();
   }
 
   /* ---------- 3. météo ---------- */
@@ -323,6 +326,8 @@
       $('#g-live-create').addEventListener('click', () => start({ do: 'live-create' }));
       $('#g-live-join').addEventListener('click', () => start({ do: 'live-join' }));
       renderAll();
+      // Jeu3D : matériel modifié sur la vue 3D (gear-edit.js) ; les changements sont enregistrés tout de suite
+      if ($('#gs-gear3d')) PYR.gearEdit.init($('#gs-gear3d'), () => { PYR.app.refreshBindings(); });
       setMode(S.mode, true);
       store.on('weather', () => { randomSummary(); renderSummary(); });      // météo récupérée, ou tirée à nouveau
       // lecture de Dropbox à l'ouverture, quand l'appareil est connecté
