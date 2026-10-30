@@ -39,6 +39,9 @@
   const SURFACE_RAMP = ['#c9a77c', '#b88a55', '#a1733f', '#86592b', '#6b421c', '#4f2e10'];
 
   const M = {
+    // fond de carte choisi (avant l'initialisation de la carte : pages sans carte principale, comme les vignettes de parcours des jeux ; init() le remplace)
+    baseSpecs: BASE_LAYERS,
+    baseSpec: () => BASE_LAYERS.find((b) => b.id === (store.state.ui && store.state.ui.baseLayer)) || BASE_LAYERS[0],
     /** Couleur d'une portion de revêtement d'après son coefficient de friction (aussi pour le profil de la page Parcours). */
     surfaceColor(sp) {
       const f = PYR.physics.surfaceFactor(sp);

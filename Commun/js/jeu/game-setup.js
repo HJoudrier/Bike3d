@@ -115,7 +115,8 @@
     if (!list.length) empty.textContent = 'Aucun parcours pour le moment. Trace-en un dans PaceYourRide et enregistre-le dans la bibliothèque ; il apparaîtra ici après la synchronisation Dropbox.';
     const cur = pickId('route');
     for (const { it, p } of list) {
-      const canvas = h('canvas', { 'aria-hidden': 'true' });
+      // 3D : une vue qui tourne ; 2D : le tracé sur le fond de carte
+      const canvas = is3d() ? h('canvas', { 'aria-hidden': 'true' }) : h('div', { class: 'gs-map', 'aria-hidden': 'true' });
       const stat = (cls, label, value) => h('span', { class: cls }, h('small', null, label), h('b', null, value));
       const card = h('div', { class: 'gs-route', role: 'option', tabindex: '-1', 'aria-selected': String(it.id === cur), dataset: { id: it.id },
         'aria-label': `${it.name}, ${fmt(p.length / 1000, 1)} km, D+ ${fmt(p.up)} m, D− ${fmt(p.down)} m` },
@@ -131,7 +132,7 @@
         h('div', { class: 'gs-pick' }, it.id === cur ? '✓ Parcours choisi' : 'Choisir ce parcours')));
       card.addEventListener('click', () => { if (canvas.dataset.dragged === '1') { canvas.dataset.dragged = ''; return; } setPick('route', it.id); });
       track.appendChild(card);
-      S.views.push(PYR.routeThumb.mount(canvas, p));
+      S.views.push(is3d() ? PYR.routeThumb.mount(canvas, p) : PYR.routeThumb.mountMap(canvas, p));
     }
     const sel = track.querySelector('[aria-selected="true"]');
     if (sel) track.scrollTo({ left: sel.offsetLeft - (track.clientWidth - sel.clientWidth) / 2, behavior: 'auto' });

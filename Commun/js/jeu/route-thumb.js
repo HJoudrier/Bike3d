@@ -236,5 +236,36 @@
     return view;
   }
 
-  PYR.routeThumb = { geometry, meshData, gradeColor, mount, loadThree, get webgl() { return E.ok; } };
+  /**
+   * Vignette 2D d'un parcours dans `box` : le tracé (liseré blanc, trait bleu, départ vert, arrivée rouge) sur le fond de carte de l'application,
+   * cadré sur le parcours. La carte ne bouge pas (rien ne capte la molette ni le doigt : la page continue de défiler) et n'est créée que
+   * lorsque la vignette devient visible (un fond de carte par parcours, c'est autant de tuiles à charger).
+   */
+  function mountMap(box, profile) {
+    const view = { destroyed: false, map: null, destroy() { view.destroyed = true; if (io) io.disconnect(); if (view.map) { view.map.remove(); view.map = null; } } };
+    let io = null;
+    const build = () => {
+      if (view.destroyed || view.map || !globalThis.L || !profile || !(profile.n >= 2)) return;
+      const L = globalThis.L, pts = [], stride = Math.max(1, Math.floor(profile.n / 400));
+      for (let i = 0; i < profile.n; i += stride) pts.push([profile.lat[i], profile.lng[i]]);
+      pts.push([profile.lat[profile.n - 1], profile.lng[profile.n - 1]]);
+      const map = view.map = L.map(box, { zoomControl: false, dragging: false, touchZoom: false, doubleClickZoom: false, scrollWheelZoom: false, boxZoom: false, keyboard: false, tap: false, zoomSnap: 0.25, attributionControl: true });
+      map.attributionControl.setPrefix('');
+      const spec = PYR.map && PYR.map.baseSpec ? PYR.map.baseSpec() : null;
+      if (spec) L.tileLayer(spec.url, { maxZoom: spec.maxZoom, subdomains: spec.subdomains || 'abc', attribution: spec.attribution, crossOrigin: true }).addTo(map);
+      const line = L.polyline(pts, { color: '#fff', weight: 7, opacity: 0.9, interactive: false }).addTo(map);
+      L.polyline(pts, { color: '#2a78d6', weight: 4, opacity: 1, interactive: false }).addTo(map);
+      const dot = (p, color) => L.circleMarker(p, { radius: 6, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1, interactive: false }).addTo(map);
+      dot(pts[0], '#2e9e4f'); dot(pts[pts.length - 1], '#d62828');
+      map.invalidateSize({ animate: false });
+      map.fitBounds(line.getBounds(), { padding: [18, 18], animate: false });
+    };
+    if (globalThis.IntersectionObserver) {
+      io = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) { build(); if (io) io.disconnect(); } }, { rootMargin: '200px' });
+      io.observe(box);
+    } else build();
+    return view;
+  }
+
+  PYR.routeThumb = { geometry, meshData, gradeColor, mount, mountMap, loadThree, get webgl() { return E.ok; } };
 })(globalThis.PYR = globalThis.PYR || {});
