@@ -347,10 +347,12 @@
       const cnt = g.attributes.position.count;
       vCount += cnt;
       iCount += idx ? idx.length : cnt;
-      return { g, idx, cnt, color: new THREE.Color(p.color || '#ffffff'), tint: p.tint ? 1 : 0, arm: p.arm || 0, wing: p.wing || 0, glow: p.glow || 0 };
+      return { g, idx, cnt, color: new THREE.Color(p.color || '#ffffff'), tint: p.tint ? 1 : 0, arm: p.arm || 0, wing: p.wing || 0, glow: p.glow || 0, sheen: p.sheen || 0 };
     });
     const hasGlow = prepared.some((p) => p.glow !== 0);
     const glow = hasGlow ? new Float32Array(vCount) : null;
+    const hasSheen = prepared.some((p) => p.sheen !== 0);
+    const sheen = hasSheen ? new Float32Array(vCount) : null;
     const hasArm = prepared.some((p) => p.arm !== 0);
     const arm = hasArm ? new Float32Array(vCount) : null;
     const hasWing = prepared.some((p) => p.wing !== 0);
@@ -369,6 +371,7 @@
         if (arm) arm[vo + i] = p.arm;
         if (wing) wing[vo + i] = p.wing;
         if (glow) glow[vo + i] = p.glow;
+        if (sheen) sheen[vo + i] = p.sheen;
       }
       if (p.idx) { for (let k = 0; k < p.idx.length; k++) index[io + k] = p.idx[k] + vo; io += p.idx.length; }
       else { for (let k = 0; k < p.cnt; k++) index[io + k] = vo + k; io += p.cnt; }
@@ -382,6 +385,7 @@
     if (arm) geo.setAttribute('armSide', new THREE.BufferAttribute(arm, 1));
     if (wing) geo.setAttribute('wingSide', new THREE.BufferAttribute(wing, 1));
     if (glow) geo.setAttribute('glow', new THREE.BufferAttribute(glow, 1));
+    if (sheen) geo.setAttribute('sheen', new THREE.BufferAttribute(sheen, 1));
     geo.setIndex(new THREE.BufferAttribute(index, 1));
     geo.computeBoundingSphere();
     return geo;
@@ -409,6 +413,36 @@
     return t;
   }
 
+  /* Reflet d'un tissu tendu (lycra du cuissard des cyclistes détaillés) sur les sommets marqués « sheen » (0..1) : un reflet en deux
+     paliers de la lumière principale et un liseré lumineux sur les bords tournés vers elle. L'ombrage toon aplatit un tissu sombre ;
+     le reflet en montre les formes, comme sur une photo. */
+  const SHEEN_FRAG = [
+    '#if NUM_DIR_LIGHTS > 0',
+    'if (vSheen > 0.0) {',
+    '  vec3 shL = directionalLights[0].direction;',
+    '  float shNL = max(dot(normal, shL), 0.0);',
+    '  float shS = pow(max(dot(normal, normalize(shL + geometryViewDir)), 0.0), 20.0) * step(0.001, shNL);',
+    '  float shB = 0.5 * smoothstep(0.22, 0.3, shS) + 0.5 * smoothstep(0.62, 0.7, shS);',
+    '  float shR = smoothstep(0.6, 0.78, 1.0 - max(dot(normal, geometryViewDir), 0.0)) * smoothstep(0.0, 0.3, shNL);',
+    '  outgoingLight += vSheen * (0.06 * shB + 0.03 * shR) * directionalLights[0].color;',
+    '}',
+    '#endif'
+  ].join('\n');
+  function sheenPatch(m) {
+    const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
+    m.onBeforeCompile = (shader, renderer) => {
+      if (prev) prev.call(m, shader, renderer);
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float sheen;\nvarying float vSheen;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSheen = sheen;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vSheen;')
+        .replace('#include <opaque_fragment>', SHEEN_FRAG + '\n#include <opaque_fragment>');
+    };
+    m.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|sheen';
+    return m;
+  }
+
   // Matériau toon dont les pièces marquées « glow » (fenêtres, lampes) s'allument la nuit (lumière chaude).
   function glowMat(opts) {
     const m = new THREE.MeshToonMaterial(Object.assign({ vertexColors: true, gradientMap: gradientMap() }, opts || {}));
@@ -425,5 +459,5 @@
     return m;
   }
 
-  B3D.toon = { shared, snowPatch, glowMat, gradientMap, terrainGradientMap, mat, instancedMat, outlineMat, computeOutlineNormals, addOutline, outlineAll, merge, tr, textTexture, _m };
+  B3D.toon = { shared, snowPatch, sheenPatch, glowMat, gradientMap, terrainGradientMap, mat, instancedMat, outlineMat, computeOutlineNormals, addOutline, outlineAll, merge, tr, textTexture, _m };
 })(typeof window !== 'undefined' ? window : globalThis);

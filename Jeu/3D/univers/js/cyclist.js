@@ -792,7 +792,7 @@
     // géométrie est recentrée sur ce point, où le mesh est placé (bouche qui s'ouvre, queue de cheval qui se balance)
     _parts(parts, outline, parent, pivot) {
       const geo = B3D.toon.merge(parts);
-      const mesh = new THREE.Mesh(geo, cached('vc', () => new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: B3D.toon.gradientMap() })));
+      const mesh = new THREE.Mesh(geo, cached('vc', () => B3D.toon.sheenPatch(new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: B3D.toon.gradientMap() }))));
       if (pivot) { geo.translate(-pivot.x, -pivot.y, -pivot.z); mesh.position.copy(pivot); }
       (parent || this.body).add(mesh);
       if (outline) addOutline(mesh, { width: outline, minW: outline < 0.5 ? 0.0015 : 0.004, maxW: outline < 0.5 ? 0.004 : 0.03 });
@@ -815,8 +815,12 @@
       this.torso = new THREE.Mesh(A.torsoGeometry({ q, fem }), toonMap(jerseyTexture(J)));
       this.body.add(this.torso);
       addOutline(this.torso, { width: 0.9, minW: 0.006, maxW: 0.04 });
+      this._parts(A.torsoHem({ q, fem, base: J.base }), 0.6, this.torso);
       if (q > 1) this._parts(A.torsoTrim({ q, fem, base: J.base, accent: J.accent }), 0, this.torso);
-      this.pelvis = this._parts(A.pelvisParts({ q, fem, color: shorts }), 0.8);
+      // bassin et fessiers (reflet du lycra), et le trait du sillon, sans contour
+      const [seat, ...creases] = A.pelvisParts({ q, fem, color: shorts });
+      this.pelvis = this._parts([seat], 0.8);
+      this._parts(creases, 0, this.pelvis);
       // tête : crâne et visage, nez et oreilles (contour fin), yeux et lèvres, cheveux, casque et lunettes
       this.head = new THREE.Group();
       this.head.scale.setScalar(HEAD_FINE);
@@ -862,7 +866,7 @@
       const shinBands = !over ? [[sockFrom, SKIN], [1, sockMat]]
         : sockFrom < coverFrom ? [[sockFrom, SKIN], [coverFrom, sockMat], [1, SHOES.aero]] : [[coverFrom, SKIN], [1, SHOES.aero]];
       const hemT = loose ? 0.86 : 0.78;
-      const thighBands = q > 1 ? [[hemT - 0.05, shorts], [hemT, gripper], [1, SKIN]] : [[hemT, shorts], [1, SKIN]];
+      const thighBands = q > 1 ? [[hemT - 0.05, shorts, 1], [hemT, gripper, 1], [1, SKIN]] : [[hemT, shorts, 1], [1, SKIN]];
       const [sole, detail] = SHOE_PARTS[G.shoes];
       this.sockH = 0;
       this.legs = [];
@@ -1088,6 +1092,12 @@
       const back = Math.atan2(tdir.y, tdir.z);
       this.torso.position.copy(pelvis).addScaledVector(tdir, 0.5);
       this.torso.quaternion.setFromUnitVectors(UP, tdir.normalize());
+      if (fine) {
+        // bassin et fessiers basculés avec le buste
+        const P = B3D.anatomy.pelvisPose(tdir);
+        this.pelvis.position.add(P.offset);
+        this.pelvis.rotation.x = P.tilt;
+      }
       // respiration (modèles fins) : plus ample et plus rapide à l'effort ; la bouche s'ouvre
       const effort = st.effort !== undefined ? clamp(st.effort, 0, 1) : st.standing ? 0.8 : st.pedaling ? 0.35 : 0.05;
       this.effortT = lerp(this.effortT, effort, 1 - Math.exp(-dt * 2));

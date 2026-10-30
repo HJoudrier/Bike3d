@@ -507,8 +507,8 @@ test('cyclistes 3D : trois niveaux de détail, la même pose, une cycliste', { s
   assert.ok(A.headParts({ q: 1, eyes: true }).marks.length > A.headParts({ q: 1, eyes: false }).marks.length);
 });
 
-test('cyclistes 3D : anatomie (géométries valides, poitrine d\'une cycliste, couleurs des membres)', { skip: !hasBike3d && 'Bike3D absent' }, () => {
-  const A = bike3d().anatomy;
+test('cyclistes 3D : anatomie (géométries valides, poitrine d\'une cycliste, fessiers, épaules, couleurs des membres)', { skip: !hasBike3d && 'Bike3D absent' }, () => {
+  const B3D = bike3d(), A = B3D.anatomy;
   const finite = (geo) => [...geo.attributes.position.array, ...geo.attributes.normal.array].every(Number.isFinite);
   for (const q of [1, 2]) {
     for (const fem of [false, true]) {
@@ -528,17 +528,27 @@ test('cyclistes 3D : anatomie (géométries valides, poitrine d\'une cycliste, c
   };
   assert.ok(chest(true) > chest(false) + 0.2, `poitrine : ${chest(true).toFixed(2)} contre ${chest(false).toFixed(2)}`);
   assert.ok(A.headParts({ q: 1, fem: true }).tail.length > 0 && A.headParts({ q: 1, fem: false }).tail.length === 0);
-  // fessiers : deux, séparés par le sillon, bien en arrière du bassin, plus pleins chez une cycliste
-  const glutes = (fem) => {
-    const [core, ...lobes] = A.pelvisParts({ q: 2, fem });
-    core.geo.computeBoundingBox();
-    const back = lobes.map((p) => { const g = p.geo.clone().applyMatrix4(p.matrix); g.computeBoundingBox(); return g.boundingBox; });
-    return { n: lobes.length, behind: core.geo.boundingBox.min.z - Math.min(...back.map((b) => b.min.z)), cleft: Math.min(...back.map((b) => Math.min(Math.abs(b.min.x), Math.abs(b.max.x)))) };
+  // fessiers : une seule surface avec le bassin (pas deux boules), deux rondeurs séparées par un sillon étroit, qui se fondent dans
+  // le dos en haut ; plus pleines chez une cycliste ; reflet du lycra sur le cuissard
+  const at = (fem, v, x) => { // point du dos à la hauteur v et à x m du milieu (repère debout : +z devant)
+    let lo = 0, hi = Math.PI / 2;
+    for (let k = 0; k < 40; k++) { const a = (lo + hi) / 2; if (A.pelvisPoint(a, v, fem).x < x) lo = a; else hi = a; }
+    return A.pelvisPoint(lo, v, fem);
   };
-  const gm = glutes(false), gf = glutes(true);
-  assert.equal(gm.n, 2);
-  assert.ok(gm.behind > 0.05 && gf.behind > gm.behind, `fessiers en arrière : ${gm.behind.toFixed(3)} m, ${gf.behind.toFixed(3)} m`);
-  assert.ok(gm.cleft > 0.003 && gm.cleft < 0.02, `sillon : ${gm.cleft.toFixed(4)} m`);
+  for (const fem of [false, true]) {
+    const cheek = at(fem, 0.44, 0.07).z, cleft = at(fem, 0.44, 0).z, near = at(fem, 0.44, 0.03).z;
+    assert.ok(cheek < -0.12, `fessier bien en arrière : ${cheek.toFixed(3)} m`);
+    assert.ok(cleft - cheek > 0.025, 'sillon entre les fessiers');
+    assert.ok(near - cheek < 0.012, 'sillon étroit : le fessier reste plein jusqu\'à 3 cm du milieu');
+    assert.ok(Math.abs(at(fem, 0.97, 0.02).z - at(fem, 0.97, 0).z) < 0.003, 'en haut, ni sillon ni bord : les fessiers se fondent dans le dos');
+  }
+  assert.ok(at(true, 0.44, 0.07).z < at(false, 0.44, 0.07).z - 0.01, 'plus pleins chez une cycliste');
+  const seat = A.pelvisParts({ q: 2, fem: true });
+  assert.equal(seat[0].sheen, 1, 'reflet du lycra sur le cuissard');
+  assert.ok(B3D.toon.merge(seat).attributes.sheen, 'attribut de reflet dans la géométrie fusionnée');
+  // le bassin bascule avec le buste : plus en bas du cintre (buste couché) qu'en danseuse (buste relevé)
+  const V3 = B3D.toon.shared.uRider.value.constructor;
+  assert.ok(A.pelvisPose(new V3(0, 0.45, 0.9)).tilt > A.pelvisPose(new V3(0, 0.9, 0.45)).tilt);
   // épaules : le buste va jusqu'à l'attache des bras (pas de boule du deltoïde à côté)
   const shoulder = (fem) => A.torsoPoint({ x: 1, y: 0.69, z: 0 }, fem).x * 0.2; // côté du buste à hauteur des épaules (unité x : 0,2 m)
   assert.ok(shoulder(false) >= 0.19 && shoulder(true) >= 0.175, `largeur aux épaules : ${shoulder(false).toFixed(3)} m, ${shoulder(true).toFixed(3)} m`);

@@ -162,6 +162,7 @@
     const tdir = shoulder.clone().sub(pelvis), tlen = tdir.length(), tn = tdir.clone().normalize();
     const torsoM = new THREE.Matrix4().compose(pelvis.clone().addScaledVector(tdir, 0.5), new THREE.Quaternion().setFromUnitVectors(UP, tn), V(0.2, tlen * 0.5 + 0.1, 0.16));
     parts.push({ geo: A.torsoGeometry({ q, fem }), color: W, tint: 1, matrix: torsoM });
+    parts.push(...placed(A.torsoHem({ q, fem, base: W }), torsoM, { tint: 1 }));
     if (q > 1) {
       // col, liseré, fermeture, poches (teintées, un peu plus sombres)
       const trim = A.torsoTrim({ q, fem, base: W, accent: '#f4f1ea' });
@@ -170,7 +171,8 @@
     // dossard, posé sur le dos
     const backP = A.torsoPoint(V(0, -0.12, -1), fem, 0.03).applyMatrix4(torsoM), torsoQ = new THREE.Quaternion().setFromUnitVectors(UP, tn);
     parts.push({ geo: new THREE.BoxGeometry(0.18, 0.13, 0.008), color: '#fbfaf5', matrix: new THREE.Matrix4().compose(backP, torsoQ, V(1, 1, 1)) });
-    parts.push(...placed(A.pelvisParts({ q, fem, color: DK }), new THREE.Matrix4().makeTranslation(pelvis.x, pelvis.y, pelvis.z)));
+    const pp = A.pelvisPose(tn);
+    parts.push(...placed(A.pelvisParts({ q, fem, color: DK }), new THREE.Matrix4().compose(pelvis.clone().add(pp.offset), new THREE.Quaternion().setFromEuler(new THREE.Euler(pp.tilt, 0, 0)), V(1, 1, 1))));
     // tête, comme le cycliste du joueur : dans le prolongement du dos, réduite à l'échelle réelle, casque et lunettes de sport
     const ha = Math.atan2(tn.y, tn.z) + 0.21, headPos = shoulder.clone().add(V(0, Math.sin(ha) * 0.2, Math.cos(ha) * 0.2));
     const headM = new THREE.Matrix4().compose(headPos, new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.15, 0, 0)), V(0.8, 0.8, 0.8));
@@ -225,7 +227,7 @@
     } else {
       const A = B3D.anatomy, q = level, side = (f) => [-1, 1].map((sx) => computeOutlineNormals(merge(f(sx))));
       g = {
-        thigh: side((sx) => A.limbParts('thigh', { q, side: sx, bands: q > 1 ? [[0.73, DK], [0.78, '#3a3944'], [1, SK]] : [[0.78, DK], [1, SK]] })),
+        thigh: side((sx) => A.limbParts('thigh', { q, side: sx, bands: q > 1 ? [[0.73, DK, 1], [0.78, '#3a3944', 1], [1, SK]] : [[0.78, DK, 1], [1, SK]] })),
         shin: side((sx) => A.limbParts('shin', { q, side: sx, bands: [[0.9, SK], [1, W]] })),
         shoe: side((sx) => A.shoeParts({ q, side: sx, kind: 'road', upper: W, sole: '#1d1a2b', detail: DK }))
       };
@@ -767,8 +769,9 @@
     // ------------------------------------------------------------ rendu
     _buildRender() {
       const n = Math.max(1, this.riders.length);
-      const mk = this._mk = (geo, cap, ow, shadow) => {
-        const mesh = new THREE.InstancedMesh(geo, instancedMat(), cap);
+      // sheen : reflet du lycra des cuissards (modèles fins)
+      const mk = this._mk = (geo, cap, ow, shadow, sheen) => {
+        const mesh = new THREE.InstancedMesh(geo, sheen ? B3D.toon.sheenPatch(instancedMat()) : instancedMat(), cap);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3);
         mesh.frustumCulled = false;
@@ -789,7 +792,7 @@
       const G0 = legGeometries(0);
       this.legs0 = { limb: mk(G0.limb, n * 4, 0.8, true), shoe: mk(G0.shoe, n * 2, 0.8, false), k: 0 };
       if (this.detail) {
-        const GL = legGeometries(this.detail), two = (list, shadow) => list.map((g) => mk(g, n, 0.8, shadow));
+        const GL = legGeometries(this.detail), two = (list, shadow) => list.map((g) => mk(g, n, 0.8, shadow, true));
         this.legsL = { thigh: two(GL.thigh, true), shin: two(GL.shin, true), shoe: two(GL.shoe, false), k: 0 };
       }
       // feux avant et arrière, allumés la nuit
@@ -839,7 +842,7 @@
       const key = level + (fem ? 'f' : 'm');
       let B = this.bodies.get(key);
       if (!B) {
-        B = this._mk(bodyGeometry(level, fem), Math.max(1, this.riders.length), 0.85, true);
+        B = this._mk(bodyGeometry(level, fem), Math.max(1, this.riders.length), 0.85, true, level > 0);
         B.k = 0;
         this.bodies.set(key, B);
       }
