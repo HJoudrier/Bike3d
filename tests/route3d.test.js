@@ -1,55 +1,82 @@
 /* author : Hugo Joudrier-Faure */
-/* Tests de la géométrie de la vue 3D d'un parcours (Commun/js/jeu/route-3d.js) : échantillonnage, mise à l'échelle, exagération du relief, pentes. */
+/* Tests de la vue 3D du parcours (js/ui/route3d.js) : projection, choix des tuiles du fond, placement du tracé, exagération du relief. */
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { PYR, makeProfile } = require('./helpers.js');
-require(path.join(__dirname, '..', 'Commun/js/core/library.js'));
-require(path.join(__dirname, '..', 'Commun/js/jeu/route-3d.js'));
+require(path.join(__dirname, '..', 'PaceYourRide', 'js', 'route3d.js'));
 
 const R3 = PYR.route3d;
-const profileOf = (segments, opts) => {
-  const p = makeProfile(segments, opts);
-  return { n: p.n, step: p.step, length: p.length, lat: p.lat, lng: p.lng, ele: p.ele, hasEle: true };
-};
 
-test('route 3D : le tracé tient dans la scène, centré, et le relief est exagéré quand il est faible', () => {
-  const g = R3.geometry(profileOf([{ len: 20000, grade: 0.005 }, { len: 10000, grade: -0.005 }]));
-  assert.ok(g && g.n >= 2 && g.n <= 500);
-  const span = Math.max(Math.max(...g.x) - Math.min(...g.x), Math.max(...g.z) - Math.min(...g.z));
-  assert.ok(Math.abs(span - g.span) < 1e-6, 'étendue horizontale = ' + g.span);
-  assert.ok(Math.abs((Math.max(...g.x) + Math.min(...g.x)) / 2) < 1e-6, 'centré en x');
-  assert.ok(g.exag > 1 && g.exag <= 8, 'relief exagéré : ×' + g.exag);
-  assert.ok(Math.min(...g.y) >= 0 && g.height > 0);
+test('Mercator : le point (0°, 0°) est au centre du monde, le nord est en haut (y décroît)', () => {
+  const [x, y] = R3.merc(0, 0);
+  assert.ok(Math.abs(x - 0.5) < 1e-12 && Math.abs(y - 0.5) < 1e-12);
+  assert.ok(R3.merc(45, 0)[1] < R3.merc(0, 0)[1]);
+  assert.ok(R3.merc(0, 10)[0] > R3.merc(0, 0)[0]);
 });
 
-test('route 3D : un parcours sans altitude donne un tracé plat ; un col a des pentes positives puis négatives', () => {
-  const flat = R3.geometry(Object.assign(profileOf([{ len: 10000, grade: 0 }]), { ele: null, hasEle: false }));
-  assert.equal(flat.height, 0);
-  assert.ok(flat.grade.every((x) => x === 0));
-  const col = R3.geometry(profileOf([{ len: 8000, grade: 0.08 }, { len: 8000, grade: -0.08 }]));
-  assert.ok(Math.max(...col.grade) > 0.06 && Math.min(...col.grade) < -0.06);
+test('tuiles du fond : le zoom le plus fin qui tient dans 8 × 8 tuiles, la boîte est couverte', () => {
+  const a = R3.merc(45.1, 6.3), b = R3.merc(45.0, 6.45);       // ~ 12 km
+  const box = [a[0], a[1], b[0], b[1]];
+  const t = R3.pickTiles(...box, 17);
+  assert.ok(t.nx <= 8 && t.ny <= 8 && t.nx * t.ny <= 48);
+  const n = 2 ** t.z;
+  assert.ok(t.tx0 / n <= box[0] && (t.tx0 + t.nx) / n >= box[2], 'couvre en x');
+  assert.ok(t.ty0 / n <= box[1] && (t.ty0 + t.ny) / n >= box[3], 'couvre en y');
+  // un zoom de plus ne tiendrait plus
+  const m = 2 ** (t.z + 1);
+  const nx = Math.floor(box[2] * m) - Math.floor(box[0] * m) + 1, ny = Math.floor(box[3] * m) - Math.floor(box[1] * m) + 1;
+  assert.ok(t.z === 17 || nx > 8 || ny > 8 || nx * ny > 48);
+  // plafonné au zoom du fond (OpenTopoMap : 17) et au zoom 17 en général
+  assert.equal(R3.pickTiles(0.5, 0.5, 0.5000001, 0.5000001, 17).z, 17);
+  assert.equal(R3.pickTiles(0.5, 0.5, 0.5000001, 0.5000001, 12).z, 12);
 });
 
-test('route 3D : trop de points est ramené à 500, pas de géométrie sans tracé', () => {
-  const g = R3.geometry(profileOf([{ len: 200000, grade: 0.01 }], { step: 10 }));
-  assert.equal(g.n, 500);
-  assert.equal(R3.geometry(null), null);
-  assert.equal(R3.geometry({ n: 1, lat: [0], lng: [0] }), null);
+test('placement du tracé : mètres autour du centre, altitude relative au point le plus bas', () => {
+  const p = makeProfile([{ len: 3000, grade: 0.05 }, { len: 3000, grade: -0.02 }], { ele0: 400, heading: 90 });   // cap est
+  const L = R3.layout(p);
+  const n = p.n;
+  assert.equal(L.pos.length, 3 * n);
+  assert.ok(Math.abs(L.pos[1]) < 1e-3, 'départ au plus bas');
+  assert.ok(Math.abs(L.range - (L.eleMax - L.eleMin)) < 1e-9);
+  assert.ok(Math.abs(L.range - 150) < 1, 'D+ de 150 m');
+  // cap est : x croît d'environ 6 000 m, z reste proche de 0
+  assert.ok(Math.abs((L.pos[3 * (n - 1)] - L.pos[0]) - 6000) < 60, 'longueur est-ouest');
+  assert.ok(Math.abs(L.pos[3 * (n - 1) + 2] - L.pos[2]) < 20);
+  assert.ok(Math.abs(L.extent - 6000) < 60);
+  assert.ok(Math.abs(L.pos[0] + L.pos[3 * (n - 1)]) < 60, 'centré');
 });
 
-test('route 3D : sommets du ruban et du rideau cohérents, couleurs selon la pente', () => {
-  const g = R3.geometry(profileOf([{ len: 6000, grade: 0.1 }]));
-  const d = R3.meshData(g);
-  assert.equal(d.pos.length, g.n * 6);
-  assert.equal(d.idx.length, (g.n - 1) * 6);
-  assert.equal(d.cPos.length, g.n * 6);
-  for (const i of d.idx.concat(d.cIdx)) assert.ok(i >= 0 && i < g.n * 2);
-  // le rideau descend jusqu'au sol
-  for (let i = 0; i < g.n; i++) assert.equal(d.cPos[i * 6 + 4], 0);
-  const steep = R3.gradeColor(0.1), flat = R3.gradeColor(0.01), down = R3.gradeColor(-0.06);
-  assert.notDeepEqual(steep, flat);
-  assert.ok(down[2] > down[0], 'descente en bleu');
-  assert.ok(steep[0] > steep[2], 'montée raide en rouge');
+test('exagération conseillée : le relief atteint ~30 % de l\'étendue, entre ×1 et ×10', () => {
+  assert.equal(R3.autoExag(20000, 1000), 6);
+  assert.equal(R3.autoExag(20000, 100), 10);
+  assert.equal(R3.autoExag(1000, 1000), 1);
+  assert.equal(R3.autoExag(5000, 0), 1);
+});
+
+test('adresse d\'une tuile', () => {
+  const u = R3.tileUrl({ url: 'https://{s}.tile.example/{z}/{x}/{y}{r}.png', subdomains: 'ab' }, 12, 2113, 1456);
+  assert.match(u, /^https:\/\/[ab]\.tile\.example\/12\/2113\/1456\.png$/);
+});
+
+test('altitude Terrarium : R × 256 + V + B / 256 − 32768', () => {
+  assert.equal(R3.terrarium(128, 0, 0), 0);
+  assert.equal(R3.terrarium(131, 232, 0), 1000);        // 131 × 256 + 232 − 32768
+  assert.equal(R3.terrarium(128, 10, 128), 10.5);
+});
+
+test('maillage du terrain : altitude interpolée entre les quatre mailles voisines', () => {
+  // 3 × 3 mailles (2 segments par côté) : h = 10 × colonne + 100 × rangée
+  const h = new Float32Array(9).map((_, k) => 10 * (k % 3) + 100 * Math.floor(k / 3));
+  assert.equal(R3.sampleGrid(h, 2, 2, 0, 0), 0);
+  assert.equal(R3.sampleGrid(h, 2, 2, 1, 1), 220);
+  assert.equal(R3.sampleGrid(h, 2, 2, 0.5, 0.5), 110);
+  assert.equal(R3.sampleGrid(h, 2, 2, 0.25, 0.75), 5 + 150);
+  assert.equal(R3.sampleGrid(h, 2, 2, -3, 9), 200, 'borné au rectangle');
+});
+
+test('exagération conseillée sur un terrain : plus modeste, jamais au-delà de ×4', () => {
+  assert.equal(R3.autoExag(10000, 1500, 0.12, 4), 1);
+  assert.equal(R3.autoExag(10000, 300, 0.12, 4), 4);
 });

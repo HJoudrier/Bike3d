@@ -5,9 +5,9 @@
  * Un seul moteur WebGL sert toutes les vignettes (les navigateurs limitent le nombre de contextes) : à chaque image, chaque vignette
  * visible est rendue puis recopiée dans son propre canvas. three.js est celui de l'univers de Bike3D, chargé à la demande ; sans WebGL,
  * la vignette montre le profil d'altitude à plat.
- *   const view = PYR.route3d.mount(canvas, profile);   // profile : PYR.library.routeProfile → { n, length, lat, lng, ele, up, down, hasEle }
+ *   const view = PYR.routeThumb.mount(canvas, profile);   // profile : PYR.library.routeProfile → { n, length, lat, lng, ele, up, down, hasEle }
  *   view.destroy();                                    // retire la vignette
- * La géométrie (pure, testable sous Node) est dans PYR.route3d.geometry. */
+ * La géométrie (pure, testable sous Node) est dans PYR.routeThumb.geometry. */
 (function (PYR) {
   'use strict';
 
@@ -236,5 +236,5 @@
     return view;
   }
 
-  PYR.route3d = { geometry, meshData, gradeColor, mount, loadThree, get webgl() { return E.ok; } };
+  PYR.routeThumb = { geometry, meshData, gradeColor, mount, loadThree, get webgl() { return E.ok; } };
 })(globalThis.PYR = globalThis.PYR || {});

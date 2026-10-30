@@ -37,7 +37,7 @@
   // interface commune aux deux jeux (carte 2D, 3D) : la page de choix et l'écran de course
   const GAME_UI = [
     'Commun/vendor/qrcode-generator/qrcode.js',
-    'Commun/js/jeu/view3d.js', 'Commun/js/jeu/game-source.js', 'Commun/js/jeu/route-3d.js', 'Commun/js/jeu/game-setup.js', 'Commun/js/jeu/tab-game.js', 'Commun/js/jeu/game-mobile.js',
+    'Commun/js/jeu/view3d.js', 'Commun/js/jeu/game-source.js', 'Commun/js/jeu/route-thumb.js', 'Commun/js/jeu/game-setup.js', 'Commun/js/jeu/tab-game.js', 'Commun/js/jeu/game-mobile.js',
     'Commun/js/jeu/challenges.js', 'Commun/js/jeu/qr.js', 'Commun/js/jeu/relay.js', 'Commun/js/jeu/live.js',
   ];
 
@@ -45,7 +45,7 @@
     pro: {
       dir: 'PaceYourRide', ns: 'paceyourride',
       scripts: ENGINE.concat(SHARED_UI, [
-        'PaceYourRide/js/tab-route.js', 'PaceYourRide/js/rider-physio.js', 'PaceYourRide/js/tab-rider.js', 'PaceYourRide/js/rider-import.js', 'PaceYourRide/js/tab-bike.js',
+        'PaceYourRide/js/route3d.js', 'PaceYourRide/js/tab-route.js', 'PaceYourRide/js/rider-physio.js', 'PaceYourRide/js/tab-rider.js', 'PaceYourRide/js/rider-import.js', 'PaceYourRide/js/tab-bike.js',
         'PaceYourRide/js/calibration.js', 'PaceYourRide/js/tab-shop.js', 'PaceYourRide/js/tab-perf.js']),
     },
     jeu2d: { dir: 'Jeu2D', ns: 'paceyourride.jeu2d', scripts: ENGINE.concat(SHARED_UI, GAME_UI) },

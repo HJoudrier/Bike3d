@@ -37,6 +37,7 @@ body[data-tab="ride"] .ride { display: flex; }
   background: var(--surface); border-bottom: 1px solid var(--border);
 }
 .rd-title { font-size: 16px; }
+.rd-top .rd-menu { margin-left: auto; }
 body[data-ride="live"] .rd-top { display: none; }
 .rd-scroll {
   flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;

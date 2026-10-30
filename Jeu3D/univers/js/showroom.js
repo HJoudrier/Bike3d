@@ -3,13 +3,14 @@
    ou en pinçant, un double-clic revient à la vue de départ ; sans geste, la caméra tourne doucement.
 
    PaceYourRide → vitrine (messages pyr3d: 1)
-     gear : { gear: {frame, wheels, tire, position, helmet, clothing, glasses, socks, shoes} (voir B3D.Cyclist.GEAR),
+     gear : { gear: {frame, wheels, tire, position, helmet, clothing, glasses, socks, shoes, sex} (voir B3D.Cyclist.GEAR),
               color (couleur du joueur : maillot et casque), bg (couleur du fond), dark (thème sombre), rider (montrer le cycliste) }
      run  : { on } (l'onglet du magasin est affiché ou non : la vitrine s'arrête quand on ne la voit pas)
    vitrine → PaceYourRide
      hello  : prête à recevoir l'équipement (renvoyé chaque seconde tant qu'il n'est pas arrivé)
      status : { state: 'ready' } après la première image avec l'équipement
-   Ouverte seule, elle lit l'équipement dans l'adresse : showroom.html?frame=aero&wheels=c65&position=drops&color=%23eb6834… */
+   Le cycliste est au niveau de détail réaliste (detail=simple ou detailed dans l'adresse pour un autre).
+   Ouverte seule, elle lit l'équipement dans l'adresse : showroom.html?frame=aero&wheels=c65&position=drops&sex=f&color=%23eb6834… */
 (function () {
   'use strict';
   const B3D = window.B3D;
@@ -24,6 +25,7 @@
     cyclist: null,
     gear: null,
     color: '#eb6834',
+    detail: 'realistic', // un seul cycliste, vu de près : le niveau de détail le plus fin
     rider: true,
     running: true,
     cam: Object.assign({}, HOME),
@@ -72,7 +74,8 @@
       if (q.get('bg')) this.setBg(q.get('bg'), q.get('dark') === '1');
       if (q.get('rider') === '0') this.rider = false;
       const fromUrl = {};
-      for (const k of ['frame', 'wheels', 'tire', 'position', 'helmet', 'clothing', 'glasses', 'socks', 'shoes']) if (q.get(k)) fromUrl[k] = q.get(k);
+      for (const k of ['frame', 'wheels', 'tire', 'position', 'helmet', 'clothing', 'glasses', 'socks', 'shoes', 'sex']) if (q.get(k)) fromUrl[k] = q.get(k);
+      if (B3D.Cyclist.DETAILS.includes(q.get('detail'))) this.detail = q.get('detail');
       this.setGear(Object.keys(fromUrl).length || !this.host ? Object.assign({ frame: 'alu', wheels: 'alu' }, fromUrl) : { frame: 'alu', wheels: 'alu' });
       r.setAnimationLoop(() => this.loop());
       // l'application n'écoute peut-être pas encore : on se signale jusqu'à recevoir l'équipement
@@ -167,7 +170,7 @@
       tube(P(-0.05, ry, rz), P(-0.3, 0.02, az - 0.2), 0.012, dark);
       // cale de la roue avant (la roue reste à la même hauteur que l'arrière)
       const block = new THREE.Mesh(new THREE.BoxGeometry(0.15, LIFT, 0.26), dark);
-      block.position.set(0, LIFT / 2, 0.52);
+      block.position.set(0, LIFT / 2, 0.57);
       block.castShadow = true;
       block.receiveShadow = true;
       g.add(block);
@@ -177,12 +180,12 @@
     // (Re)construit le cycliste équipé ; le coup de pédale continue là où il en était
     setGear(gear) {
       const G = B3D.Cyclist.normGear(Object.assign({}, gear));
-      const key = JSON.stringify(G) + this.color;
+      const key = JSON.stringify(G) + this.color + this.detail;
       if (key === this.gearKey) return;
       this.gearKey = key;
       this.gear = G;
       const old = this.cyclist;
-      const c = this.cyclist = new B3D.Cyclist({ gear: G, custom: { name: 'PaceYourRide', base: this.color, accent: '#1d1a2b', style: 'stripe' } });
+      const c = this.cyclist = new B3D.Cyclist({ gear: G, detail: this.detail, custom: { name: 'PaceYourRide', base: this.color, accent: '#1d1a2b', style: 'stripe' } });
       c.root.position.y = LIFT;
       if (old) {
         c.crank = old.crank; c.wheelAngle = old.wheelAngle; c.time = old.time;

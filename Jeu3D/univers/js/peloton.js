@@ -15,6 +15,7 @@
     'Pignon', 'Rouleur', 'Bidon', 'Cassette', 'Guidon', 'Rayon', 'Bordure', 'Musette', 'Socquette', 'Cuissard', 'Chambre-à-Air', 'Patate', 'Bonbon'];
 
   const WR = 0.34; // rayon de roue
+  const FRONT = 0.57; // axe de la roue avant (z)
   const GROUP_GAP = 10; // au-delà de cet écart (m), on forme un autre groupe
   const ROW = 1.85; // distance entre deux rangs (m)
   const COL = 0.72; // distance entre deux files (m)
@@ -59,21 +60,58 @@
     return out.copy(a).addScaledVector(d, Math.cos(ang) * l1).addScaledVector(perp, Math.sin(ang) * l1);
   }
 
-  let geoCache = null;
-  function geometries() {
-    if (geoCache) return geoCache;
-    const cyl = new THREE.CylinderGeometry(1, 0.92, 1, 7);
-    const sph = (w, h) => new THREE.SphereGeometry(1, w || 10, h || 7);
-    const W = '#ffffff', DK = '#26232f', SK = '#f1c29b';
+  /* Matrice d'un membre galbé de B3D.anatomy (axe y, longueur 1) posé de a à b, sa face avant (+z) tournée vers front ; out reçoit
+     la matrice. */
+  const _bx = new THREE.Vector3(), _by = new THREE.Vector3(), _bz = new THREE.Vector3();
+  function limbM(a, b, front, out) {
+    _by.copy(b).sub(a);
+    const len = _by.length();
+    _by.multiplyScalar(1 / (len || 1));
+    _bz.copy(front).addScaledVector(_by, -front.dot(_by));
+    if (_bz.lengthSq() < 1e-8) _bz.set(0, 0, 1).addScaledVector(_by, -_by.z);
+    _bz.normalize();
+    _bx.crossVectors(_by, _bz);
+    out.makeBasis(_bx, _by.multiplyScalar(len), _bz);
+    return out.setPosition((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  }
+  // côté vers lequel pointe l'articulation j (genou, coude) par rapport à la droite a-c
+  const _bd = new THREE.Vector3();
+  function bendDir(a, j, c, out) {
+    _bd.copy(c).sub(a).normalize();
+    out.copy(j).sub(a);
+    return out.addScaledVector(_bd, -out.dot(_bd)).normalize();
+  }
+  const placed = (list, M, extra) => list.map((p) => Object.assign({}, p, extra, { matrix: p.matrix ? M.clone().multiply(p.matrix) : M.clone() }));
+
+  /* Géométries des coureurs, par niveau de détail : 0 (simple), 1 (détaillé) ou 2 (réaliste, B3D.anatomy), et pour une coureuse (fem).
+     Le corps (vélo et coureur assis, mains sur les cocottes) est fusionné ; les cuisses, les jambes et les chaussures sont des
+     instances posées à chaque image. */
+  const geoCache = new Map();
+  const W = '#ffffff', DK = '#26232f', SK = '#f1c29b';
+  const HIP_U = { uHipP: { value: new THREE.Vector2(0.97, -0.24) } }; // axe des hanches (y, z) du coureur assis
+  const BB0 = V(0, 0.28, -0.08), PELVIS = V(0, 1.0, -0.26), SHOULDER = V(0, 1.37, 0.2);
+  function bodyGeometry(level, fem) {
+    const key = 'body' + level + (fem ? 'f' : 'm');
+    if (geoCache.has(key)) return geoCache.get(key);
     const parts = [];
-    const tube = (a, b, r, color, tint) => parts.push({ geo: cyl, color, tint, matrix: tubeM(a, b, r) });
-    // vélo (cadre à la couleur de l'équipe)
-    const BB = V(0, 0.28, -0.08), stTop = V(0, 0.815, -0.244), htTop = V(0, 0.86, 0.40), htBot = V(0, 0.70, 0.45);
-    tube(BB, stTop, 0.026, W, 1); tube(stTop, htTop, 0.024, W, 1); tube(BB, htBot, 0.03, W, 1); tube(htBot, htTop, 0.032, W, 1);
+    bikeParts(parts);
+    if (level) fineRider(parts, level, fem); else simpleRider(parts, fem);
+    const g = computeOutlineNormals(merge(parts));
+    geoCache.set(key, g);
+    return g;
+  }
+
+  const cylGeo = () => geoCache.get('cyl') || geoCache.set('cyl', new THREE.CylinderGeometry(1, 0.92, 1, 7)).get('cyl');
+  const sph = (w, h) => new THREE.SphereGeometry(1, w || 10, h || 7);
+  function bikeParts(parts) {
+    const tube = (a, b, r, color, tint) => parts.push({ geo: cylGeo(), color, tint, matrix: tubeM(a, b, r) });
+    // vélo (cadre à la couleur de l'équipe), le même que celui de B3D.Cyclist : roue avant devant l'axe de direction
+    const BB = BB0, stTop = V(0, 0.815, -0.244), htTop = V(0, 0.86, 0.36), htBot = V(0, 0.70, 0.41), dtTop = V(0, 0.75, 0.394);
+    tube(BB, stTop, 0.026, W, 1); tube(stTop, htTop, 0.024, W, 1); tube(BB, dtTop, 0.03, W, 1); tube(htBot, htTop, 0.032, W, 1);
     for (const sx of [-1, 1]) {
       tube(stTop, V(sx * 0.055, WR, -0.5), 0.014, W, 1);
       tube(BB, V(sx * 0.055, WR, -0.5), 0.016, W, 1);
-      tube(V(sx * 0.04, 0.7, 0.45), V(sx * 0.05, WR, 0.52), 0.016, W, 1);
+      tube(V(sx * 0.04, 0.7, 0.41), V(sx * 0.05, WR, FRONT), 0.016, W, 1);
     }
     tube(stTop, V(0, 0.95, -0.287), 0.014, '#c9ced8');
     parts.push({ geo: sph(), color: DK, matrix: tr(0, 0.965, -0.29, 0, 0, 0, 0.07, 0.03, 0.14) });
@@ -83,12 +121,22 @@
       tube(V(sx * 0.21, 0.885, 0.5), V(sx * 0.21, 0.9, 0.6), 0.015, DK);
       tube(V(sx * 0.21, 0.9, 0.6), V(sx * 0.21, 0.78, 0.6), 0.015, DK);
     }
-    parts.push({ geo: new THREE.CylinderGeometry(0.035, 0.035, 0.2, 8), color: W, matrix: tr(0, 0.47, 0.15, -1.05, 0, 0) });
+    // bidon contre le tube oblique, côté intérieur du cadre, bouchon vers la douille
+    const u = dtTop.clone().sub(BB).normalize(), bot = BB.clone().addScaledVector(u, 0.15).addScaledVector(V(0, u.z, -u.y), 0.068);
+    const neck = bot.clone().addScaledVector(u, 0.17);
+    tube(bot, neck, 0.035, W);
+    tube(neck, neck.clone().addScaledVector(u, 0.03), 0.022, DK);
     parts.push({ geo: new THREE.CylinderGeometry(0.1, 0.1, 0.014, 14), color: '#c9ced8', matrix: tr(-0.06, BB.y, BB.z, 0, 0, Math.PI / 2) });
-    // coureur assis, mains sur les cocottes
-    const pelvis = V(0, 1.0, -0.26), shoulder = V(0, 1.37, 0.2);
+  }
+
+  // Coureur simple (sphères et cylindres), assis, mains sur les cocottes ; une coureuse a une poitrine et une queue de cheval
+  function simpleRider(parts, fem) {
+    const tube = (a, b, r, color, tint) => parts.push({ geo: cylGeo(), color, tint, matrix: tubeM(a, b, r) });
+    const pelvis = PELVIS, shoulder = SHOULDER;
     const tdir = shoulder.clone().sub(pelvis), tlen = tdir.length();
-    parts.push({ geo: sph(14, 10), color: W, tint: 1, matrix: new THREE.Matrix4().compose(pelvis.clone().addScaledVector(tdir, 0.5), new THREE.Quaternion().setFromUnitVectors(UP, tdir.clone().normalize()), V(0.2, tlen * 0.5 + 0.1, 0.16)) });
+    const torsoM = new THREE.Matrix4().compose(pelvis.clone().addScaledVector(tdir, 0.5), new THREE.Quaternion().setFromUnitVectors(UP, tdir.clone().normalize()), V(0.2, tlen * 0.5 + 0.1, 0.16));
+    parts.push({ geo: sph(14, 10), color: W, tint: 1, matrix: torsoM });
+    if (fem) for (const sx of [-1, 1]) parts.push({ geo: sph(), color: W, tint: 1, matrix: torsoM.clone().multiply(tr(sx * 0.36, 0.28, 0.76, 0, 0, 0, 0.3, 0.17, 0.34)) });
     // dossard dans le dos
     parts.push({ geo: new THREE.BoxGeometry(0.2, 0.15, 0.015), color: '#fbfaf5', matrix: new THREE.Matrix4().compose(V(0, 1.2, -0.18), new THREE.Quaternion().setFromUnitVectors(FWD, V(0, 0.75, -0.66).normalize()), V(1, 1, 1)) });
     parts.push({ geo: sph(), color: DK, matrix: tr(pelvis.x, pelvis.y, pelvis.z, 0, 0, 0, 0.165, 0.11, 0.15) });
@@ -98,15 +146,61 @@
     parts.push({ geo: new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), color: W, tint: 1, matrix: tr(head.x, head.y + 0.03, head.z - 0.03, -0.4, 0, 0, 0.155, 0.147, 0.2) });
     parts.push({ geo: new THREE.BoxGeometry(0.24, 0.05, 0.05), color: '#1d1a2b', matrix: tr(head.x, head.y, head.z + 0.12, -0.15, 0, 0) });
     parts.push({ geo: new THREE.BoxGeometry(0.22, 0.035, 0.02), color: '#4fd0ff', matrix: tr(head.x, head.y, head.z + 0.146, -0.15, 0, 0) });
+    if (fem) parts.push({ geo: sph(), color: '#6b4423', matrix: tr(head.x, head.y - 0.08, head.z - 0.17, -0.35, 0, 0, 0.04, 0.095, 0.045) });
     for (const sx of [-1, 1]) {
-      const sh = V(sx * 0.19, shoulder.y - 0.02, shoulder.z - 0.02), hand = V(sx * 0.205, 0.93, 0.58);
+      const sh = V(sx * (fem ? 0.18 : 0.19), shoulder.y - 0.02, shoulder.z - 0.02), hand = V(sx * 0.205, 0.93, 0.58);
       const elbow = ik(sh, hand, 0.3, 0.3, V(sx * 0.6, -0.3, -0.75).normalize(), new THREE.Vector3());
       parts.push({ geo: sph(), color: W, tint: 1, matrix: tr(sh.x, sh.y, sh.z, 0, 0, 0, 0.068) });
       tube(sh, elbow, 0.056, W, 1);
       tube(elbow, hand, 0.045, SK);
       parts.push({ geo: sph(), color: DK, matrix: tr(hand.x, hand.y, hand.z, 0, 0, 0, 0.05) });
     }
-    const body = merge(parts);
+  }
+
+  // Coureur détaillé ou réaliste (B3D.anatomy), dans la même pose : maillot et casque à la couleur de l'équipe
+  function fineRider(parts, q, fem) {
+    const A = B3D.anatomy, pelvis = PELVIS, shoulder = SHOULDER;
+    const tdir = shoulder.clone().sub(pelvis), tlen = tdir.length(), tn = tdir.clone().normalize();
+    const torsoM = new THREE.Matrix4().compose(pelvis.clone().addScaledVector(tdir, 0.5), new THREE.Quaternion().setFromUnitVectors(UP, tn), V(0.2, tlen * 0.5 + 0.1, 0.16));
+    parts.push({ geo: A.torsoGeometry({ q, fem }), color: W, tint: 1, matrix: torsoM });
+    parts.push(...placed(A.torsoHem({ q, fem, base: W }), torsoM, { tint: 1 }));
+    if (q > 1) {
+      // col, liseré, fermeture, poches (teintées, un peu plus sombres)
+      const trim = A.torsoTrim({ q, fem, base: W, accent: '#f4f1ea' });
+      parts.push(...placed(trim, torsoM).map((p) => Object.assign(p, { tint: p.color === '#26232f' || p.color === '#f4f1ea' ? 0 : 1 })));
+    }
+    // dossard, posé sur le dos
+    const backP = A.torsoPoint(V(0, -0.12, -1), fem, 0.03).applyMatrix4(torsoM), torsoQ = new THREE.Quaternion().setFromUnitVectors(UP, tn);
+    parts.push({ geo: new THREE.BoxGeometry(0.18, 0.13, 0.008), color: '#fbfaf5', matrix: new THREE.Matrix4().compose(backP, torsoQ, V(1, 1, 1)) });
+    const pp = A.pelvisPose(tn);
+    parts.push(...placed(A.pelvisParts({ q, fem, color: DK }), new THREE.Matrix4().compose(pelvis.clone().add(pp.offset), new THREE.Quaternion().setFromEuler(new THREE.Euler(pp.tilt, 0, 0)), V(1, 1, 1))));
+    // tête, comme le cycliste du joueur : dans le prolongement du dos, réduite à l'échelle réelle, casque et lunettes de sport
+    const ha = Math.atan2(tn.y, tn.z) + 0.21, headPos = shoulder.clone().add(V(0, Math.sin(ha) * 0.2, Math.cos(ha) * 0.2));
+    const headM = new THREE.Matrix4().compose(headPos, new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.15, 0, 0)), V(0.8, 0.8, 0.8));
+    const H = A.headParts({ q, fem, skin: SK, eyes: false, tie: '#e2463a' });
+    for (const k of ['skull', 'features', 'marks', 'mouth', 'hair', 'tail', 'straps']) parts.push(...placed(H[k], headM));
+    const gearM = headM.clone().multiply(tr(0, 0.006, -0.003, 0, 0, 0, 0.87)).multiply(tr(0, 0.03, -0.03, -0.25, 0, 0, 1, 0.95, 1.3));
+    parts.push({ geo: new THREE.SphereGeometry(0.155, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), color: W, tint: 1, matrix: gearM });
+    parts.push(...placed(A.glassesParts({ q, fem, type: 'sport' }), headM));
+    const neckBase = shoulder.clone().add(V(0, 0.05, 0.03));
+    parts.push(...placed(A.limbParts('neck', { q, fem, bands: [[1, SK]] }), limbM(neckBase, headPos, V(0, -tn.z, tn.y), new THREE.Matrix4())));
+    // bras : manches courtes à la couleur de l'équipe, mains gantées sur les cocottes
+    for (const sx of [-1, 1]) {
+      const sh = V(sx * (fem ? 0.175 : 0.19), shoulder.y - 0.02, shoulder.z - 0.02), hand = V(sx * 0.205, 0.93, 0.58);
+      const elbow = ik(sh, hand, 0.3, 0.3, V(sx * 0.6, -0.3, -0.75).normalize(), new THREE.Vector3());
+      const front = bendDir(sh, elbow, hand, new THREE.Vector3()).negate();
+      const upper = A.limbParts('upper', { q, fem, side: sx, bands: q > 1 ? [[0.45, W], [0.5, '#f4f1ea'], [1, SK]] : [[0.5, W], [1, SK]] });
+      parts.push(...placed(upper, limbM(sh, elbow, front, new THREE.Matrix4()), { tint: 1 }).map((p, k) => Object.assign(p, { tint: k === 0 ? 1 : 0 })));
+      parts.push(...placed(A.limbParts('fore', { q, fem, side: sx, bands: [[1, SK]] }), limbM(elbow, hand, front, new THREE.Matrix4())));
+      parts.push({ geo: sph(8, 6), color: SK, matrix: tr(elbow.x, elbow.y, elbow.z, 0, 0, 0, 0.034) });
+      const z = hand.clone().sub(elbow).normalize(), y = V(0, 1, 0).addScaledVector(z, -z.y).normalize();
+      const handM = new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(y, z), y, z).setPosition(hand);
+      parts.push(...placed(A.handParts({ q, side: sx, glove: DK, skin: SK, fem }), handM));
+    }
+  }
+
+  function wheelGeometry() {
+    if (geoCache.has('wheel')) return geoCache.get('wheel');
     // roue : pneu, jante haute, 3 bâtons à la couleur de l'équipe
     const wparts = [
       { geo: new THREE.TorusGeometry(WR - 0.018, 0.022, 6, 24), color: DK, matrix: tr(0, 0, 0, 0, Math.PI / 2, 0) },
@@ -117,13 +211,30 @@
       const a = k / 3 * Math.PI * 2;
       wparts.push({ geo: new THREE.BoxGeometry(0.016, WR - 0.05, 0.05), color: W, tint: 1, matrix: tr(0, Math.cos(a) * (WR - 0.05) / 2, Math.sin(a) * (WR - 0.05) / 2, a, 0, 0) });
     }
-    const wheel = merge(wparts);
-    // segment de jambe (cylindre unité, teinté par instance) et chaussure
-    const limb = merge([{ geo: new THREE.CylinderGeometry(1, 0.85, 1, 7), color: W, tint: 1 }]);
-    const shoe = merge([{ geo: new THREE.BoxGeometry(0.09, 0.08, 0.25), color: W }]);
-    for (const g of [body, wheel, limb, shoe]) computeOutlineNormals(g);
-    geoCache = { body, wheel, limb, shoe };
-    return geoCache;
+    const g = computeOutlineNormals(merge(wparts));
+    geoCache.set('wheel', g);
+    return g;
+  }
+
+  /* Jambes : simple, un cylindre unité (teinté par instance : cuissard ou peau) et une chaussure en boîte ; détaillé ou réaliste,
+     cuisse (cuissard), jambe (chaussette courte) et chaussure de route modelées, à gauche [0] et à droite [1]. */
+  function legGeometries(level) {
+    const key = 'legs' + level;
+    if (geoCache.has(key)) return geoCache.get(key);
+    let g;
+    if (!level) {
+      g = { limb: merge([{ geo: new THREE.CylinderGeometry(1, 0.85, 1, 7), color: W, tint: 1 }]), shoe: merge([{ geo: new THREE.BoxGeometry(0.09, 0.08, 0.25), color: W }]) };
+      for (const k of ['limb', 'shoe']) computeOutlineNormals(g[k]);
+    } else {
+      const A = B3D.anatomy, q = level, side = (f) => [-1, 1].map((sx) => computeOutlineNormals(merge(f(sx))));
+      g = {
+        thigh: side((sx) => A.limbParts('thigh', { q, side: sx, bands: q > 1 ? [[0.73, DK, 1], [0.78, '#3a3944', 1], [1, SK]] : [[0.78, DK, 1], [1, SK]] })),
+        shin: side((sx) => A.limbParts('shin', { q, side: sx, bands: [[0.9, SK], [1, W]] })),
+        shoe: side((sx) => A.shoeParts({ q, side: sx, kind: 'road', upper: W, sole: '#1d1a2b', detail: DK }))
+      };
+    }
+    geoCache.set(key, g);
+    return g;
   }
 
   // Sillage : demi-tube ouvert vers le bas, qui s'élargit vers l'arrière, rayé de filets d'air qui défilent.
@@ -208,9 +319,12 @@
 
   // ------------------------------------------------------------------ le peloton
   class Peloton {
-    // opts : { count, phys (physique du joueur), playerColor, teams }
+    /* opts : { count, phys (physique du joueur), playerColor, teams, detail (niveau de détail des coureurs proches de la caméra :
+       0 simple, 1 détaillé, 2 réaliste), sex ('f' : des coureuses ; setLook le change coureur par coureur) } */
     constructor(scene, route, L, opts) {
       this.scene = scene;
+      this.detail = clamp(Math.round(opts.detail || 0), 0, 2);
+      this.near = this.detail > 1 ? 32 : 24; // m : en deçà, le modèle fin
       this.route = route;
       this.L = L;
       this.phys = opts.phys;
@@ -232,7 +346,7 @@
         const climber = rnd() < 0.3 ? 0.6 + rnd() * 0.4 : rnd() * 0.45;
         const team = teams[i % teams.length];
         return {
-          id: i, name, team, color: new THREE.Color(team.color),
+          id: i, name, team, color: new THREE.Color(team.color), fem: opts.sex === 'f',
           sprinter, climber, aggr: rnd(),
           mass: 76 + rnd() * 10 - climber * 6 + sprinter * 3,
           cp: 285 + rnd() * 60 + climber * 15, wp: 15000 + rnd() * 9000, pmax: 760 + sprinter * 420,
@@ -655,27 +769,37 @@
 
     // ------------------------------------------------------------ rendu
     _buildRender() {
-      const G = geometries();
       const n = Math.max(1, this.riders.length);
-      const mk = (geo, cap, ow, shadow) => {
-        const mesh = new THREE.InstancedMesh(geo, instancedMat(), cap);
+      // sheen : reflet du lycra des cuissards ; hip : fessiers qui suivent les cuisses (angles par instance : aHip) — modèles fins
+      const T = B3D.toon;
+      const mk = this._mk = (geo, cap, ow, shadow, sheen, hip) => {
+        let m = instancedMat();
+        if (sheen) m = T.sheenPatch(m);
+        if (hip) m = T.hipPatch(m, HIP_U, true);
+        const mesh = new THREE.InstancedMesh(geo, m, cap);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3);
         mesh.frustumCulled = false;
         mesh.castShadow = shadow;
         mesh.count = 0;
         this.scene.add(mesh);
-        const ol = new THREE.InstancedMesh(geo, outlineMat({ width: ow, minW: 0.004, maxW: 0.04 }), cap);
+        const ol = new THREE.InstancedMesh(geo, outlineMat({ width: ow, minW: 0.004, maxW: 0.04, hip: hip ? { uniforms: HIP_U, instanced: true } : null }), cap);
         ol.instanceMatrix = mesh.instanceMatrix;
         ol.frustumCulled = false;
         ol.count = 0;
         this.scene.add(ol);
         return { mesh, ol };
       };
-      this.mBody = mk(G.body, n, 0.85, true);
-      this.mWheel = mk(G.wheel, n * 2, 0.7, true);
-      this.mLimb = mk(G.limb, n * 4, 0.8, true);
-      this.mShoe = mk(G.shoe, n * 2, 0.8, false);
+      // corps (vélo et coureur) par niveau de détail et pour un coureur ou une coureuse, créés à la demande ; roues ; jambes
+      this.bodies = new Map();
+      for (const r of this.riders) { this._bodySet(0, r.fem); if (this.detail) this._bodySet(this.detail, r.fem); }
+      this.mWheel = mk(wheelGeometry(), n * 2, 0.7, true);
+      const G0 = legGeometries(0);
+      this.legs0 = { limb: mk(G0.limb, n * 4, 0.8, true), shoe: mk(G0.shoe, n * 2, 0.8, false), k: 0 };
+      if (this.detail) {
+        const GL = legGeometries(this.detail), two = (list, shadow) => list.map((g) => mk(g, n, 0.8, shadow, true));
+        this.legsL = { thigh: two(GL.thigh, true), shin: two(GL.shin, true), shoe: two(GL.shoe, false), k: 0 };
+      }
       // feux avant et arrière, allumés la nuit
       this.mLamps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ fog: false }), n * 2);
       this.mLamps.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -687,13 +811,13 @@
       this.scene.add(this.mLamps);
       this.lightsOn = false;
       const skin = new THREE.Color('#f1c29b'), shorts = new THREE.Color('#26232f'), white = new THREE.Color('#ffffff');
+      // couleurs : roues de l'équipe ; jambes simples par quatre (deux cuisses au cuissard, deux jambes nues) ; corps à chaque image
       this.riders.forEach((r, i) => {
-        this.mBody.mesh.setColorAt(i, r.color);
         this.mWheel.mesh.setColorAt(i * 2, r.color); this.mWheel.mesh.setColorAt(i * 2 + 1, r.color);
-        for (let k = 0; k < 4; k++) this.mLimb.mesh.setColorAt(i * 4 + k, k < 2 ? shorts : skin);
-        this.mShoe.mesh.setColorAt(i * 2, white); this.mShoe.mesh.setColorAt(i * 2 + 1, white);
+        for (let k = 0; k < 4; k++) this.legs0.limb.mesh.setColorAt(i * 4 + k, k < 2 ? shorts : skin);
+        this.legs0.shoe.mesh.setColorAt(i * 2, white); this.legs0.shoe.mesh.setColorAt(i * 2 + 1, white);
       });
-      for (const M of [this.mBody, this.mWheel, this.mLimb, this.mShoe]) M.mesh.instanceColor.needsUpdate = true;
+      for (const M of [this.mWheel, this.legs0.limb, this.legs0.shoe]) M.mesh.instanceColor.needsUpdate = true;
       // sillage
       this.wake = new THREE.Mesh(wakeGeometry(), wakeMaterial());
       this.wake.frustumCulled = false;
@@ -718,9 +842,30 @@
       this.tagTex = new Map();
     }
 
-    // Nom et couleur imposés de l'extérieur (vue pilotée par PaceYourRide : chaque coureur garde son nom et sa couleur)
-    setLook(i, name, color) {
+    // Corps d'un niveau de détail, pour un coureur ou une coureuse (créé au premier besoin) ; k : instances de l'image en cours
+    _bodySet(level, fem) {
+      const key = level + (fem ? 'f' : 'm');
+      let B = this.bodies.get(key);
+      if (!B) {
+        const cap = Math.max(1, this.riders.length);
+        let geo = bodyGeometry(level, fem);
+        if (level) {
+          // une copie par peloton : elle porte les angles des cuisses de chaque coureur
+          geo = geo.clone();
+          geo.setAttribute('aHip', new THREE.InstancedBufferAttribute(new Float32Array(cap * 2), 2).setUsage(THREE.DynamicDrawUsage));
+        }
+        B = this._mk(geo, cap, 0.85, true, level > 0, level > 0);
+        B.k = 0;
+        B.hip = level ? geo.attributes.aHip : null;
+        this.bodies.set(key, B);
+      }
+      return B;
+    }
+
+    // Nom, couleur et sexe imposés de l'extérieur (vue pilotée par PaceYourRide : chaque coureur garde son nom et sa couleur)
+    setLook(i, name, color, sex) {
       const r = this.riders[i];
+      if (r && (sex === 'f' || sex === 'm')) r.fem = sex === 'f';
       const look = name + '|' + color;
       if (!r || r.look === look) return;
       r.look = look;
@@ -730,9 +875,7 @@
       r.team = { name: '', color: '#' + c.getHexString() };
       const t = this.tagTex.get(r);
       if (t) { t.dispose(); this.tagTex.delete(r); }
-      this.mBody.mesh.setColorAt(i, c);
       this.mWheel.mesh.setColorAt(i * 2, c); this.mWheel.mesh.setColorAt(i * 2 + 1, c);
-      this.mBody.mesh.instanceColor.needsUpdate = true;
       this.mWheel.mesh.instanceColor.needsUpdate = true;
     }
 
@@ -764,7 +907,14 @@
       const quat = new THREE.Quaternion(), eul = new THREE.Euler(0, 0, 0, 'YXZ'), pos = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
       const BB = this._BB || (this._BB = V(0, 0.28, -0.08));
       const hip = new THREE.Vector3(), pedal = new THREE.Vector3(), ankle = new THREE.Vector3(), knee = new THREE.Vector3(), toe = new THREE.Vector3(), d = new THREE.Vector3();
-      const bend = V(0, 0.25, 1), mid = new THREE.Vector3(), q2 = new THREE.Quaternion(), sc = new THREE.Vector3();
+      const bend = V(0, 0.25, 1), mid = new THREE.Vector3(), q2 = new THREE.Quaternion(), sc = new THREE.Vector3(), front = new THREE.Vector3(), shoeM = new THREE.Matrix4();
+      const theta = [0, 0];
+      // niveaux de détail : chaque coureur prend le modèle fin près de la caméra (avec un peu d'hystérésis), le simple au loin ;
+      // les instances de chaque modèle sont rangées à la suite
+      const cam = camera.getWorldPosition(this._lp || (this._lp = new THREE.Vector3())), L = this.detail, L0 = this.legs0, LL = this.legsL;
+      for (const B of this.bodies.values()) B.k = 0;
+      L0.k = 0;
+      if (LL) LL.k = 0;
       for (let i = 0; i < n; i++) {
         const r = this.riders[i];
         route.sample(r.s, q);
@@ -780,12 +930,16 @@
         m4.compose(pos, quat, one);
         r.pos = r.pos || new THREE.Vector3();
         r.pos.copy(pos);
-        this.mBody.mesh.setMatrixAt(i, m4);
+        const near = this.near + (r.fine ? 4 : 0);
+        r.fine = L > 0 && pos.distanceToSquared(cam) < near * near;
+        const B = this._bodySet(r.fine ? L : 0, r.fem), slot = B.k++;
+        B.mesh.setMatrixAt(slot, m4);
+        B.mesh.setColorAt(slot, r.color);
         // roues
         r.wheelA += r.v / WR * dt;
         for (let w = 0; w < 2; w++) {
           ml.makeRotationX(r.wheelA);
-          ml.setPosition(0, WR, w ? 0.52 : -0.5);
+          ml.setPosition(0, WR, w ? FRONT : -0.5);
           mw.multiplyMatrices(m4, ml);
           this.mWheel.mesh.setMatrixAt(i * 2 + w, mw);
         }
@@ -804,21 +958,32 @@
           hip.set(sx * 0.095, 0.97, -0.24);
           bend.set(sx * 0.12, 0.25, 1).normalize();
           ik(hip, ankle, 0.46, 0.45, bend, knee);
+          theta[side] = Math.atan2(knee.z - hip.z, hip.y - knee.y); // angle de la cuisse (+ genou en avant)
+          toe.copy(pedal).add(d.set(0, 0.03, 0.09));
+          d.copy(toe).sub(ankle).normalize();
+          shoeM.compose(mid.copy(ankle).add(toe).multiplyScalar(0.5), q2.setFromUnitVectors(FWD, d), one);
+          if (r.fine) {
+            // cuisse et jambe galbées : quadriceps et tibia du côté où pointe le genou
+            bendDir(hip, knee, ankle, front);
+            LL.thigh[side].mesh.setMatrixAt(LL.k, mw.multiplyMatrices(m4, limbM(hip, knee, front, ml)));
+            LL.shin[side].mesh.setMatrixAt(LL.k, mw.multiplyMatrices(m4, limbM(knee, ankle, front, ml)));
+            LL.shoe[side].mesh.setMatrixAt(LL.k, mw.multiplyMatrices(m4, shoeM));
+            continue;
+          }
           const seg = (a, b, rad, idx) => {
             d.copy(b).sub(a);
             const len = d.length();
             ml.compose(mid.copy(a).add(b).multiplyScalar(0.5), q2.setFromUnitVectors(UP, d.divideScalar(len || 1)), sc.set(rad, len, rad));
             mw.multiplyMatrices(m4, ml);
-            this.mLimb.mesh.setMatrixAt(idx, mw);
+            L0.limb.mesh.setMatrixAt(idx, mw);
           };
-          seg(hip, knee, 0.078, i * 4 + side);
-          seg(knee, ankle, 0.058, i * 4 + 2 + side);
-          toe.copy(pedal).add(d.set(0, 0.03, 0.09));
-          d.copy(toe).sub(ankle).normalize();
-          ml.compose(mid.copy(ankle).add(toe).multiplyScalar(0.5), q2.setFromUnitVectors(FWD, d), one);
-          mw.multiplyMatrices(m4, ml);
-          this.mShoe.mesh.setMatrixAt(i * 2 + side, mw);
+          seg(hip, knee, 0.078, L0.k * 4 + side);
+          seg(knee, ankle, 0.058, L0.k * 4 + 2 + side);
+          L0.shoe.mesh.setMatrixAt(L0.k * 2 + side, mw.multiplyMatrices(m4, shoeM));
         }
+        if (r.fine) LL.k++; else L0.k++;
+        // le bas des fessiers suit les cuisses (écart à leur angle moyen ; gauche : -x)
+        if (B.hip) { const mean = (theta[0] + theta[1]) / 2; B.hip.setXY(slot, theta[0] - mean, theta[1] - mean); }
         if (this.lightsOn) {
           ml.makeTranslation(0, 0.84, 0.58); mw.multiplyMatrices(m4, ml); this.mLamps.setMatrixAt(i * 2, mw);
           ml.makeTranslation(0, 0.86, -0.38); mw.multiplyMatrices(m4, ml); this.mLamps.setMatrixAt(i * 2 + 1, mw);
@@ -827,8 +992,12 @@
       this.mLamps.visible = this.lightsOn;
       this.mLamps.count = this.lightsOn ? n * 2 : 0;
       if (this.lightsOn) this.mLamps.instanceMatrix.needsUpdate = true;
-      for (const [M, k] of [[this.mBody, 1], [this.mWheel, 2], [this.mLimb, 4], [this.mShoe, 2]]) {
-        M.mesh.count = M.ol.count = n * k;
+      const counts = [[this.mWheel, n * 2], [L0.limb, L0.k * 4], [L0.shoe, L0.k * 2]];
+      for (const B of this.bodies.values()) { counts.push([B, B.k]); B.mesh.instanceColor.needsUpdate = true; if (B.hip) B.hip.needsUpdate = true; }
+      if (LL) for (const k of ['thigh', 'shin', 'shoe']) for (const M of LL[k]) counts.push([M, LL.k]);
+      for (const [M, c] of counts) {
+        M.mesh.count = M.ol.count = c;
+        M.mesh.visible = M.ol.visible = c > 0;
         M.mesh.instanceMatrix.needsUpdate = true;
       }
       this._renderWake(dt);
@@ -892,7 +1061,10 @@
     }
 
     dispose() {
-      for (const M of [this.mBody, this.mWheel, this.mLimb, this.mShoe]) { this.scene.remove(M.mesh); this.scene.remove(M.ol); }
+      for (const B of this.bodies.values()) if (B.hip) B.mesh.geometry.dispose();
+      const all = [this.mWheel, this.legs0.limb, this.legs0.shoe, ...this.bodies.values()];
+      if (this.legsL) for (const k of ['thigh', 'shin', 'shoe']) all.push(...this.legsL[k]);
+      for (const M of all) { this.scene.remove(M.mesh); this.scene.remove(M.ol); }
       this.scene.remove(this.mLamps); this.mLamps.geometry.dispose(); this.mLamps.material.dispose();
       this.scene.remove(this.wake);
       this.wake.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });

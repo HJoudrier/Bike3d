@@ -22,11 +22,18 @@
       <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor"/><path d="M10 44 L24 26 L32 36 L42 20 L54 44 Z" fill="#fff"/></svg>
       <span>PaceYourRide</span><small class="gs-app">Jeu 2D</small>
     </a>
-    <nav class="tabs" aria-label="Sections">
-      <a href="../index.html" title="Les applications" aria-label="Applications"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></a>
-    </nav>
-    <div class="top-actions" id="top-actions">
+        <div class="top-actions" id="top-actions">
       <a class="btn ghost" href="../PaceYourRide/documentation.html" target="_blank" rel="noopener" title="Documentation" aria-label="Documentation"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></a>
+    </div>
+    <div class="burger-wrap">
+      <button class="btn ghost burger" id="btn-menu" type="button" title="Menu : les pages du site" aria-label="Menu" aria-haspopup="true" aria-expanded="false" aria-controls="site-menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <nav class="site-menu" id="site-menu" aria-label="Sections" hidden>
+        <a href="index.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg><span>Choix de la partie</span></a>
+        <a href="../PaceYourRide/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20 9 9l4 6 3-4 5 9z"/></svg><span>PaceYourRide</span></a>
+        <a href="../Jeu3D/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h4M8 10v4"/><path d="M15 11.5h.01M18 13.5h.01"/><path d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5z"/></svg><span>Jeu 3D</span></a>
+        <a href="../Compteur/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg><span>Compteur</span></a>
+        <a href="../index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Applications</span></a>
+      </nav>
     </div>
   </header>
 
@@ -197,6 +204,8 @@
   </div>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="../Commun/js/menu.js"></script>
 
   <!-- scripts de l'application (Commun/js/boot.js, selon data-app) puis démarrage de la page (Commun/js/app.js) -->
   <script src="../Commun/js/boot.js" data-app="jeu2d"></script>

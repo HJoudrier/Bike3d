@@ -21,17 +21,24 @@
       <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor"/><path d="M10 44 L24 26 L32 36 L42 20 L54 44 Z" fill="#fff"/></svg>
       <span>PaceYourRide</span>
     </a>
-    <nav class="tabs" aria-label="Sections">
-      <a href="parcours.html" aria-current="page" title="Parcours" aria-label="Parcours"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-5h6.5"/></svg></a>
-      <a href="athlete.html" title="Athlète" aria-label="Athlète"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></a>
-      <a href="equipement.html" title="Équipements" aria-label="Équipements"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17 9.5 8h5l4 9M9.5 8 12.5 17H5.5M14.5 5h2.5"/></svg></a>
-      <a href="pacing.html" title="Pacing optimal" aria-label="Pacing optimal"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4"/><path d="m12 14 3-3"/><circle cx="12" cy="14" r="8"/></svg></a>
-    </nav>
     <div class="top-actions" id="top-actions">
       <a class="btn ghost" href="documentation.html" target="_blank" rel="noopener" title="Documentation : guide d'utilisation, modèles mécanique et physiologique, simulation et algorithmes d'optimisation" aria-label="Documentation"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></a>
       <button class="btn ghost" id="btn-export-project" type="button" title="Exporter : enregistrer tout le projet dans un fichier" aria-label="Exporter le projet"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></button>
       <label class="btn ghost" title="Importer : ouvrir un projet enregistré" aria-label="Importer un projet"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg><input type="file" id="input-import-project" accept=".json,application/json" hidden></label>
       <button class="btn ghost" id="btn-reset" type="button" title="Réinitialiser : tout effacer et repartir des valeurs par défaut" aria-label="Réinitialiser"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+    </div>
+    <div class="burger-wrap">
+      <button class="btn ghost burger" id="btn-menu" type="button" title="Menu : les pages du site" aria-label="Menu" aria-haspopup="true" aria-expanded="false" aria-controls="site-menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <nav class="site-menu" id="site-menu" aria-label="Sections" hidden>
+        <a href="parcours.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-5h6.5"/></svg><span>Parcours</span></a>
+        <a href="athlete.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Athlète</span></a>
+        <a href="equipement.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17 9.5 8h5l4 9M9.5 8 12.5 17H5.5M14.5 5h2.5"/></svg><span>Équipements</span></a>
+        <a href="pacing.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4"/><path d="m12 14 3-3"/><circle cx="12" cy="14" r="8"/></svg><span>Pacing optimal</span></a>
+        <a href="../Jeu2D/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h4M8 10v4"/><path d="M15 11.5h.01M18 13.5h.01"/><path d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5z"/></svg><span>Jeu 2D</span></a>
+        <a href="../Jeu3D/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h4M8 10v4"/><path d="M15 11.5h.01M18 13.5h.01"/><path d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5z"/></svg><span>Jeu 3D</span></a>
+        <a href="../Compteur/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg><span>Compteur</span></a>
+        <a href="../index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Applications</span></a>
+      </nav>
     </div>
   </header>
 
@@ -48,6 +55,11 @@
           <div class="rh-stats" id="route-key-stats" aria-live="polite"></div>
         </div>
         <div class="rh-actions">
+          <div class="seg-control view-switch" id="view-switch" role="radiogroup" aria-label="Vue du parcours">
+            <button type="button" role="radio" data-view="map" aria-pressed="true" title="2D : la carte, pour tracer et modifier le parcours">2D</button>
+            <button type="button" role="radio" data-view="flat" aria-pressed="false" title="2D + 3D : le fond de carte à plat, avec le tracé en 3D au-dessus, à la hauteur de son altitude">2D + 3D</button>
+            <button type="button" role="radio" data-view="terrain" aria-pressed="false" title="3D : le terrain en relief, la carte plaquée dessus et le tracé posé sur sa surface">3D</button>
+          </div>
           <button class="btn" type="button" id="btn-save-lib" title="Enregistrer ce parcours dans la bibliothèque sous son nom (page d'accueil › Sélectionner un parcours)">Enregistrer</button>
           <label class="btn" title="Ouvrir un GPX : une simple trace, ou un parcours complet exporté par PaceYourRide (sprints, côtes, ravitaillements, météo…)">Importer<input type="file" id="input-gpx" accept=".gpx,application/gpx+xml" hidden></label>
           <div class="menu-wrap">
@@ -86,6 +98,23 @@
             <button class="tool danger" type="button" id="btn-clear" title="Effacer le parcours" aria-label="Effacer le parcours"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 11v5M14 11v5"/></svg></button>
           </div>
         </div>
+        <!-- page Parcours : le parcours en 3D (js/ui/route3d.js), à la place de la carte -->
+        <div class="route3d" id="route3d" hidden>
+          <div class="r3-panel">
+            <div class="seg-control" role="radiogroup" aria-label="Fond de carte">
+              <button type="button" role="radio" data-base="plan" aria-pressed="true" title="Plan (OpenStreetMap)">Plan</button>
+              <button type="button" role="radio" data-base="topo" aria-pressed="false" title="Carte topographique (courbes de niveau)">Topo</button>
+              <button type="button" role="radio" data-base="sat" aria-pressed="false" title="Image satellite">Satellite</button>
+            </div>
+            <label class="r3-exag" title="Exagération de la hauteur : à ×1 le relief est à l'échelle de la carte"><span>Relief</span><input type="range" id="r3-exag" min="1" max="10" step="0.5" value="1"><output id="r3-exag-out">×1</output></label>
+            <button class="btn" type="button" id="r3-reset" title="Revenir à la vue de départ (double clic sur la vue)">Recentrer</button>
+          </div>
+          <div class="r3-info" id="r3-info"></div>
+          <div class="r3-tip" id="r3-tip" hidden></div>
+          <div class="r3-msg" id="r3-msg" role="status" aria-live="polite" hidden></div>
+          <div class="r3-attr" id="r3-attr"></div>
+        </div>
+
         <!-- alerte de course (incident, fringale, arrivée…) : seul élément du jeu qui reste sur la carte -->
         <div class="hud-banner" id="hud-banner" hidden></div>
         <!-- mode jeu : décompte avant le départ (réglage « Décompte avant le départ »), au centre de l'écran de course -->
@@ -100,7 +129,6 @@
         <div class="bottom-view" data-view="route">
           <div class="chart-head">
             <h3>Profil altimétrique</h3>
-            <div class="legend" id="profile-legend"></div>
             <div class="seg-control" role="radiogroup" aria-label="Graphique du bas">
               <button type="button" data-rbottom="profile" aria-pressed="true">Altitude</button>
               <button type="button" data-rbottom="weather" aria-pressed="false">Météo</button>
@@ -201,8 +229,8 @@
   <footer class="credit">Réalisée par <a href="mailto:hugo.joudrier@gmail.com">Hugo Joudrier-Faure</a></footer>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
-
-  <!-- scripts de l'application (une seule liste pour toutes les pages) puis démarrage de cette page : Commun/js/boot.js, Commun/js/app.js -->
+  <script src="../Commun/js/menu.js"></script>
+  <!-- scripts de l'application (une seule liste pour toutes les pages) puis démarrage de cette page : js/boot.js, js/app.js -->
   <script src="../Commun/js/boot.js" data-app="pro"></script>
 </body>
 </html>

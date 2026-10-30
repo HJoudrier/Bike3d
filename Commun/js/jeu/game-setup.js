@@ -131,7 +131,7 @@
         h('div', { class: 'gs-pick' }, it.id === cur ? '✓ Parcours choisi' : 'Choisir ce parcours')));
       card.addEventListener('click', () => { if (canvas.dataset.dragged === '1') { canvas.dataset.dragged = ''; return; } setPick('route', it.id); });
       track.appendChild(card);
-      S.views.push(PYR.route3d.mount(canvas, p));
+      S.views.push(PYR.routeThumb.mount(canvas, p));
     }
     const sel = track.querySelector('[aria-selected="true"]');
     if (sel) track.scrollTo({ left: sel.offsetLeft - (track.clientWidth - sel.clientWidth) / 2, behavior: 'auto' });
