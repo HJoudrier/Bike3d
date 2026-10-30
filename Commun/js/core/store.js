@@ -58,6 +58,9 @@
       peloton: true,           // peloton en deux dimensions : coureurs côte à côte sur la largeur de la route, éventails (peloton.js) ; toujours vrai
       physio: true,            // modèle physiologique (avec l'alimentation) : glycogène par fibres, glycémie, chaleur, eau, fatigue, caféine
       fx: true,                // animations météo sur la carte (pluie, battement des manches à air)
+      pick: { route: '', athlete: '', bike: '', outfit: '' },   // jeux : éléments de la bibliothèque choisis (identifiants ; '' : réglages par défaut, ou le premier proposé)
+      weatherMode: 'random',   // jeux : météo 'random' (aléatoire évolutive) ou 'date' (celle d'un jour et d'une heure)
+      weatherSeed: 0,          // jeux : graine du temps aléatoire
       display: '2d',           // écran de course : '2d' la carte (Jeu2D), '3d' l'univers de Bike3D (Jeu3D)
       // limites en « Dans les roues » / « Suivre les attaques » (en %) : on se laisse décrocher plutôt que de passer sous ce W′ (0 : aucune limite)
       // ou de dépasser cette part de la courbe de puissance record (100 : aucune limite)

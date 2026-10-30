@@ -144,7 +144,8 @@
 
   /* ---------- Météo ---------- */
   const WEATHER_VARS = 'temperature_2m,relative_humidity_2m,pressure_msl,precipitation,wind_speed_10m,wind_direction_10m,wind_gusts_10m';
-  const WEATHER_PAST_DAYS = 90, WEATHER_FUTURE_DAYS = 15; // Open-Meteo : jusqu'à 92 jours en arrière et 16 en avant
+  const WEATHER_PAST_DAYS = 90, WEATHER_FUTURE_DAYS = 15; // prévisions Open-Meteo : jusqu'à 92 jours en arrière et 16 en avant ; plus loin, les archives
+  const ARCHIVE_FIRST_DAY = Date.UTC(1940, 0, 1) / 86400000;
 
   /**
    * Prévisions horaires aux stations du parcours (cf. weather.js stationsFor) pour un départ à startAtLocal
@@ -156,12 +157,15 @@
     if (!m) throw new Error('Indique d\'abord la date et l\'heure de départ.');
     const day = Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000;
     const today = Math.floor((now === undefined ? Date.now() : now) / 86400000);
-    if (day < today - WEATHER_PAST_DAYS || day > today + WEATHER_FUTURE_DAYS) {
-      throw new Error(`Les prévisions couvrent de ${WEATHER_PAST_DAYS} jours en arrière à ${WEATHER_FUTURE_DAYS} jours en avant : choisis une date dans cette plage.`);
+    if (day > today + WEATHER_FUTURE_DAYS) {
+      throw new Error(`Les prévisions ne vont pas au-delà de ${WEATHER_FUTURE_DAYS} jours : choisis une date plus proche.`);
     }
+    if (day < ARCHIVE_FIRST_DAY) throw new Error('Open-Meteo ne remonte pas avant 1940 : choisis une date plus récente.');
+    // au-delà des prévisions et des derniers jours : les archives (relevés réanalysés), même variables, même forme de réponse
+    const archive = day < today - WEATHER_PAST_DAYS;
     const iso = (d) => new Date(d * 86400000).toISOString().slice(0, 10);
     // un jour de marge de chaque côté : l'heure saisie est locale, les heures reçues sont en temps unix
-    const url = 'https://api.open-meteo.com/v1/forecast?' +
+    const url = (archive ? 'https://archive-api.open-meteo.com/v1/archive?' : 'https://api.open-meteo.com/v1/forecast?') +
       `latitude=${stations.map((s) => s.lat.toFixed(4)).join(',')}&longitude=${stations.map((s) => s.lng.toFixed(4)).join(',')}` +
       `&hourly=${WEATHER_VARS}&wind_speed_unit=ms&timeformat=unixtime&timezone=auto&start_date=${iso(day - 1)}&end_date=${iso(day + 1)}`;
     let lastErr = null;

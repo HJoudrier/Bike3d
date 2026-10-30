@@ -7,57 +7,74 @@
   <meta name="referrer" content="strict-origin-when-cross-origin"> <!-- requis par la politique d'usage des tuiles OSM -->
   <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
-  <title>Jeu — PaceYourRide</title>
-  <meta name="description" content="Configure ta partie : coureurs virtuels, météo, alimentation, défis entre amis, course en direct ; puis cours-la sur la carte ou en 3D.">
+  <title>Jeu 3D — PaceYourRide</title>
+  <meta name="description" content="Choisis ton parcours (en 3D), ton athlète et la météo, règle ta partie, puis cours-la dans le paysage de Bike3D.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a78d6'/%3E%3Cpath d='M10 44 L24 26 L32 36 L42 20 L54 44 Z' fill='white'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="../vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="../css/style.css">
-  <link rel="stylesheet" href="../css/game-mobile.css">
-  <link rel="stylesheet" href="../css/ride.css">
+  <link rel="stylesheet" href="../Commun/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="../Commun/css/style.css">
+  <link rel="stylesheet" href="../Commun/css/game-mobile.css">
+  <link rel="stylesheet" href="../Commun/css/ride.css">
+  <link rel="stylesheet" href="../Commun/css/select.css">
 </head>
-<body data-page="game" data-tab="game">
+<body data-page="game" data-tab="game" class="gs-page">
   <header class="topbar">
-    <a class="brand" href="../index.html" title="Retour à l'accueil">
+    <a class="brand" href="index.html" title="Choix de la partie">
       <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor"/><path d="M10 44 L24 26 L32 36 L42 20 L54 44 Z" fill="#fff"/></svg>
-      <span>PaceYourRide</span>
+      <span>PaceYourRide</span><small class="gs-app">Jeu 3D</small>
     </a>
     <nav class="tabs" aria-label="Sections">
-      <a href="../parcours.html" title="Parcours" aria-label="Parcours"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-5h6.5"/></svg></a>
-      <a href="../athlete.html" title="Athlète" aria-label="Athlète"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></a>
-      <a href="../equipement.html" title="Équipements" aria-label="Équipements"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17 9.5 8h5l4 9M9.5 8 12.5 17H5.5M14.5 5h2.5"/></svg></a>
-      <a href="../pacing.html" title="Pacing optimal" aria-label="Pacing optimal"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4"/><path d="m12 14 3-3"/><circle cx="12" cy="14" r="8"/></svg></a>
-      <a href="../Jeu/index.html" aria-current="page" title="Jeu" aria-label="Jeu"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h4M8 10v4"/><path d="M15 11.5h.01M18 13.5h.01"/><path d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5z"/></svg></a>
-      <a href="../Compteur/index.html" title="Compteur" aria-label="Compteur"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg></a>
+      <a href="../index.html" title="Les applications" aria-label="Applications"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></a>
     </nav>
     <div class="top-actions" id="top-actions">
-      <a class="btn ghost" href="../documentation.html" target="_blank" rel="noopener" title="Documentation : guide d'utilisation, modèles mécanique et physiologique, simulation et algorithmes d'optimisation" aria-label="Documentation"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></a>
-      <button class="btn ghost" id="btn-export-project" type="button" title="Exporter : enregistrer tout le projet dans un fichier" aria-label="Exporter le projet"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></button>
-      <label class="btn ghost" title="Importer : ouvrir un projet enregistré" aria-label="Importer un projet"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg><input type="file" id="input-import-project" accept=".json,application/json" hidden></label>
-      <button class="btn ghost" id="btn-reset" type="button" title="Réinitialiser : tout effacer et repartir des valeurs par défaut" aria-label="Réinitialiser"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+      <a class="btn ghost" href="../PaceYourRide/documentation.html" target="_blank" rel="noopener" title="Documentation" aria-label="Documentation"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></a>
     </div>
   </header>
 
-  <main class="layout">
-    <section class="stage">
-      <div class="map-wrap">
-        <div id="map" aria-label="Carte"></div>
+  <main class="gs">
+    <!-- Dropbox : d'où viennent les parcours et les athlètes (js/jeu/game-setup.js) -->
+    <section class="gs-cloud" id="gs-cloud" aria-live="polite"></section>
 
-        <!-- alerte de course (incident, fringale, arrivée…) : seul élément du jeu qui reste sur la carte -->
-        <div class="hud-banner" id="hud-banner" hidden></div>
-        <!-- mode jeu : décompte avant le départ (réglage « Décompte avant le départ »), au centre de l'écran de course -->
-        <div class="game-countdown" id="game-countdown" role="status" aria-live="polite" hidden></div>
+    <!-- ============ 1. PARCOURS : carrousel de vues 3D (js/jeu/route-3d.js) ============ -->
+    <section class="gs-sec" aria-labelledby="gs-h-route">
+      <h2 id="gs-h-route"><span class="gs-num">1</span> Parcours</h2>
+      <div class="gs-car">
+        <button class="gs-arrow" type="button" id="gs-prev" aria-label="Parcours précédent">‹</button>
+        <div class="gs-track" id="gs-track" tabindex="0" role="listbox" aria-label="Parcours de ta bibliothèque"></div>
+        <button class="gs-arrow" type="button" id="gs-next" aria-label="Parcours suivant">›</button>
+      </div>
+      <p class="hint gs-empty" id="gs-route-empty" hidden></p>
+    </section>
 
-        <div class="map-status" id="map-status" hidden></div>
-        <!-- course en direct : demandes d'accès à valider (organisateur) -->
-        <div class="live-requests" id="live-requests" hidden aria-live="polite"></div>
+    <!-- ============ 2. ATHLÈTE ============ -->
+    <section class="gs-sec" aria-labelledby="gs-h-ath">
+      <h2 id="gs-h-ath"><span class="gs-num">2</span> Athlète</h2>
+      <div class="gs-cards" id="gs-athletes" role="listbox" aria-label="Athlètes de ta bibliothèque"></div>
+      <p class="hint gs-empty" id="gs-ath-empty" hidden></p>
+      <div class="grid2 gs-gear">
+        <div class="field"><label for="gs-bike">Vélo</label><select id="gs-bike"></select></div>
+        <div class="field"><label for="gs-outfit">Tenue et position</label><select id="gs-outfit"></select></div>
       </div>
     </section>
 
-    <aside class="side" id="side">
-      <!-- ============ JEU : configuration de la partie (js/ui/game-setup.js) ; la course se joue sur Jeu/Map2D ou Jeu/3D ============ -->
-      <section class="panel" data-panel="game">
-        <h2>Jeu</h2>
-        <p class="hint game-setup">Gère toi-même l'effort du cycliste numérique : une fois la partie lancée (sur la carte ou dans l'univers 3D), règle la barre de puissance ou choisis une tactique sur l'écran de course : récupérer, endurance, tempo, seuil, PMA, attaquer, sprinter, rester dans les roues, suivre les attaques ou prendre des relais. Si ton W′ tombe à zéro, tu ne peux plus dépasser ta puissance critique ! Dans les roues, l'aspiration t'épargne jusqu'à un tiers de l'effort aérodynamique. Des points sont en jeu aux sprints intermédiaires et au sommet des côtes classées : lance ton sprint à moins de 400 m de la ligne, ou attaque dans la côte pour tenir jusqu'au sommet.</p>
+    <!-- ============ 3. MÉTÉO : une date, ou un temps aléatoire qui évolue ============ -->
+    <section class="gs-sec" aria-labelledby="gs-h-wx">
+      <h2 id="gs-h-wx"><span class="gs-num">3</span> Météo</h2>
+      <div class="seg-control gs-seg" role="radiogroup" aria-label="Source de la météo">
+        <button type="button" data-wx-mode="random" aria-pressed="true" title="Un temps tiré au hasard, qui change au fil de la course">🎲 Aléatoire évolutive</button>
+        <button type="button" data-wx-mode="date" aria-pressed="false" title="La météo réelle d'un jour et d'une heure, prévue ou observée">📅 Pour une date</button>
+      </div>
+      <div class="gs-wx" id="gs-wx-random">
+        <p class="hint" id="gs-wx-random-note"></p>
+        <div class="toolbar"><button class="btn" type="button" id="gs-wx-reroll">🎲 Tirer un autre temps</button></div>
+        <div class="status-line" id="gs-wx-random-sum"></div>
+      </div>
+      <div class="gs-wx" id="gs-wx-date" hidden><div data-wx-api></div></div>
+    </section>
+
+    <!-- ============ 4. PARTIE : réglages (page de configuration d'avant, Commun/js/jeu/game-setup.js) ============ -->
+    <section class="panel gs-sec" data-panel="game" aria-labelledby="gs-h-game">
+      <h2 id="gs-h-game"><span class="gs-num">4</span> Partie</h2>
+      <p class="hint game-setup">Gère toi-même l'effort du cycliste numérique : une fois la partie lancée, règle la barre de puissance ou choisis une tactique sur l'écran de course : récupérer, endurance, tempo, seuil, PMA, attaquer, sprinter, rester dans les roues, suivre les attaques ou prendre des relais. Si ton W′ tombe à zéro, tu ne peux plus dépasser ta puissance critique ! Dans les roues, l'aspiration t'épargne jusqu'à un tiers de l'effort aérodynamique. Des points sont en jeu aux sprints intermédiaires et au sommet des côtes classées : lance ton sprint à moins de 400 m de la ligne, ou attaque dans la côte pour tenir jusqu'au sommet.</p>
         <div class="keys">
           <div><kbd>↑</kbd> <kbd>↓</kbd> ±10 W</div>
           <div><kbd>Maj</kbd>+<kbd>↑</kbd><kbd>↓</kbd> ±50 W</div>
@@ -69,7 +86,7 @@
           <div><kbd>←</kbd> <kbd>→</kbd> changer de rang</div>
           <div><kbd>Z</kbd> zoom peloton</div>
         </div>
-        <div class="game-setup">
+      <div class="game-setup">
         <div class="grid2">
           <div>
           <div class="field"><label for="g-speed">Vitesse du temps</label>
@@ -109,8 +126,6 @@
         </div>
         <p class="hint">Avec un home-trainer ou sur la route, tu connectes ton capteur ou ton GPS sur l'écran de course, juste avant le départ.
           Avatars, home-trainers et cyclistes sur la route se retrouvent dans la même course en direct, sur la carte comme dans l'univers 3D.</p>
-        <h3>Météo</h3>
-        <div data-wx-api></div>
         <h3>Course</h3>
         <div class="grid2">
           <div class="field"><label for="g-bots">Coureurs virtuels (0 à 89 : un peloton de 90 avec toi)</label>
@@ -159,15 +174,6 @@
           </table>
           <p class="hint">0 désactive le cas. Pour un évènement, la durée est comptée en secondes de course ; pour un point de passage, la vitesse repasse à ×1 sur les derniers mètres avant la ligne. La pause fige la course quelques secondes (temps réel) pour te laisser régler ta puissance ou ta tactique.</p>
         </div>
-        <h3>Affichage de la course</h3>
-        <div class="seg-control game-display" role="radiogroup" aria-label="Affichage de la course">
-          <button type="button" data-display-choice="2d" aria-pressed="true" title="La course sur la carte (Jeu/Map2D)">🗺️ Carte 2D</button>
-          <button type="button" data-display-choice="3d" aria-pressed="false" title="La course dans le paysage cartoon de Bike3D (Jeu/3D)">🚴 Univers 3D</button>
-        </div>
-        <p class="hint" id="g-display-note"></p>
-        <div class="dock-transport game-launch">
-          <button class="btn primary" type="button" id="g-go">Démarrer</button>
-        </div>
         <h3>Défis entre amis (en différé)</h3>
         <div class="field">
           <label for="g-name">Tu roules sous le nom</label>
@@ -181,16 +187,18 @@
           <button class="btn" type="button" id="g-live-create">Créer une course en direct</button>
           <button class="btn" type="button" id="g-live-join">Rejoindre une course</button>
         </div>
-        </div>
-      </section>
-    </aside>
+      </div>
+    </section>
   </main>
 
-  <footer class="credit">Réalisée par <a href="mailto:hugo.joudrier@gmail.com">Hugo Joudrier-Faure</a></footer>
+  <div class="gs-go">
+    <div class="gs-go-sum" id="gs-go-sum" aria-live="polite"></div>
+    <button class="btn primary" type="button" id="g-go" disabled>Démarrer</button>
+  </div>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <!-- scripts de l'application (une seule liste pour toutes les pages) puis démarrage de cette page : js/boot.js, js/app.js -->
-  <script src="../js/boot.js"></script>
+  <!-- scripts de l'application (Commun/js/boot.js, selon data-app) puis démarrage de la page (Commun/js/app.js) -->
+  <script src="../Commun/js/boot.js" data-app="jeu3d"></script>
 </body>
 </html>

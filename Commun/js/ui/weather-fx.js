@@ -102,7 +102,7 @@
   function frame(now) {
     S.raf = 0;
     if (!S.running) return;
-    const dt = Math.min(0.05, (now - S.last) / 1000 || 0.016);
+    const dt = Math.max(0, Math.min(0.05, (now - S.last) / 1000 || 0.016));   // jamais négatif : l'horodatage de l'image peut précéder `S.last` (performance.now() de la mise en route)
     S.last = now;
     const ctx = S.ctx, C = S.cur;
     ease(dt);

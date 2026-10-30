@@ -209,6 +209,83 @@
     return normalize(Object.assign({ v: 1, start, off: num(o.off) ? o.off : 0, t0: start - 3600, n: 2, stations, custom: true }, cols));
   }
 
+  /* ---------- Météo aléatoire évolutive : un temps tiré au hasard qui change au fil des heures et le long du parcours ---------- */
+
+  /** Générateur pseudo-aléatoire à graine (mulberry32) : la même graine redonne la même météo. */
+  function rng(seed) {
+    let a = (Number(seed) || 1) >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return (((t ^ (t >>> 14)) >>> 0) / 4294967296);
+    };
+  }
+
+  /**
+   * Instantané d'une météo tirée au hasard, qui évolue : des perturbations (pluie, orage) passent sur le parcours à leur rythme, le
+   * vent tourne et se renforce avec elles, la température suit le cycle du jour, baisse sous la pluie et avec l'altitude. Chaque station
+   * voit le même temps que ses voisines avec un léger décalage (les perturbations se déplacent le long du parcours).
+   * profile : {n, step, length, lat, lng, ele} ; seed : entier (même graine, même temps) ;
+   * opts : {start (epoch s du départ), off (décalage UTC, s), hours (durée couverte, 24 par défaut), wet (0 à 1 : goût du temps humide, 0,5 par défaut)}.
+   * Renvoie null s'il n'y a pas de parcours.
+   */
+  function randomEvolving(profile, seed, opts) {
+    if (!profile || !(profile.length >= 30)) return null;
+    const o = opts || {};
+    const rnd = rng(seed);
+    const gauss = () => { let u = 0; for (let i = 0; i < 6; i++) u += rnd(); return (u - 3) / 0.7071; };   // ≈ N(0, 1)
+    const stations = stationsFor(profile);
+    const K = stations.length;
+    const start = num(o.start) ? o.start : Math.round(Date.now() / 1000);
+    const off = num(o.off) ? o.off : 0;
+    const n = clamp(Math.round(num(o.hours) ? o.hours : 24), 4, MAX_HOURS - 2);
+    const wet = clamp(num(o.wet) ? o.wet : 0.5, 0, 1);
+    const t0 = Math.floor(start / 3600) * 3600 - 3600;
+    // saison et climat : température moyenne et humidité de base tirées au hasard
+    const baseT = 6 + rnd() * 18;
+    const swing = 2 + rnd() * 4;                       // amplitude du cycle du jour (°C)
+    // perturbation : processus lent (AR(1)) sur une grille de 15 min, étendu au-delà de la durée pour décaler les stations
+    const lagH = (profile.length / 1000) / 40;         // temps (h) que met une perturbation à traverser le parcours
+    const steps = (n + Math.ceil(lagH) + 2) * 4;
+    const front = new Float64Array(steps);
+    let f = clamp(0.5 + (wet - 0.5) * 0.6 + gauss() * 0.25, 0, 1);
+    for (let i = 0; i < steps; i++) {
+      f = clamp(f + (0.45 + (wet - 0.5) * 0.5 - f) * 0.04 + gauss() * 0.075, 0, 1);
+      front[i] = f;
+    }
+    const frontAt = (h) => {                           // h : heures depuis t0 (peut être décalé par la station)
+      const x = clamp(h * 4, 0, steps - 1), i = Math.floor(x), j = Math.min(steps - 1, i + 1);
+      return front[i] + (front[j] - front[i]) * (x - i);
+    };
+    // vent : direction d'origine tirée au hasard, qui tourne lentement ; vitesse de base + renforcement avec la perturbation
+    const wd0 = rnd() * 360, wdDrift = (rnd() - 0.5) * 30, ws0 = 1 + rnd() * 3;
+    const cols = { T: [], rh: [], p: [], rain: [], ws: [], wd: [], gust: [] };
+    const ele0 = stations[0].ele;
+    for (let k = 0; k < K; k++) {
+      const lag = (stations[k].s / profile.length) * lagH;
+      const row = { T: [], rh: [], p: [], rain: [], ws: [], wd: [], gust: [] };
+      for (let h = 0; h < n; h++) {
+        const q = frontAt(h + 1 - lag);
+        const rainy = clamp((q - 0.58) / 0.42, 0, 1);               // 0 sous le seuil, 1 au plus fort
+        const rain = rainy * rainy * (1 + 9 * rainy) * (0.7 + 0.6 * rnd());      // mm/h : de l'averse légère à l'orage
+        const hourLocal = (((t0 + h * 3600 + off) / 3600) % 24 + 24) % 24;
+        const diurnal = Math.sin(((hourLocal - 9) / 24) * 2 * Math.PI) * swing;    // maximum vers 15 h
+        const T = baseT + diurnal - 3.2 * q - 0.0065 * (stations[k].ele - ele0) + gauss() * 0.3;
+        const ws = ws0 * (0.8 + 0.5 * q) + 4 * rainy * rainy + Math.abs(gauss()) * 0.3;
+        row.T.push(T);
+        row.rh.push(clamp(48 + 48 * q + gauss() * 3, 25, 100));
+        row.p.push(1013.25 + 10 * (0.5 - q) + gauss() * 0.4);
+        row.rain.push(rain);
+        row.ws.push(ws);
+        row.wd.push(((wd0 + wdDrift * (h / n) + 25 * (q - 0.5) + gauss() * 4) % 360 + 360) % 360);
+        row.gust.push(ws * (1.2 + 0.35 * rainy) + 0.4);
+      }
+      for (const fld of FIELDS) cols[fld].push(row[fld]);
+    }
+    return normalize(Object.assign({ v: 1, start: Math.round(start), off, t0, n, stations }, cols));
+  }
+
   /* ---------- Lecture : interpolation en distance et en temps ---------- */
 
   const prepared = new WeakMap();
@@ -356,6 +433,6 @@
 
   PYR.weather = {
     WIND_K, MAX_STATIONS, MAX_HOURS, FIELDS,
-    stationsFor, fromCustom, normalize, localToEpoch, epochToLocal, routeKey, freshKey, fromApi, at, compass, alongRoute, heatIndex, heatFactor, roadEffects, summary,
+    stationsFor, fromCustom, randomEvolving, normalize, localToEpoch, epochToLocal, routeKey, freshKey, fromApi, at, compass, alongRoute, heatIndex, heatFactor, roadEffects, summary,
   };
 })(globalThis.PYR = globalThis.PYR || {});

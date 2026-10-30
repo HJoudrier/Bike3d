@@ -211,11 +211,15 @@
     V.planLine = h('p', { class: 'rd-line' });
     V.planWarn = h('p', { class: 'rd-warn', hidden: true });
     V.planBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => computePlan() }, 'Calculer le plan');
-    V.perfBtn = h('button', { class: 'btn', type: 'button', onclick: () => { adoptPerfPlan(true); renderPrep(); D.toast('Plan de l\'page Pacing optimal repris.'); } }, 'Reprendre celui de l\'page Pacing optimal');
+    V.perfBtn = h('button', { class: 'btn', type: 'button', onclick: () => { adoptPerfPlan(true); renderPrep(); D.toast('Plan repris.'); } }, 'Reprendre le plan calculé ici');
     V.planFill = h('div', { class: 'progress-fill' });
     V.planProg = h('div', { class: 'progress', hidden: true }, V.planFill);
     V.segTable = h('table', { class: 'rd-table' });
     V.margin = marginEl();
+    V.cloudLine = h('p', { class: 'rd-line' });
+    V.cloudBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => cloudAction() }, 'Récupérer depuis Dropbox');
+    V.cloudCard = card('Parcours et plan (Dropbox)', V.cloudLine, h('div', { class: 'rd-btns' }, V.cloudBtn),
+      h('p', { class: 'rd-note' }, 'Le parcours, l\'athlète, le vélo et le plan optimal viennent de PaceYourRide, par Dropbox : calcule le plan là-bas, il arrive ici.'));
     V.routeCard = card('Parcours', V.routeLine, V.mapCard, V.pprofCard);
     V.formRef = selectEl([['athlete', 'Profil de l\'athlète à 100 %'], ['form', 'Profil ajusté à la forme']], store.state.perf.formRef, (v) => store.set('perf.formRef', v));
     V.formRefRow = rowEl('W′bal et temps tenable sur', V.formRef);
@@ -287,7 +291,7 @@
 
     V.startBtn = h('button', { class: 'btn primary big', type: 'button', onclick: () => startLive() }, 'Démarrer la sortie');
     V.startHint = h('p', { class: 'rd-note center' });
-    V.prep.append(V.resume, V.routeCard, V.planCard, V.mixCard, V.sensCard, V.nutCard, V.setCard, V.startBtn, V.startHint);
+    V.prep.append(V.resume, V.cloudCard, V.routeCard, V.planCard, V.mixCard, V.sensCard, V.nutCard, V.setCard, V.startBtn, V.startHint);
     buildKit();
   }
 
@@ -313,7 +317,7 @@
     if (!run.plan) loadStoredPlan();
     // parcours
     V.routeLine.hidden = !!p;                                    // sans parcours : seul ce message s'affiche
-    setTxt(V.routeLine, 'Aucun parcours : trace-le dans l\'page Parcours (ou importe un projet).');
+    setTxt(V.routeLine, 'Aucun parcours : crée-le dans PaceYourRide, puis récupère-le ici depuis Dropbox.');
     if (p) {
       const st = p.stats || {};
       setTxt(V.distLine, `Distance : ${km(p.length)} km`);
@@ -335,10 +339,11 @@
       setTxt(V.planWarn, diffLen ? 'Ce plan ne correspond plus au parcours : recalcule-le.' : 'Le parcours, le cycliste ou le vélo ont changé depuis le calcul : recalcule le plan.');
       renderSegTable(plan);
     } else {
-      setTxt(V.planLine, 'Pas encore de plan. Calcule-le ici ou dans l\'page Pacing optimal.');
+      setTxt(V.planLine, 'Pas encore de plan. Calcule-le ici, ou dans PaceYourRide (page Pacing optimal) puis récupère-le depuis Dropbox.');
       V.planWarn.hidden = true;
       D.clear(V.segTable);
     }
+    renderCloud();
     renderPrepMap();
     renderPrepProfile();
     // défi contre des coureurs virtuels
@@ -353,6 +358,51 @@
       : Sx.power.state === 'on' ? 'Prêt : GPS et capteur de puissance.' : 'Sans capteur de puissance, elle sera estimée d\'après la vitesse, la météo et la pente.');
     renderNutrition();
     renderResume();
+  }
+
+  /* ---------- parcours et plan : lus dans Dropbox (cloud.js pull), propres à cette application ---------- */
+  const CLOUD_AT_KEY = 'paceyourride.compteur.cloudat';
+  const cloudAt = () => { try { return Number(localStorage.getItem(CLOUD_AT_KEY)) || 0; } catch (e) { return 0; } };
+
+  function renderCloud() {
+    const st = PYR.cloud.status(), p = store.profile;
+    const at = cloudAt();
+    const what = p ? `${store.state.route.name || 'Parcours'} · ${km(p.length)} km${run.plan ? ' · plan prêt' : ' · pas de plan'}` : 'rien pour le moment';
+    setTxt(V.cloudLine, run.cloudBusy ? 'Lecture de Dropbox…' : run.cloudMsg ? run.cloudMsg
+      : !st.connected ? 'Dropbox non connecté : connecte-le pour récupérer ton plan.' : `Dropbox connecté${at ? ' · projet du ' + new Date(at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''} · ${what}`);
+    V.cloudBtn.disabled = !!run.cloudBusy;
+    setTxt(V.cloudBtn, st.connected ? '↻ Récupérer depuis Dropbox' : 'Se connecter à Dropbox');
+  }
+
+  function cloudAction() {
+    if (!PYR.cloud.status().connected) { PYR.cloud.login().catch((e) => D.toast(e.message, 'error')); return; }
+    pullFromCloud(true);
+  }
+
+  /** Reprend le projet de PaceYourRide (parcours, athlète, vélo, météo, plan) ; les réglages de ce téléphone (alertes, mode démo) sont gardés. */
+  async function pullFromCloud(force) {
+    if (run.cloudBusy || run.mode !== 'prep' || !PYR.cloud.status().connected) return;
+    run.cloudBusy = true; run.cloudMsg = ''; renderCloud();
+    try {
+      const snap = await PYR.cloud.pull();
+      if (!snap || !snap.project) run.cloudMsg = 'Ton Dropbox ne contient pas encore de projet : ouvre PaceYourRide, trace un parcours et calcule un plan.';
+      else if (run.mode !== 'prep') return;
+      else if (force || snap.savedAt > cloudAt() || !store.profile) {
+        const keep = { cfg: store.state.ride.cfg, demo: store.state.ride.demo };
+        store.importProject(snap.project);
+        store.state.ride.cfg = Object.assign({}, store.state.ride.cfg, keep.cfg);
+        store.state.ride.demo = keep.demo;
+        PYR.routeModel.computeMissing();
+        PYR.routeModel.rebuildProfile();
+        run.plan = null; run.base = null; run.segPlan = null;
+        loadStoredPlan();
+        try { localStorage.setItem(CLOUD_AT_KEY, String(snap.savedAt)); } catch (e) { /* stockage indisponible */ }
+        store.save();
+        if (force) D.toast('Parcours et plan récupérés depuis Dropbox.');
+      }
+    } catch (e) { run.cloudMsg = e.message; if (force) D.toast(e.message, 'error'); }
+    run.cloudBusy = false;
+    renderCloud(); renderPrep();
   }
 
   /* ---------- parcours en intégralité et profil, avant le départ ---------- */
@@ -2091,6 +2141,8 @@ Recalé sur ta FC depuis ${hmm(hf.n)} (filtre de Kalman) : FC de repos ${Math.ro
       const rs = store.state.ride;
       if (!rs) return;
       build();
+      PYR.cloud.onChange(() => { if (run.mode === 'prep') renderCloud(); });
+      pullFromCloud(false);                                       // un projet plus récent dans Dropbox est repris à l'ouverture
       ['profile', 'rider', 'bike', 'env', 'perf', 'weather', 'surfaces', 'winds'].forEach((e) => store.on(e, () => { if (run.mode === 'prep' && document.body.dataset.tab === 'ride') renderPrep(); }));
       // la référence de W′bal est inscrite dans le plan : un plan repris de la page Pacing optimal est repris à nouveau, les autres sont signalés périmés (empreinte)
       store.on('formref', () => {
