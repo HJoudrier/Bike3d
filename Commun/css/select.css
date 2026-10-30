@@ -100,3 +100,7 @@ body.gs-page .topbar { position: sticky; top: 0; z-index: 40; }
 .gs-dlg-form .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .gs-dlg-form .wz-warn { color: var(--danger); margin: 4px 0; }
 .gs-dlg-form .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+
+/* bascule 2D / 3D du sélecteur de parcours */
+.gs-add .gs-view { margin-left: auto; }
+.gs-view button { min-width: 38px; }

@@ -149,5 +149,54 @@
     n.focus(); n.select();
   }
 
-  PYR.libPick = { routeCarousel, athleteCards, chooseGpx, athleteDialog, profileOf };
+  /* ---------- les sélecteurs complets : les mêmes dans PaceYourRide, Jeu 2D, Jeu 3D et le compteur ---------- */
+
+  const VIEW_KEY = (PYR.storageNs || 'paceyourride') + '.pickview';
+  /** Vue des parcours choisie ('2d' : le tracé sur la carte ; '3d' : une vue 3D), gardée pour l'application ; `dflt` tant qu'on n'a pas choisi. */
+  function viewPref(dflt) {
+    let v = null;
+    try { v = localStorage.getItem(VIEW_KEY); } catch (e) { /* stockage indisponible */ }
+    return v === '3d' || v === '2d' ? v : (dflt === '3d' ? '3d' : '2d');
+  }
+
+  /**
+   * Sélecteur de parcours : une barre (« Ajouter un parcours », autres boutons, bascule 2D / 3D) puis le carrousel (routeCarousel).
+   * o : routeCarousel + {onAdd (ajout d'un fichier GPX), extra ([{label, title, fn}] : autres boutons), defaultView ('2d' | '3d')}.
+   * Renvoie {destroy, setPick(id)}.
+   */
+  function routePicker(host, o) {
+    D.clear(host);
+    let view = viewPref(o.defaultView), car = null, pick = o.pick;
+    const area = h('div', { class: 'gs-route-area' });
+    const seg = h('div', { class: 'seg-control gs-view', role: 'radiogroup', 'aria-label': 'Vue des parcours' },
+      ['2d', '3d'].map((v) => h('button', { type: 'button', role: 'radio', dataset: { view: v }, 'aria-pressed': String(v === view),
+        title: v === '2d' ? 'Le tracé sur le fond de carte' : 'Le tracé en 3D, posé à son altitude : glisse pour le faire tourner', onclick: () => setView(v) }, v === '2d' ? '2D' : '3D')));
+    const bar = h('div', { class: 'gs-add' },
+      o.onAdd ? h('button', { class: 'btn', type: 'button', title: 'Ajouter un parcours à ta bibliothèque : un fichier GPX, ou un parcours complet exporté par PaceYourRide', onclick: o.onAdd }, '＋ Ajouter un parcours (GPX)') : null,
+      (o.extra || []).map((b) => h('button', { class: 'btn', type: 'button', title: b.title || b.label, onclick: b.fn }, b.label)), seg);
+    host.append(bar, area);
+    function draw() {
+      if (car) car.destroy();
+      car = routeCarousel(area, Object.assign({}, o, { pick, view, onPick: (id) => { pick = id; o.onPick(id); } }));
+    }
+    function setView(v) {
+      if (v === view) return;
+      view = v;
+      try { localStorage.setItem(VIEW_KEY, v); } catch (e) { /* stockage indisponible */ }
+      $$('[data-view]', seg).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+      draw();
+    }
+    draw();
+    return { destroy() { if (car) car.destroy(); }, setPick(id) { pick = id; if (car) car.setPick(id); } };
+  }
+
+  /** Sélecteur d'athlète : une barre (« Ajouter un athlète ») puis les cartes (athleteCards). o : athleteCards + {onAdd}. */
+  function athletePicker(host, o) {
+    D.clear(host);
+    const area = h('div');
+    host.append(h('div', { class: 'gs-add' }, o.onAdd ? h('button', { class: 'btn', type: 'button', onclick: o.onAdd }, '＋ Ajouter un athlète') : null), area);
+    return athleteCards(area, o);
+  }
+
+  PYR.libPick = { routeCarousel, athleteCards, routePicker, athletePicker, viewPref, chooseGpx, athleteDialog, profileOf };
 })(globalThis.PYR = globalThis.PYR || {});

@@ -336,18 +336,18 @@
         if (W.sel[kind] === it.id) W.sel[kind] = 'current';
         renderWizard();
       } }]);
-    const add = kind === 'route'
-      ? h('button', { class: 'btn', type: 'button', title: 'Un fichier GPX, ou un parcours complet exporté par PaceYourRide', onclick: () => PYR.libPick.chooseGpx((r) => {
-        const it = L.add(lib, 'route', r.name, r.data);
-        if (writeJSON(LIBRARY_KEY, lib)) { D.toast(`« ${it.name} » ajouté à ta bibliothèque` + (r.hasEle === false ? " (le fichier n'a pas d'altitude : pas de dénivelé)." : '.')); W.sel.route = it.id; renderWizard(); }
-      }) }, '＋ Ajouter un parcours (GPX)')
-      : h('button', { class: 'btn', type: 'button', onclick: openAddAthlete }, '＋ Ajouter un athlète');
-    body.appendChild(h('div', { class: 'gs-add' }, add, kind === 'route' ? h('button', { class: 'btn', type: 'button', onclick: createRoute, title: 'Un parcours vide, à tracer sur la carte' }, '✎ Tracer un parcours') : null));
+    const addGpx = () => PYR.libPick.chooseGpx((r) => {
+      const it = L.add(lib, 'route', r.name, r.data);
+      if (writeJSON(LIBRARY_KEY, lib)) { D.toast(`« ${it.name} » ajouté à ta bibliothèque` + (r.hasEle === false ? " (le fichier n'a pas d'altitude : pas de dénivelé)." : '.')); W.sel.route = it.id; renderWizard(); }
+    });
     const host = h('div');
     body.appendChild(host);
-    const view = (kind === 'route' ? PYR.libPick.routeCarousel : PYR.libPick.athleteCards)(host, { items: list, pick: W.sel[kind], view: '2d', projectLabel: 'Projet en cours', actions: acts,
+    const common = { items: list, pick: W.sel[kind], projectLabel: 'Projet en cours', actions: acts,
       onPick: (id) => { W.sel[kind] = id; view.setPick(id); },
-      emptyText: kind === 'route' ? 'Aucun parcours : ajoute un fichier GPX ou trace-en un.' : 'Aucun athlète : ajoute-en un.' });
+      emptyText: kind === 'route' ? 'Aucun parcours : ajoute un fichier GPX ou trace-en un.' : 'Aucun athlète : ajoute-en un.' };
+    const view = kind === 'route'
+      ? PYR.libPick.routePicker(host, Object.assign(common, { onAdd: addGpx, extra: [{ label: '✎ Tracer un parcours', title: 'Un parcours vide, à tracer sur la carte', fn: createRoute }] }))
+      : PYR.libPick.athletePicker(host, Object.assign(common, { onAdd: openAddAthlete }));
     W.views.push(view);
     return canCurrent || items.length > 0;
   }

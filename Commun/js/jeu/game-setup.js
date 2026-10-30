@@ -84,14 +84,14 @@
 
   function renderRoutes() {
     for (const v of S.views) v.destroy();
-    S.views = [PYR.libPick.routeCarousel($('#gs-routes'), { items: items('route'), pick: pickId('route'), view: is3d() ? '3d' : '2d', onPick: (id) => setPick('route', id), actions: removeAction('route'),
+    S.views = [PYR.libPick.routePicker($('#gs-routes'), { items: items('route'), pick: pickId('route'), defaultView: is3d() ? '3d' : '2d', onAdd: addRoute, onPick: (id) => setPick('route', id), actions: removeAction('route'),
       emptyText: 'Aucun parcours pour le moment. Ajoute un fichier GPX avec « Ajouter un parcours », ou trace-en un dans PaceYourRide.' })];
   }
 
   /* ---------- 2. athlète, vélo, tenue ---------- */
 
   function renderAthletes() {
-    PYR.libPick.athleteCards($('#gs-athletes'), { items: items('athlete'), pick: pickId('athlete'), onPick: (id) => setPick('athlete', id), actions: removeAction('athlete'),
+    PYR.libPick.athletePicker($('#gs-athletes'), { items: items('athlete'), pick: pickId('athlete'), onAdd: addAthlete, onPick: (id) => setPick('athlete', id), actions: removeAction('athlete'),
       emptyText: "Aucun athlète enregistré : l'athlète par défaut sera utilisé. Ajoute le tien avec « Ajouter un athlète »." });
     for (const kind of ['bike', 'outfit']) {
       const sel = $(kind === 'bike' ? '#gs-bike' : '#gs-outfit'), all = items(kind), id = store.state.game.pick[kind];
@@ -232,8 +232,6 @@
       S.mode = st.game.weatherMode === 'date' ? 'date' : 'random';
       C.load();
       renderWeatherPanel();
-      $('#gs-add-route').addEventListener('click', addRoute);
-      $('#gs-add-athlete').addEventListener('click', addAthlete);
       $('#g-go').addEventListener('click', () => start());
       $('#g-live-create').addEventListener('click', () => start({ do: 'live-create' }));
       $('#g-live-join').addEventListener('click', () => start({ do: 'live-join' }));

@@ -223,9 +223,7 @@
     V.pickAth = h('div', { class: 'gs-pick-ath' });
     V.pickBike = h('select', { 'aria-label': 'Vélo', onchange: () => pickItem('bike', V.pickBike.value) });
     V.pickOutfit = h('select', { 'aria-label': 'Tenue et position', onchange: () => pickItem('outfit', V.pickOutfit.value) });
-    V.cloudCard = card('Parcours et athlète', V.cloudLine, h('div', { class: 'rd-btns' }, V.cloudBtn,
-      h('button', { class: 'btn', type: 'button', onclick: () => addRoute() }, '＋ Ajouter un parcours (GPX)'),
-      h('button', { class: 'btn', type: 'button', onclick: () => addAthlete() }, '＋ Ajouter un athlète')),
+    V.cloudCard = card('Parcours et athlète', V.cloudLine, h('div', { class: 'rd-btns' }, V.cloudBtn),
     V.pickRoutes, V.pickAth,
     h('div', { class: 'grid2' }, rowEl('Vélo', V.pickBike), rowEl('Tenue et position', V.pickOutfit)),
     h('p', { class: 'rd-note' }, 'Les parcours, athlètes, vélos et tenues sont ceux de PaceYourRide, lus dans ton Dropbox ; le plan optimal vient avec le projet en cours de PaceYourRide (ou calcule-le ici).'));
@@ -387,9 +385,9 @@
   function renderPickers() {
     const pick = pickOf();
     for (const v of pickViews) v.destroy();
-    pickViews = [PYR.libPick.routeCarousel(V.pickRoutes, { items: LC.items('route'), pick: LC.pickId('route', pick.route), view: '2d', onPick: (id) => pickItem('route', id),
+    pickViews = [PYR.libPick.routePicker(V.pickRoutes, { items: LC.items('route'), pick: LC.pickId('route', pick.route), onAdd: addRoute, onPick: (id) => pickItem('route', id),
       emptyText: 'Aucun parcours : ajoute un fichier GPX, ou crée-en un dans PaceYourRide.' })];
-    PYR.libPick.athleteCards(V.pickAth, { items: LC.items('athlete'), pick: LC.pickId('athlete', pick.athlete), onPick: (id) => pickItem('athlete', id), emptyText: "Aucun athlète : l'athlète par défaut est utilisé." });
+    PYR.libPick.athletePicker(V.pickAth, { items: LC.items('athlete'), pick: LC.pickId('athlete', pick.athlete), onAdd: addAthlete, onPick: (id) => pickItem('athlete', id), emptyText: "Aucun athlète : l'athlète par défaut est utilisé." });
     for (const [kind, sel] of [['bike', V.pickBike], ['outfit', V.pickOutfit]]) {
       D.clear(sel);
       sel.appendChild(h('option', { value: 'none' }, 'Réglages par défaut'));
