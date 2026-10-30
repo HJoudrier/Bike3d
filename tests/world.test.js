@@ -548,12 +548,18 @@ test('cyclistes 3D : anatomie (géométries valides, poitrine d\'une cycliste, f
   };
   for (const fem of [false, true]) {
     const cheek = at(fem, 0.44, 0.07).z, cleft = at(fem, 0.44, 0).z, near = at(fem, 0.44, 0.03).z;
-    assert.ok(cheek < -0.12, `fessier bien en arrière : ${cheek.toFixed(3)} m`);
+    assert.ok(cheek < -0.11 && cheek > -0.13, `fessier en arrière sans excès : ${cheek.toFixed(3)} m`);
+    // de profil, pas de pointe : le fessier reste presque aussi saillant 4 cm au-dessus et au-dessous de son sommet
+    const prof = [];
+    for (let v = 0.02; v < 1; v += 0.01) prof.push({ y: A.pelvisPoint(0, v, fem).y, z: at(fem, v, 0.07).z });
+    const top = prof.reduce((m, p) => (p.z < m.z ? p : m));
+    const near4 = (dy) => prof.reduce((m, p) => (Math.abs(p.y - top.y - dy) < Math.abs(m.y - top.y - dy) ? p : m));
+    for (const dy of [-0.04, 0.04]) assert.ok(near4(dy).z - top.z < 0.012, `profil plein à ${dy * 100} cm du sommet : ${(near4(dy).z - top.z).toFixed(3)} m`);
     assert.ok(cleft - cheek > 0.025, 'sillon entre les fessiers');
     assert.ok(near - cheek < 0.012, 'sillon étroit : le fessier reste plein jusqu\'à 3 cm du milieu');
     assert.ok(Math.abs(at(fem, 0.97, 0.02).z - at(fem, 0.97, 0).z) < 0.003, 'en haut, ni sillon ni bord : les fessiers se fondent dans le dos');
   }
-  assert.ok(at(true, 0.44, 0.07).z < at(false, 0.44, 0.07).z - 0.01, 'plus pleins chez une cycliste');
+  assert.ok(at(true, 0.44, 0.07).z < at(false, 0.44, 0.07).z - 0.006, 'plus pleins chez une cycliste');
   const seat = A.pelvisParts({ q: 2, fem: true });
   assert.equal(seat[0].sheen, 1, 'reflet du lycra sur le cuissard');
   assert.ok(B3D.toon.merge(seat).attributes.sheen, 'attribut de reflet dans la géométrie fusionnée');

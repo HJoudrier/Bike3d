@@ -386,19 +386,27 @@
      la hauteur des hanches, +z devant), puis basculée comme le bassin d'un cycliste assis. Les fessiers arrondissent le dos du
      bassin et s'y fondent : ni bord en haut ni boule, pleins jusqu'au sillon, étroit et plus profond vers le bas ; arrondis
      dessous (le pli fessier) ; plus pleins et hanches plus larges chez une femme. */
-  // profils de l'entrejambe (v = 0) à la taille (v = 1), debout : hauteur, demi-largeur (femme, homme), dos sans les fessiers,
-  // creux des fessiers (fessiers compris, femme), ventre ; le profil des fessiers est un D arrondi, le plus saillant assez bas
+  // profils de l'entrejambe (v = 0) à la taille (v = 1), debout : hauteur, demi-largeur (femme, homme), dos sans les fessiers, ventre
+  // (le profil des fessiers : gluteDepth)
   const PV = (() => {
     const K = [
-      [0, -0.125, 0, 0, 0, 0, 0], [0.06, -0.121, 0.068, 0.062, 0.035, 0.074, 0.038], [0.14, -0.108, 0.124, 0.113, 0.058, 0.115, 0.057],
-      [0.24, -0.09, 0.158, 0.144, 0.072, 0.136, 0.068], [0.34, -0.07, 0.176, 0.159, 0.08, 0.146, 0.075], [0.44, -0.046, 0.18, 0.163, 0.085, 0.148, 0.08],
-      [0.54, -0.02, 0.175, 0.16, 0.087, 0.143, 0.082], [0.64, 0.008, 0.161, 0.149, 0.086, 0.132, 0.083], [0.74, 0.04, 0.14, 0.132, 0.08, 0.11, 0.08],
-      [0.84, 0.075, 0.118, 0.114, 0.074, 0.09, 0.076], [0.92, 0.11, 0.106, 0.104, 0.068, 0.074, 0.072], [1, 0.15, 0.098, 0.098, 0.062, 0.062, 0.068]
+      [0, -0.125, 0, 0, 0, 0], [0.06, -0.121, 0.068, 0.062, 0.035, 0.038], [0.14, -0.108, 0.124, 0.113, 0.058, 0.057],
+      [0.24, -0.09, 0.158, 0.144, 0.072, 0.068], [0.34, -0.07, 0.176, 0.159, 0.08, 0.075], [0.44, -0.046, 0.18, 0.163, 0.085, 0.08],
+      [0.54, -0.02, 0.175, 0.16, 0.087, 0.082], [0.64, 0.008, 0.161, 0.149, 0.086, 0.083], [0.74, 0.04, 0.14, 0.132, 0.08, 0.08],
+      [0.84, 0.075, 0.118, 0.114, 0.074, 0.076], [0.92, 0.11, 0.106, 0.104, 0.068, 0.072], [1, 0.15, 0.098, 0.098, 0.062, 0.068]
     ];
     const col = (k) => curve(K.map((r) => [r[0], r[k]]));
-    return { y: col(1), wf: col(2), wm: col(3), back: col(4), cheek: col(5), front: col(6),
+    return { y: col(1), wf: col(2), wm: col(3), back: col(4), front: col(5),
       cleft: curve([[0, 0.012], [0.1, 0.03], [0.3, 0.04], [0.5, 0.034], [0.68, 0.018], [0.8, 0.005], [0.9, 0]]) };
   })();
+  /* Profil des fessiers vus de côté (debout) : une super-ellipse (exposant GLUTE.n > 2) plutôt qu'une ellipse : moins saillante au
+     sommet, pleine au-dessus et au-dessous ; la courbe va du bas du dos à la selle d'un seul arrondi, sans pointe. Profondeur (m)
+     derrière le milieu du bassin à la hauteur y ; fermée à l'entrejambe. */
+  const GLUTE = { yc: -0.035, up: 0.17, down: 0.095, depth: 0.128, n: 2.4 };
+  function gluteDepth(v) {
+    const y = PV.y(v), u = Math.min(1, Math.abs(y - GLUTE.yc) / (y > GLUTE.yc ? GLUTE.up : GLUTE.down));
+    return GLUTE.depth * Math.pow(1 - Math.pow(u, GLUTE.n), 1 / GLUTE.n) * ss(0, 0.12, v);
+  }
   /** Point du bassin : a, angle autour du corps (0 au milieu du dos, π/2 sur le côté +x) ; v, hauteur (0 entrejambe, 1 taille). */
   function pelvisPoint(a, v, fem) {
     // section : ellipse devant ; derrière, une super-ellipse (le bassin reste large jusqu'aux fessiers au lieu de s'effiler)
@@ -407,7 +415,7 @@
     let z = c > 0 ? -B * Math.pow(c, e) : -PV.front(v) * c;
     // fessiers : un dôme rond de chaque côté, plein jusqu'au sillon et arrondi vers l'extérieur jusqu'à la hanche ; moins saillants
     // chez un homme
-    const t = W > 1e-6 ? Math.abs(x) / W : 0, bk = ss(-0.1, 0.45, c), G = Math.max(0, PV.cheek(v) - B) * (fem ? 1 : 0.8);
+    const t = W > 1e-6 ? Math.abs(x) / W : 0, bk = ss(-0.1, 0.45, c), G = Math.max(0, gluteDepth(v) - B) * (fem ? 1 : 0.8);
     z -= G * Math.sqrt(Math.max(0, 1 - ((t - 0.42) / 0.74) ** 2)) * bk;
     z += PV.cleft(v) * (fem ? 1.1 : 1) * Math.exp(-((x / 0.013) ** 2)) * bk;
     if (!fem) z += 0.006 * bell(t, 0.9, 0.08) * bell(v, 0.55, 0.15) * bk; // léger creux sur le côté de la hanche
