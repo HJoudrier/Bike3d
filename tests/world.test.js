@@ -499,6 +499,17 @@ test('cyclistes 3D : trois niveaux de détail, la même pose, une cycliste', { s
   assert.ok(!real.c.tail, 'pas de queue de cheval chez un homme');
   assert.ok(f.c.shoulderX < real.c.shoulderX);
   assert.ok(real.c.arms.every((a) => !a.shoulder), 'modèles fins : pas de boule à l\'épaule');
+  // les fessiers suivent les cuisses : angles opposés autour de leur moyenne, qui s'inversent au demi-tour de pédalier
+  const c = real.c;
+  c.crank = 1;
+  c.update(0, st);
+  const a1 = c.hipU.uHipA.value.clone();
+  c.crank = 1 + Math.PI;
+  c.update(0, st);
+  const a2 = c.hipU.uHipA.value;
+  assert.ok(Math.abs(a1.x + a1.y) < 1e-9 && Math.abs(a1.x) > 0.1, `écarts des cuisses : ${a1.x.toFixed(3)}, ${a1.y.toFixed(3)}`);
+  assert.ok(Math.abs(a2.x - a1.y) < 1e-6, 'au demi-tour, chaque fessier prend le mouvement de l\'autre');
+  assert.ok(!simple.c.hipU, 'modèle simple : pas de fessiers animés');
   assert.ok(new C({ sex: 'f', detail: 'detailed' }).fem, 'sans équipement : le sexe du menu de Bike3D');
   assert.ok(!new C({ sex: 'f', gear: { sex: 'm' } }).fem, 'avec équipement : celui du profil');
   // finitions du réaliste : lunettes, jugulaire et col en plus ; les yeux se voient sans lunettes ou derrière la visière du chrono
@@ -546,6 +557,17 @@ test('cyclistes 3D : anatomie (géométries valides, poitrine d\'une cycliste, f
   const seat = A.pelvisParts({ q: 2, fem: true });
   assert.equal(seat[0].sheen, 1, 'reflet du lycra sur le cuissard');
   assert.ok(B3D.toon.merge(seat).attributes.sheen, 'attribut de reflet dans la géométrie fusionnée');
+  // pédalage : le bas de chaque fessier suit sa cuisse (poids par sommet, signé par côté), le haut et le milieu ne bougent pas
+  const hw = seat[0].geo.attributes.hipW, pp = seat[0].geo.attributes.position;
+  let low = 0, high = 0, mid = 0;
+  for (let i = 0; i < hw.count; i++) {
+    const w = hw.getX(i), x = pp.getX(i), y = pp.getY(i);
+    if (w !== 0) assert.equal(Math.sign(w), Math.sign(x), 'chaque côté suit sa cuisse');
+    if (y < -0.1 && Math.abs(x) > 0.06) low = Math.max(low, Math.abs(w));
+    if (y > 0.1) high = Math.max(high, Math.abs(w));
+    if (Math.abs(x) < 0.002) mid = Math.max(mid, Math.abs(w));
+  }
+  assert.ok(Math.abs(low - A.HIP_FOLLOW) < 0.05 && high < 0.01 && mid < 0.05, `poids : bas ${low.toFixed(2)}, haut ${high.toFixed(2)}, milieu ${mid.toFixed(2)}`);
   // le bassin bascule avec le buste : plus en bas du cintre (buste couché) qu'en danseuse (buste relevé)
   const V3 = B3D.toon.shared.uRider.value.constructor;
   assert.ok(A.pelvisPose(new V3(0, 0.45, 0.9)).tilt > A.pelvisPose(new V3(0, 0.9, 0.45)).tilt);

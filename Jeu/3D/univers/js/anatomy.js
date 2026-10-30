@@ -3,7 +3,7 @@
    Des géométries sans matériau : des pièces à fusionner ({geo, color, matrix?}, comme B3D.toon.merge) pour la tête (crâne et visage,
    nez, oreilles, lèvres, yeux, sourcils, cheveux, queue de cheval, jugulaire du casque), les bras et les jambes galbés (deltoïde,
    biceps, quadriceps, mollet, tibia, chevilles ; manches, cuissard, chaussettes, couvre-chaussures), les mains gantées, les
-   chaussures, le bassin et les fessiers (une seule surface, avec le reflet du lycra) ; le buste (épaules arrondies d'où sortent les bras, omoplates, dos rond du cycliste,
+   chaussures, le bassin et les fessiers (une seule surface, avec le reflet du lycra, dont le bas suit les cuisses) ; le buste (épaules arrondies d'où sortent les bras, omoplates, dos rond du cycliste,
    pectoraux ou poitrine chez une femme) est une géométrie simple qui garde les coordonnées de texture de la sphère du modèle
    simple, pour le motif du maillot.
    q : 1 (détaillé) ou 2 (réaliste : plus fin, avec les finitions : col et fermeture du maillot, poches, bande de cuissard, doigts,
@@ -138,7 +138,7 @@
     thigh: (side, fem) => (t, th) => {
       const inner = Math.max(0, -Math.sin(th) * side); // vers le vélo
       return THIGH(t) * (fem ? 1.02 : 1) + 0.009 * bell(t, 0.45, 0.28) * front(th) ** 1.5 + 0.008 * bell(t, 0.82, 0.1) * front(th) * inner * 2
-        + 0.004 * bell(t, 0.5, 0.3) * back(th);
+        + 0.004 * bell(t, 0.5, 0.3) * back(th) + 0.014 * bell(t, 0.03, 0.14) * back(th) ** 1.2; // la racine s'élargit sous le fessier
     },
     shin: (side) => (t, th) => {
       const inner = Math.max(0, -Math.sin(th) * side), outer = Math.max(0, Math.sin(th) * side);
@@ -390,9 +390,9 @@
   // creux des fessiers (fessiers compris, femme), ventre ; le profil des fessiers est un D arrondi, le plus saillant assez bas
   const PV = (() => {
     const K = [
-      [0, -0.13, 0, 0, 0, 0, 0], [0.06, -0.128, 0.06, 0.055, 0.03, 0.05, 0.035], [0.14, -0.118, 0.115, 0.105, 0.055, 0.105, 0.055],
-      [0.24, -0.1, 0.15, 0.137, 0.07, 0.135, 0.068], [0.34, -0.078, 0.168, 0.152, 0.08, 0.15, 0.075], [0.44, -0.052, 0.174, 0.157, 0.085, 0.155, 0.08],
-      [0.54, -0.024, 0.17, 0.155, 0.088, 0.15, 0.083], [0.64, 0.006, 0.158, 0.146, 0.086, 0.136, 0.083], [0.74, 0.04, 0.138, 0.13, 0.08, 0.112, 0.08],
+      [0, -0.125, 0, 0, 0, 0, 0], [0.06, -0.121, 0.068, 0.062, 0.035, 0.074, 0.038], [0.14, -0.108, 0.124, 0.113, 0.058, 0.115, 0.057],
+      [0.24, -0.09, 0.158, 0.144, 0.072, 0.136, 0.068], [0.34, -0.07, 0.176, 0.159, 0.08, 0.146, 0.075], [0.44, -0.046, 0.18, 0.163, 0.085, 0.148, 0.08],
+      [0.54, -0.02, 0.175, 0.16, 0.087, 0.143, 0.082], [0.64, 0.008, 0.161, 0.149, 0.086, 0.132, 0.083], [0.74, 0.04, 0.14, 0.132, 0.08, 0.11, 0.08],
       [0.84, 0.075, 0.118, 0.114, 0.074, 0.09, 0.076], [0.92, 0.11, 0.106, 0.104, 0.068, 0.074, 0.072], [1, 0.15, 0.098, 0.098, 0.062, 0.062, 0.068]
     ];
     const col = (k) => curve(K.map((r) => [r[0], r[k]]));
@@ -401,26 +401,33 @@
   })();
   /** Point du bassin : a, angle autour du corps (0 au milieu du dos, π/2 sur le côté +x) ; v, hauteur (0 entrejambe, 1 taille). */
   function pelvisPoint(a, v, fem) {
-    const sn = Math.sin(a), c = Math.cos(a), W = (fem ? PV.wf : PV.wm)(v), B = PV.back(v);
-    const x = W * sn;
-    let z = c > 0 ? -B * c : -PV.front(v) * c;
-    // fessiers : pleins du sillon jusqu'aux deux tiers de la largeur, puis ils rejoignent la hanche ; moins saillants chez un homme
-    const t = W > 1e-6 ? Math.abs(x) / W : 0, bk = ss(-0.05, 0.55, c), G = Math.max(0, PV.cheek(v) - B) * (fem ? 1 : 0.78);
-    z -= G * ss(1, 0.38, t) * (0.85 + 0.15 * bell(t, 0.45, 0.2)) * bk;
+    // section : ellipse devant ; derrière, une super-ellipse (le bassin reste large jusqu'aux fessiers au lieu de s'effiler)
+    const sn = Math.sin(a), c = Math.cos(a), e = c > 0 ? 0.78 : 1, W = (fem ? PV.wf : PV.wm)(v), B = PV.back(v);
+    const x = W * Math.sign(sn) * Math.pow(Math.abs(sn), e);
+    let z = c > 0 ? -B * Math.pow(c, e) : -PV.front(v) * c;
+    // fessiers : un dôme rond de chaque côté, plein jusqu'au sillon et arrondi vers l'extérieur jusqu'à la hanche ; moins saillants
+    // chez un homme
+    const t = W > 1e-6 ? Math.abs(x) / W : 0, bk = ss(-0.1, 0.45, c), G = Math.max(0, PV.cheek(v) - B) * (fem ? 1 : 0.8);
+    z -= G * Math.sqrt(Math.max(0, 1 - ((t - 0.42) / 0.74) ** 2)) * bk;
     z += PV.cleft(v) * (fem ? 1.1 : 1) * Math.exp(-((x / 0.013) ** 2)) * bk;
-    if (!fem) z += 0.008 * bell(t, 0.88, 0.1) * bell(v, 0.55, 0.15) * bk; // creux sur le côté de la hanche
-    return V(x, PV.y(v), z);
+    if (!fem) z += 0.006 * bell(t, 0.9, 0.08) * bell(v, 0.55, 0.15) * bk; // léger creux sur le côté de la hanche
+    // cambrure : au-dessus des fessiers, la taille suit le dos penché et reste sous le maillot
+    const y = PV.y(v);
+    if (y > 0) z += 0.42 * y * y / (y + 0.03);
+    return V(x, y, z);
   }
+
   /** Pose du bassin d'un cycliste : il bascule avec le buste (penché sur le cintre, les fessiers pointent vers l'arrière), autour
       d'un point placé au-dessus des hanches du gabarit pour que les fessiers reposent sur la selle et que les cuisses sortent
       dessous. tdir : du bassin aux épaules ; renvoie {offset (à ajouter au point du bassin), tilt (rad, rotation autour de x)}. */
   function pelvisPose(tdir) {
-    return { offset: V(0, 0.015, -0.005), tilt: 0.8 * Math.atan2(tdir.z, tdir.y) };
+    return { offset: V(0, 0.015, -0.005), tilt: 0.68 * Math.atan2(tdir.z, tdir.y) };
   }
 
+  const HIP_FOLLOW = 0.6; // part du mouvement de la cuisse que suit le bas du fessier
   /** Grille (a, v) de la surface : colonnes resserrées au milieu du dos (le sillon), bas fermé, haut fermé par une calotte. */
   function pelvisSurface(fem, q) {
-    const N = q > 1 ? 72 : 44, M = q > 1 ? 40 : 24, pos = [], idx = [];
+    const N = q > 1 ? 72 : 44, M = q > 1 ? 40 : 24, pos = [], idx = [], hip = [];
     const col = (i) => { const u = -1 + 2 * i / N; return Math.PI * Math.sign(u) * Math.pow(Math.abs(u), 1.6); };
     for (let j = 0; j <= M + 1; j++) {
       for (let i = 0; i < N; i++) {
@@ -428,6 +435,8 @@
         if (j <= M) p = pelvisPoint(col(i), j / M, fem);
         else p = V(0, PV.y(1) + 0.035, (PV.front(1) - PV.back(1)) / 2); // calotte arrondie sous le maillot
         pos.push(p.x, p.y, p.z);
+        // part du mouvement de la cuisse de ce côté : forte au bas du fessier, nulle en haut et au milieu (le sillon reste continu)
+        hip.push(j <= M ? Math.sign(p.x) * HIP_FOLLOW * ss(0.8, 0.1, j / M) * ss(0, 0.045, Math.abs(p.x)) : 0);
       }
     }
     for (let j = 0; j <= M; j++) {
@@ -438,6 +447,7 @@
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('hipW', new THREE.Float32BufferAttribute(hip, 1));
     geo.setIndex(idx);
     return smoothNormals(geo);
   }
@@ -527,5 +537,5 @@
     return parts;
   }
 
-  B3D.anatomy = { curve, smoothNormals, deformed, rings, limb, limbParts, LENGTHS, headPoint, headParts, glassesParts, torsoPoint, torsoGeometry, torsoTrim, torsoHem, pelvisPoint, pelvisParts, pelvisPose, handParts, shoeParts };
+  B3D.anatomy = { curve, smoothNormals, deformed, rings, limb, limbParts, LENGTHS, headPoint, headParts, glassesParts, torsoPoint, torsoGeometry, torsoTrim, torsoHem, pelvisPoint, pelvisParts, pelvisPose, HIP_FOLLOW, handParts, shoeParts };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -817,9 +817,13 @@
       addOutline(this.torso, { width: 0.9, minW: 0.006, maxW: 0.04 });
       this._parts(A.torsoHem({ q, fem, base: J.base }), 0.6, this.torso);
       if (q > 1) this._parts(A.torsoTrim({ q, fem, base: J.base, accent: J.accent }), 0, this.torso);
-      // bassin et fessiers (reflet du lycra), et le trait du sillon, sans contour
+      // bassin et fessiers (reflet du lycra), qui suivent les cuisses au pédalage, et le trait du sillon, sans contour
       const [seat, ...creases] = A.pelvisParts({ q, fem, color: shorts });
-      this.pelvis = this._parts([seat], 0.8);
+      const hipU = this.hipU = { uHipP: { value: new THREE.Vector2() }, uHipA: { value: new THREE.Vector2() } };
+      const T = B3D.toon;
+      this.pelvis = new THREE.Mesh(T.merge([seat]), T.hipPatch(T.sheenPatch(new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: T.gradientMap() })), hipU, false));
+      this.body.add(this.pelvis);
+      addOutline(this.pelvis, { width: 0.8, minW: 0.004, maxW: 0.03, hip: { uniforms: hipU } });
       this._parts(creases, 0, this.pelvis);
       // tête : crâne et visage, nez et oreilles (contour fin), yeux et lèvres, cheveux, casque et lunettes
       this.head = new THREE.Group();
@@ -1093,10 +1097,10 @@
       this.torso.position.copy(pelvis).addScaledVector(tdir, 0.5);
       this.torso.quaternion.setFromUnitVectors(UP, tdir.normalize());
       if (fine) {
-        // bassin et fessiers basculés avec le buste
+        // bassin et fessiers basculés avec le buste ; il roule un peu à chaque coup de pédale, côté de la jambe qui pousse plus bas
         const P = B3D.anatomy.pelvisPose(tdir);
         this.pelvis.position.add(P.offset);
-        this.pelvis.rotation.x = P.tilt;
+        this.pelvis.rotation.set(P.tilt, 0, 0.03 * Math.sin(this.crank) * (st.pedaling ? 1 - stand : 0));
       }
       // respiration (modèles fins) : plus ample et plus rapide à l'effort ; la bouche s'ouvre
       const effort = st.effort !== undefined ? clamp(st.effort, 0, 1) : st.standing ? 0.8 : st.pedaling ? 0.35 : 0.05;
@@ -1148,6 +1152,8 @@
         const hip = new THREE.Vector3(leg.sx * 0.095 + pelvis.x, pelvis.y - 0.03, pelvis.z + 0.02);
         const knee = this._ik(hip, ankle, 0.46, 0.45, new THREE.Vector3(leg.sx * 0.12, 0.25, 1).normalize(), new THREE.Vector3());
         leg.knee.position.copy(knee);
+        leg.theta = Math.atan2(knee.z - hip.z, hip.y - knee.y); // angle de la cuisse (0 : à la verticale, + genou en avant)
+        leg.hip = hip;
         if (fine) {
           // quadriceps et tibia du côté où pointe le genou, mollet derrière
           const front = this._bendDir(hip, knee, ankle, this._v[2]);
@@ -1165,6 +1171,14 @@
         const toe = pedal.clone().add(new THREE.Vector3(0, 0.03, 0.09));
         leg.shoe.position.copy(ankle).add(toe).multiplyScalar(0.5);
         leg.shoe.lookAt(this._toWorldDir(toe.clone().sub(ankle), leg.shoe.position));
+      }
+      if (this.hipU) {
+        // le bas de chaque fessier suit sa cuisse : écart à l'angle moyen des deux cuisses, autour de l'axe des hanches (repère du bassin)
+        const [L, Rg] = this.legs[0].sx < 0 ? this.legs : [this.legs[1], this.legs[0]], mean = (L.theta + Rg.theta) / 2;
+        this.hipU.uHipA.value.set(L.theta - mean, Rg.theta - mean);
+        this.pelvis.updateMatrix();
+        const h = this._w[0].set(0, L.hip.y, L.hip.z).applyMatrix4(this._m.copy(this.pelvis.matrix).invert());
+        this.hipU.uHipP.value.set(h.y, h.z);
       }
     }
 

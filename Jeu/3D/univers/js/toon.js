@@ -230,8 +230,9 @@
     const people = !!opts.people;
     const phase = !!opts.peoplePhase;
     const flap = opts.flap ? flapGLSL(opts.flap) : null;
+    const hip = opts.hip || null; // fessiers qui suivent les cuisses : {uniforms, instanced}
     const key = [color, width, sway, bounce, opts.minW, opts.maxW, people, phase, opts.flap ? JSON.stringify(opts.flap) : ''].join('|');
-    if (outlineCache.has(key)) return outlineCache.get(key);
+    if (!hip && outlineCache.has(key)) return outlineCache.get(key);
     const m = new THREE.ShaderMaterial({
       uniforms: {
         uColor: { value: new THREE.Color(color) },
@@ -248,9 +249,11 @@
         fogDensity: { value: 0.0 }
       },
       vertexShader: [
+        hip && hip.instanced ? '#define HIP_INSTANCED' : '',
         '#include <common>',
         '#include <fog_pars_vertex>',
         'attribute vec3 outlineNormal;',
+        hip ? HIP_PARS : '',
         'uniform float uWidth, uMinW, uMaxW, uOutlineScale, uTime;',
         'uniform vec3 uWind;',
         people ? PEOPLE_PARS + (phase ? '\n' + PHASE_PARS : '') : '',
@@ -260,6 +263,7 @@
         '  vec3 n = outlineNormal;',
         flap ? flap.setup + '\ntransformed = wingPiv + wingM * (transformed - wingPiv);\nn = wingM * n;' : '',
         people ? peopleSetup(phase) + '\ntransformed = armPiv + armM * (transformed - armPiv);\ntransformed.y += jump;\nn = armM * n;' : '',
+        hip ? (HIP_NORMAL + '\n' + HIP_POS).replace(/objectNormal/g, 'n') : '',
         swayGLSL(sway, bounce),
         '  vec4 p = vec4(transformed, 1.0);',
         '  #ifdef USE_INSTANCING',
@@ -287,7 +291,8 @@
       side: THREE.BackSide,
       fog: true
     });
-    outlineCache.set(key, m);
+    if (hip) Object.assign(m.uniforms, hip.uniforms);
+    else outlineCache.set(key, m);
     return m;
   }
 
@@ -353,6 +358,8 @@
     const glow = hasGlow ? new Float32Array(vCount) : null;
     const hasSheen = prepared.some((p) => p.sheen !== 0);
     const sheen = hasSheen ? new Float32Array(vCount) : null;
+    const hasHip = prepared.some((p) => p.g.attributes.hipW);
+    const hip = hasHip ? new Float32Array(vCount) : null;
     const hasArm = prepared.some((p) => p.arm !== 0);
     const arm = hasArm ? new Float32Array(vCount) : null;
     const hasWing = prepared.some((p) => p.wing !== 0);
@@ -372,6 +379,7 @@
         if (wing) wing[vo + i] = p.wing;
         if (glow) glow[vo + i] = p.glow;
         if (sheen) sheen[vo + i] = p.sheen;
+        if (hip && p.g.attributes.hipW) hip[vo + i] = p.g.attributes.hipW.getX(i);
       }
       if (p.idx) { for (let k = 0; k < p.idx.length; k++) index[io + k] = p.idx[k] + vo; io += p.idx.length; }
       else { for (let k = 0; k < p.cnt; k++) index[io + k] = vo + k; io += p.cnt; }
@@ -386,6 +394,7 @@
     if (wing) geo.setAttribute('wingSide', new THREE.BufferAttribute(wing, 1));
     if (glow) geo.setAttribute('glow', new THREE.BufferAttribute(glow, 1));
     if (sheen) geo.setAttribute('sheen', new THREE.BufferAttribute(sheen, 1));
+    if (hip) geo.setAttribute('hipW', new THREE.BufferAttribute(hip, 1));
     geo.setIndex(new THREE.BufferAttribute(index, 1));
     geo.computeBoundingSphere();
     return geo;
@@ -443,6 +452,45 @@
     return m;
   }
 
+  /* Fessiers qui suivent les cuisses (cyclistes détaillés) : les sommets marqués hipW (signe : côté -x ou +x ; valeur : part du
+     mouvement de la cuisse) tournent autour de l'axe des hanches (uHipP : y, z dans le repère du maillage) de cette part de l'écart
+     d'angle de la cuisse de leur côté (uHipA, ou aHip par instance : gauche -x, droite +x ; + quand le genou monte), et se gonflent
+     quand la jambe pousse (contraction du grand fessier). Le pédalage part des fessiers. */
+  const HIP_PARS = [
+    'attribute float hipW;',
+    'uniform vec2 uHipP;',
+    '#ifdef HIP_INSTANCED',
+    'attribute vec2 aHip;',
+    '#define HIP_A aHip',
+    '#else',
+    'uniform vec2 uHipA;',
+    '#define HIP_A uHipA',
+    '#endif',
+    'vec3 hipRot(vec3 v, float a, vec2 piv) { vec2 p = v.yz - piv; float c = cos(a), s = sin(a); v.yz = piv + vec2(p.x * c - p.y * s, p.x * s + p.y * c); return v; }',
+    'vec3 hipDir(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(v.x, v.y * c - v.z * s, v.y * s + v.z * c); }'
+  ].join('\n');
+  // la normale d'abord (objectNormal ; n dans le contour), puis la position
+  const HIP_NORMAL = [
+    'float hipD_ = hipW < 0.0 ? HIP_A.x : HIP_A.y, hipK_ = abs(hipW);',
+    'float hipA_ = -hipD_ * hipK_;',
+    'float hipB_ = 0.05 * max(0.0, -hipD_) * hipK_ * (1.0 - hipK_) * 2.5;',
+    'objectNormal = hipDir(objectNormal, hipA_);'
+  ].join('\n');
+  const HIP_POS = 'transformed = hipRot(transformed, hipA_, uHipP) + normalize(objectNormal) * hipB_;';
+  function hipPatch(m, uniforms, instanced) {
+    const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
+    m.onBeforeCompile = (shader, renderer) => {
+      if (prev) prev.call(m, shader, renderer);
+      Object.assign(shader.uniforms, uniforms);
+      shader.vertexShader = (instanced ? '#define HIP_INSTANCED\n' : '') + shader.vertexShader
+        .replace('#include <common>', '#include <common>\n' + HIP_PARS)
+        .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + HIP_NORMAL)
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + HIP_POS);
+    };
+    m.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|hip' + (instanced ? 'i' : '');
+    return m;
+  }
+
   // Matériau toon dont les pièces marquées « glow » (fenêtres, lampes) s'allument la nuit (lumière chaude).
   function glowMat(opts) {
     const m = new THREE.MeshToonMaterial(Object.assign({ vertexColors: true, gradientMap: gradientMap() }, opts || {}));
@@ -459,5 +507,5 @@
     return m;
   }
 
-  B3D.toon = { shared, snowPatch, sheenPatch, glowMat, gradientMap, terrainGradientMap, mat, instancedMat, outlineMat, computeOutlineNormals, addOutline, outlineAll, merge, tr, textTexture, _m };
+  B3D.toon = { shared, snowPatch, sheenPatch, hipPatch, glowMat, gradientMap, terrainGradientMap, mat, instancedMat, outlineMat, computeOutlineNormals, addOutline, outlineAll, merge, tr, textTexture, _m };
 })(typeof window !== 'undefined' ? window : globalThis);

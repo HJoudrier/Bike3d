@@ -88,6 +88,7 @@
      instances posées à chaque image. */
   const geoCache = new Map();
   const W = '#ffffff', DK = '#26232f', SK = '#f1c29b';
+  const HIP_U = { uHipP: { value: new THREE.Vector2(0.97, -0.24) } }; // axe des hanches (y, z) du coureur assis
   const BB0 = V(0, 0.28, -0.08), PELVIS = V(0, 1.0, -0.26), SHOULDER = V(0, 1.37, 0.2);
   function bodyGeometry(level, fem) {
     const key = 'body' + level + (fem ? 'f' : 'm');
@@ -769,16 +770,20 @@
     // ------------------------------------------------------------ rendu
     _buildRender() {
       const n = Math.max(1, this.riders.length);
-      // sheen : reflet du lycra des cuissards (modèles fins)
-      const mk = this._mk = (geo, cap, ow, shadow, sheen) => {
-        const mesh = new THREE.InstancedMesh(geo, sheen ? B3D.toon.sheenPatch(instancedMat()) : instancedMat(), cap);
+      // sheen : reflet du lycra des cuissards ; hip : fessiers qui suivent les cuisses (angles par instance : aHip) — modèles fins
+      const T = B3D.toon;
+      const mk = this._mk = (geo, cap, ow, shadow, sheen, hip) => {
+        let m = instancedMat();
+        if (sheen) m = T.sheenPatch(m);
+        if (hip) m = T.hipPatch(m, HIP_U, true);
+        const mesh = new THREE.InstancedMesh(geo, m, cap);
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3);
         mesh.frustumCulled = false;
         mesh.castShadow = shadow;
         mesh.count = 0;
         this.scene.add(mesh);
-        const ol = new THREE.InstancedMesh(geo, outlineMat({ width: ow, minW: 0.004, maxW: 0.04 }), cap);
+        const ol = new THREE.InstancedMesh(geo, outlineMat({ width: ow, minW: 0.004, maxW: 0.04, hip: hip ? { uniforms: HIP_U, instanced: true } : null }), cap);
         ol.instanceMatrix = mesh.instanceMatrix;
         ol.frustumCulled = false;
         ol.count = 0;
@@ -842,8 +847,16 @@
       const key = level + (fem ? 'f' : 'm');
       let B = this.bodies.get(key);
       if (!B) {
-        B = this._mk(bodyGeometry(level, fem), Math.max(1, this.riders.length), 0.85, true, level > 0);
+        const cap = Math.max(1, this.riders.length);
+        let geo = bodyGeometry(level, fem);
+        if (level) {
+          // une copie par peloton : elle porte les angles des cuisses de chaque coureur
+          geo = geo.clone();
+          geo.setAttribute('aHip', new THREE.InstancedBufferAttribute(new Float32Array(cap * 2), 2).setUsage(THREE.DynamicDrawUsage));
+        }
+        B = this._mk(geo, cap, 0.85, true, level > 0, level > 0);
         B.k = 0;
+        B.hip = level ? geo.attributes.aHip : null;
         this.bodies.set(key, B);
       }
       return B;
@@ -895,6 +908,7 @@
       const BB = this._BB || (this._BB = V(0, 0.28, -0.08));
       const hip = new THREE.Vector3(), pedal = new THREE.Vector3(), ankle = new THREE.Vector3(), knee = new THREE.Vector3(), toe = new THREE.Vector3(), d = new THREE.Vector3();
       const bend = V(0, 0.25, 1), mid = new THREE.Vector3(), q2 = new THREE.Quaternion(), sc = new THREE.Vector3(), front = new THREE.Vector3(), shoeM = new THREE.Matrix4();
+      const theta = [0, 0];
       // niveaux de détail : chaque coureur prend le modèle fin près de la caméra (avec un peu d'hystérésis), le simple au loin ;
       // les instances de chaque modèle sont rangées à la suite
       const cam = camera.getWorldPosition(this._lp || (this._lp = new THREE.Vector3())), L = this.detail, L0 = this.legs0, LL = this.legsL;
@@ -918,9 +932,9 @@
         r.pos.copy(pos);
         const near = this.near + (r.fine ? 4 : 0);
         r.fine = L > 0 && pos.distanceToSquared(cam) < near * near;
-        const B = this._bodySet(r.fine ? L : 0, r.fem);
-        B.mesh.setMatrixAt(B.k, m4);
-        B.mesh.setColorAt(B.k++, r.color);
+        const B = this._bodySet(r.fine ? L : 0, r.fem), slot = B.k++;
+        B.mesh.setMatrixAt(slot, m4);
+        B.mesh.setColorAt(slot, r.color);
         // roues
         r.wheelA += r.v / WR * dt;
         for (let w = 0; w < 2; w++) {
@@ -944,6 +958,7 @@
           hip.set(sx * 0.095, 0.97, -0.24);
           bend.set(sx * 0.12, 0.25, 1).normalize();
           ik(hip, ankle, 0.46, 0.45, bend, knee);
+          theta[side] = Math.atan2(knee.z - hip.z, hip.y - knee.y); // angle de la cuisse (+ genou en avant)
           toe.copy(pedal).add(d.set(0, 0.03, 0.09));
           d.copy(toe).sub(ankle).normalize();
           shoeM.compose(mid.copy(ankle).add(toe).multiplyScalar(0.5), q2.setFromUnitVectors(FWD, d), one);
@@ -967,6 +982,8 @@
           L0.shoe.mesh.setMatrixAt(L0.k * 2 + side, mw.multiplyMatrices(m4, shoeM));
         }
         if (r.fine) LL.k++; else L0.k++;
+        // le bas des fessiers suit les cuisses (écart à leur angle moyen ; gauche : -x)
+        if (B.hip) { const mean = (theta[0] + theta[1]) / 2; B.hip.setXY(slot, theta[0] - mean, theta[1] - mean); }
         if (this.lightsOn) {
           ml.makeTranslation(0, 0.84, 0.58); mw.multiplyMatrices(m4, ml); this.mLamps.setMatrixAt(i * 2, mw);
           ml.makeTranslation(0, 0.86, -0.38); mw.multiplyMatrices(m4, ml); this.mLamps.setMatrixAt(i * 2 + 1, mw);
@@ -976,7 +993,7 @@
       this.mLamps.count = this.lightsOn ? n * 2 : 0;
       if (this.lightsOn) this.mLamps.instanceMatrix.needsUpdate = true;
       const counts = [[this.mWheel, n * 2], [L0.limb, L0.k * 4], [L0.shoe, L0.k * 2]];
-      for (const B of this.bodies.values()) { counts.push([B, B.k]); B.mesh.instanceColor.needsUpdate = true; }
+      for (const B of this.bodies.values()) { counts.push([B, B.k]); B.mesh.instanceColor.needsUpdate = true; if (B.hip) B.hip.needsUpdate = true; }
       if (LL) for (const k of ['thigh', 'shin', 'shoe']) for (const M of LL[k]) counts.push([M, LL.k]);
       for (const [M, c] of counts) {
         M.mesh.count = M.ol.count = c;
@@ -1044,6 +1061,7 @@
     }
 
     dispose() {
+      for (const B of this.bodies.values()) if (B.hip) B.mesh.geometry.dispose();
       const all = [this.mWheel, this.legs0.limb, this.legs0.shoe, ...this.bodies.values()];
       if (this.legsL) for (const k of ['thigh', 'shin', 'shoe']) all.push(...this.legsL[k]);
       for (const M of all) { this.scene.remove(M.mesh); this.scene.remove(M.ol); }
