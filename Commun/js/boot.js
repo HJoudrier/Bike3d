@@ -24,20 +24,20 @@
     'Commun/js/engine/replay.js', 'Commun/js/engine/history.js', 'Commun/js/engine/nav.js', 'Commun/js/engine/presence.js',
     // état, stockage, échanges
     'Commun/js/core/dom.js', 'Commun/js/core/avatar.js', 'Commun/js/core/codec.js', 'Commun/js/core/zip.js', 'Commun/js/core/race-data.js', 'Commun/js/core/store.js',
-    'Commun/js/core/library.js', 'Commun/js/core/cloud.js', 'Commun/js/core/route-file.js', 'Commun/js/core/surface-osm.js',
+    'Commun/js/core/library.js', 'Commun/js/core/cloud.js', 'Commun/js/core/lib-cache.js', 'Commun/js/core/route-file.js', 'Commun/js/core/surface-osm.js',
   ];
 
   // interface commune aux applications : carte, graphiques, météo, capteurs, calcul des entrées de simulation, plan enregistré
   const SHARED_UI = [
     'Commun/js/ui/services.js', 'Commun/js/ui/route-model.js', 'Commun/js/ui/charts.js', 'Commun/js/ui/chart-config.js', 'Commun/js/ui/map-poi.js', 'Commun/js/ui/map.js',
     'Commun/js/ui/classif-view.js', 'Commun/js/ui/tab-weather.js', 'Commun/js/ui/weather-fx.js', 'Commun/js/ui/sensors.js', 'Commun/js/ui/gear-art.js',
-    'Commun/js/ui/sim-inputs.js', 'Commun/js/ui/plan-link.js',
+    'Commun/js/ui/sim-inputs.js', 'Commun/js/ui/plan-link.js', 'Commun/js/ui/route-thumb.js', 'Commun/js/ui/lib-pick.js',
   ];
 
   // interface commune aux deux jeux (carte 2D, 3D) : la page de choix et l'écran de course
   const GAME_UI = [
     'Commun/vendor/qrcode-generator/qrcode.js',
-    'Commun/js/jeu/view3d.js', 'Commun/js/jeu/game-source.js', 'Commun/js/jeu/route-thumb.js', 'Commun/js/jeu/gear-edit.js', 'Commun/js/jeu/game-setup.js', 'Commun/js/jeu/tab-game.js', 'Commun/js/jeu/game-mobile.js',
+    'Commun/js/jeu/view3d.js', 'Commun/js/jeu/game-source.js', 'Commun/js/jeu/gear-edit.js', 'Commun/js/jeu/game-setup.js', 'Commun/js/jeu/tab-game.js', 'Commun/js/jeu/game-mobile.js',
     'Commun/js/jeu/challenges.js', 'Commun/js/jeu/qr.js', 'Commun/js/jeu/relay.js', 'Commun/js/jeu/live.js',
   ];
 
@@ -55,7 +55,7 @@
     'pro-home': {
       dir: 'PaceYourRide', ns: 'paceyourride', light: true,
       scripts: ['Commun/vendor/leaflet/leaflet.js', 'Commun/js/core/util.js', 'Commun/js/engine/physics.js', 'Commun/js/engine/classif.js', 'Commun/js/engine/physio.js', 'Commun/js/engine/benchmarks.js',
-        'Commun/js/engine/catalog.js', 'Commun/js/core/dom.js', 'Commun/js/core/avatar.js', 'Commun/js/core/library.js', 'Commun/js/core/cloud.js', 'PaceYourRide/js/route-preview.js', 'PaceYourRide/js/home.js'],
+        'Commun/js/engine/catalog.js', 'Commun/js/core/dom.js', 'Commun/js/core/avatar.js', 'Commun/js/core/library.js', 'Commun/js/core/cloud.js', 'Commun/js/core/lib-cache.js', 'Commun/js/core/route-file.js', 'Commun/js/ui/services.js', 'Commun/js/ui/route-thumb.js', 'Commun/js/ui/lib-pick.js', 'PaceYourRide/js/route-preview.js', 'PaceYourRide/js/home.js'],
     },
     // le portail (racine) : retour de Dropbox et liens vers les applications
     portail: { dir: '', ns: 'paceyourride', light: true,

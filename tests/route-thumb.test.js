@@ -1,12 +1,12 @@
 /* author : Hugo Joudrier-Faure */
-/* Tests de la géométrie de la vue 3D d'un parcours (Commun/js/jeu/route-thumb.js) : échantillonnage, mise à l'échelle, exagération du relief, pentes. */
+/* Tests de la géométrie de la vue 3D d'un parcours (Commun/js/ui/route-thumb.js) : échantillonnage, mise à l'échelle, exagération du relief, pentes. */
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { PYR, makeProfile } = require('./helpers.js');
 require(path.join(__dirname, '..', 'Commun/js/core/library.js'));
-require(path.join(__dirname, '..', 'Commun/js/jeu/route-thumb.js'));
+require(path.join(__dirname, '..', 'Commun/js/ui/route-thumb.js'));
 
 const R3 = PYR.routeThumb;
 const profileOf = (segments, opts) => {

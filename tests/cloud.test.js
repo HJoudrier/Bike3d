@@ -66,3 +66,37 @@ test('cloud : la connexion revient par le portail de la racine du site et se sou
   assert.equal(pk.returnTo, 'https://exemple.test/site/Jeu2D/index.html');
   assert.equal(pk.redirect, 'https://exemple.test/site/index.html');
 });
+
+test('cloud : saveLibrary fusionne la bibliothèque locale avec celle de Dropbox et ne touche ni au projet ni à sa date', async () => {
+  localStorage.setItem('paceyourride.cloud.v1', JSON.stringify({ access: 'tok', refresh: '', expiresAt: Date.now() + 1e9 }));
+  const snap = snapshot();
+  let sent = null;
+  mock((url, init) => {
+    if (/download/.test(url)) return reply(200, JSON.stringify(snap), { 'dropbox-api-result': '{"rev":"a"}' });
+    sent = JSON.parse(init.body); return reply(200, '{}');
+  });
+  const local = L.empty();
+  L.add(local, 'athlete', 'Nouvelle', { rider: { name: 'Nouvelle', weight: 60, ftp: 200 } }, 9000);
+  const merged = await C.saveLibrary(local);
+  assert.deepEqual(sent.library.athletes.map((a) => a.name).sort(), ['Hugo', 'Nouvelle']);
+  assert.equal(sent.library.routes.length, 1, 'les parcours de Dropbox restent');
+  assert.equal(sent.project.route.name, 'Projet');
+  assert.equal(sent.savedAt, 5000);
+  assert.equal(merged.athletes.length, 2);
+});
+
+test('cloud : saveLibrary crée le fichier s\'il n\'existe pas encore, et recommence si un autre appareil est passé', async () => {
+  let n = 0, sent = null;
+  mock((url, init) => {
+    if (/download/.test(url)) return reply(409, '{}');
+    n++; if (n === 1) return reply(409, '{}');          // le fichier vient d'être créé ailleurs
+    sent = JSON.parse(init.body); return reply(200, '{}');
+  });
+  const local = L.empty();
+  L.add(local, 'route', 'Col', route('Col'), 1000);
+  await C.saveLibrary(local);
+  assert.equal(n, 2);
+  assert.equal(sent.app, 'PaceYourRide');
+  assert.equal(sent.project, null);
+  assert.equal(sent.library.routes[0].name, 'Col');
+});

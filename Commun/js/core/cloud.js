@@ -224,5 +224,31 @@
     } finally { S.busy = false; emit(); }
   }
 
-  PYR.cloud = { status, setKey, login, completeLogin, logout, sync, syncSoon, pushSoon, pull, onChange: (fn) => listeners.push(fn) };
+  /**
+   * Ajoute à Dropbox ce qu'une application de jeu ou le compteur vient de créer (un parcours, un athlète) : la bibliothèque locale est fusionnée
+   * avec celle de Dropbox (library.merge : le plus récent gagne, un élément retiré le reste), puis envoyée. Le projet en cours de PaceYourRide et
+   * son plan, eux, ne sont jamais touchés. Renvoie la bibliothèque fusionnée (à garder en copie locale). Lève une erreur lisible en cas d'échec.
+   */
+  async function saveLibrary(lib) {
+    S.busy = true; S.error = ''; emit();
+    try {
+      for (let i = 0; i < 4; i++) {
+        const remote = await download();
+        let snap = null;
+        if (remote) {
+          try { snap = JSON.parse(remote.text); } catch (e) { throw new Error('Le fichier sur Dropbox est illisible.'); }
+          if (!snap || typeof snap !== 'object' || snap.app !== 'PaceYourRide') throw new Error("Le fichier sur Dropbox n'est pas un fichier PaceYourRide.");
+        }
+        const merged = L.merge(lib, snap ? snap.library : null);
+        const out = Object.assign({ app: 'PaceYourRide', kind: 'cloud', version: 1, savedAt: 0, project: null }, snap || {}, { library: merged });
+        if (await upload(JSON.stringify(out), remote ? remote.rev : '', !!remote)) { saveCfg({ lastSync: Date.now() }); return merged; }
+      }
+      throw new Error('Un autre appareil modifie le fichier en même temps : réessaie dans un instant.');
+    } catch (e) {
+      S.error = e instanceof TypeError ? 'Dropbox est injoignable (connexion ?).' : (e && e.message) || 'Envoi impossible.';
+      throw new Error(S.error);
+    } finally { S.busy = false; emit(); }
+  }
+
+  PYR.cloud = { status, setKey, login, completeLogin, logout, sync, syncSoon, pushSoon, pull, saveLibrary, onChange: (fn) => listeners.push(fn) };
 })(globalThis.PYR = globalThis.PYR || {});

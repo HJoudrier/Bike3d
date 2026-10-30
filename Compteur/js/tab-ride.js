@@ -216,10 +216,19 @@
     V.planProg = h('div', { class: 'progress', hidden: true }, V.planFill);
     V.segTable = h('table', { class: 'rd-table' });
     V.margin = marginEl();
+    // choix du parcours et de l'athlète dans la bibliothèque de PaceYourRide (Dropbox), comme dans les jeux ; on peut en ajouter
     V.cloudLine = h('p', { class: 'rd-line' });
-    V.cloudBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => cloudAction() }, 'Récupérer depuis Dropbox');
-    V.cloudCard = card('Parcours et plan (Dropbox)', V.cloudLine, h('div', { class: 'rd-btns' }, V.cloudBtn),
-      h('p', { class: 'rd-note' }, 'Le parcours, l\'athlète, le vélo et le plan optimal viennent de PaceYourRide, par Dropbox : calcule le plan là-bas, il arrive ici.'));
+    V.cloudBtn = h('button', { class: 'btn', type: 'button', onclick: () => cloudAction() }, '↻ Actualiser');
+    V.pickRoutes = h('div', { class: 'gs-pick-routes' });
+    V.pickAth = h('div', { class: 'gs-pick-ath' });
+    V.pickBike = h('select', { 'aria-label': 'Vélo', onchange: () => pickItem('bike', V.pickBike.value) });
+    V.pickOutfit = h('select', { 'aria-label': 'Tenue et position', onchange: () => pickItem('outfit', V.pickOutfit.value) });
+    V.cloudCard = card('Parcours et athlète', V.cloudLine, h('div', { class: 'rd-btns' }, V.cloudBtn,
+      h('button', { class: 'btn', type: 'button', onclick: () => addRoute() }, '＋ Ajouter un parcours (GPX)'),
+      h('button', { class: 'btn', type: 'button', onclick: () => addAthlete() }, '＋ Ajouter un athlète')),
+    V.pickRoutes, V.pickAth,
+    h('div', { class: 'grid2' }, rowEl('Vélo', V.pickBike), rowEl('Tenue et position', V.pickOutfit)),
+    h('p', { class: 'rd-note' }, 'Les parcours, athlètes, vélos et tenues sont ceux de PaceYourRide, lus dans ton Dropbox ; le plan optimal vient avec le projet en cours de PaceYourRide (ou calcule-le ici).'));
     V.routeCard = card('Parcours', V.routeLine, V.mapCard, V.pprofCard);
     V.formRef = selectEl([['athlete', 'Profil de l\'athlète à 100 %'], ['form', 'Profil ajusté à la forme']], store.state.perf.formRef, (v) => store.set('perf.formRef', v));
     V.formRefRow = rowEl('W′bal et temps tenable sur', V.formRef);
@@ -360,18 +369,55 @@
     renderResume();
   }
 
-  /* ---------- parcours et plan : lus dans Dropbox (cloud.js pull), propres à cette application ---------- */
-  const CLOUD_AT_KEY = 'paceyourride.compteur.cloudat';
-  const cloudAt = () => { try { return Number(localStorage.getItem(CLOUD_AT_KEY)) || 0; } catch (e) { return 0; } };
+  /* ---------- parcours et athlète : la bibliothèque de PaceYourRide, lue dans Dropbox (lib-cache.js), propre à cette application ---------- */
+  const LC = PYR.libCache;
+  const pickOf = () => { const G = store.state.game; if (!G.pick || typeof G.pick !== 'object') G.pick = { route: '', athlete: '', bike: '', outfit: '' }; return G.pick; };
+  let pickViews = [];
 
   function renderCloud() {
-    const st = PYR.cloud.status(), p = store.profile;
-    const at = cloudAt();
-    const what = p ? `${store.state.route.name || 'Parcours'} · ${km(p.length)} km${run.plan ? ' · plan prêt' : ' · pas de plan'}` : 'rien pour le moment';
-    setTxt(V.cloudLine, run.cloudBusy ? 'Lecture de Dropbox…' : run.cloudMsg ? run.cloudMsg
-      : !st.connected ? 'Dropbox non connecté : connecte-le pour récupérer ton plan.' : `Dropbox connecté${at ? ' · projet du ' + new Date(at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''} · ${what}`);
+    const st = PYR.cloud.status(), c = LC.state, n = (k) => c.lib[PYR.library.KINDS[k].list].length;
+    const when = c.pulledAt ? new Date(c.pulledAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+    setTxt(V.cloudLine, run.cloudBusy ? 'Échange avec Dropbox…' : run.cloudMsg ? run.cloudMsg
+      : !st.connected ? 'Dropbox non connecté : connecte-le pour retrouver les parcours et athlètes de PaceYourRide.'
+        : `Dropbox connecté · ${n('route')} parcours, ${n('athlete')} athlète${n('athlete') > 1 ? 's' : ''}${when ? ' · lu le ' + when : ''}`);
     V.cloudBtn.disabled = !!run.cloudBusy;
-    setTxt(V.cloudBtn, st.connected ? '↻ Récupérer depuis Dropbox' : 'Se connecter à Dropbox');
+    setTxt(V.cloudBtn, st.connected ? '↻ Actualiser' : 'Se connecter à Dropbox');
+  }
+
+  function renderPickers() {
+    const pick = pickOf();
+    for (const v of pickViews) v.destroy();
+    pickViews = [PYR.libPick.routeCarousel(V.pickRoutes, { items: LC.items('route'), pick: LC.pickId('route', pick.route), view: '2d', onPick: (id) => pickItem('route', id),
+      emptyText: 'Aucun parcours : ajoute un fichier GPX, ou crée-en un dans PaceYourRide.' })];
+    PYR.libPick.athleteCards(V.pickAth, { items: LC.items('athlete'), pick: LC.pickId('athlete', pick.athlete), onPick: (id) => pickItem('athlete', id), emptyText: "Aucun athlète : l'athlète par défaut est utilisé." });
+    for (const [kind, sel] of [['bike', V.pickBike], ['outfit', V.pickOutfit]]) {
+      D.clear(sel);
+      sel.appendChild(h('option', { value: 'none' }, 'Réglages par défaut'));
+      for (const it of LC.items(kind)) sel.appendChild(h('option', { value: it.id }, it.name));
+      sel.value = pick[kind] === 'none' ? 'none' : (LC.pickId(kind, pick[kind]) || 'none');
+    }
+  }
+
+  /** Recopie le choix dans l'état du compteur (les réglages propres au téléphone, alertes et mode démo, sont gardés), puis recharge le plan enregistré. */
+  function composeSelection() {
+    if (run.mode !== 'prep') return;
+    const keep = { cfg: store.state.ride.cfg, demo: store.state.ride.demo, plan: store.state.ride.plan, info: store.state.ride.planInfo };
+    const pick = pickOf();
+    if (!LC.compose(store.state, pick)) return;
+    store.state.ride.cfg = keep.cfg; store.state.ride.demo = keep.demo;
+    PYR.routeModel.computeMissing();
+    PYR.routeModel.rebuildProfile();
+    // un plan calculé ici pour ce même choix vaut mieux que celui du projet de PaceYourRide
+    if (keep.plan && keep.info && keep.info.fp === PYR.planLink.fingerprint()) { store.state.ride.plan = keep.plan; store.state.ride.planInfo = keep.info; }
+    run.plan = null; run.base = null; run.segPlan = null;
+    loadStoredPlan();
+    store.save();
+  }
+
+  function pickItem(kind, id) {
+    pickOf()[kind] = id;
+    composeSelection();
+    renderPickers(); renderCloud(); renderPrep();
   }
 
   function cloudAction() {
@@ -379,30 +425,29 @@
     pullFromCloud(true);
   }
 
-  /** Reprend le projet de PaceYourRide (parcours, athlète, vélo, météo, plan) ; les réglages de ce téléphone (alertes, mode démo) sont gardés. */
+  /** Lit la bibliothèque dans Dropbox. À l'ouverture (force faux), le choix est recomposé si la bibliothèque a changé. */
   async function pullFromCloud(force) {
     if (run.cloudBusy || run.mode !== 'prep' || !PYR.cloud.status().connected) return;
     run.cloudBusy = true; run.cloudMsg = ''; renderCloud();
     try {
-      const snap = await PYR.cloud.pull();
-      if (!snap || !snap.project) run.cloudMsg = 'Ton Dropbox ne contient pas encore de projet : ouvre PaceYourRide, trace un parcours et calcule un plan.';
-      else if (run.mode !== 'prep') return;
-      else if (force || snap.savedAt > cloudAt() || !store.profile) {
-        const keep = { cfg: store.state.ride.cfg, demo: store.state.ride.demo };
-        store.importProject(snap.project);
-        store.state.ride.cfg = Object.assign({}, store.state.ride.cfg, keep.cfg);
-        store.state.ride.demo = keep.demo;
-        PYR.routeModel.computeMissing();
-        PYR.routeModel.rebuildProfile();
-        run.plan = null; run.base = null; run.segPlan = null;
-        loadStoredPlan();
-        try { localStorage.setItem(CLOUD_AT_KEY, String(snap.savedAt)); } catch (e) { /* stockage indisponible */ }
-        store.save();
-        if (force) D.toast('Parcours et plan récupérés depuis Dropbox.');
-      }
+      const r = await LC.refresh();
+      if (r === 'vide') run.cloudMsg = 'Ton Dropbox ne contient encore rien : ajoute un parcours et un athlète ici, ou ouvre PaceYourRide.';
+      else if (force) D.toast('Bibliothèque lue dans Dropbox.');
     } catch (e) { run.cloudMsg = e.message; if (force) D.toast(e.message, 'error'); }
     run.cloudBusy = false;
-    renderCloud(); renderPrep();
+    composeSelection();
+    renderPickers(); renderCloud(); renderPrep();
+  }
+
+  function afterAdd(res, kind, name, note) {
+    D.toast(`« ${name} » ajouté${note}` + (res.sent ? ' et envoyé à Dropbox.' : res.error ? ` (restera sur cet appareil : ${res.error})` : ' (sur cet appareil : connecte Dropbox pour le retrouver ailleurs).'), res.error ? 'error' : undefined, 6000);
+    pickItem(kind, res.item.id);
+  }
+  function addRoute() {
+    PYR.libPick.chooseGpx(async (r) => afterAdd(await LC.store('route', r.name, r.data), 'route', r.name, r.hasEle === false ? ' (le fichier n\'a pas d\'altitude : pas de dénivelé)' : ''));
+  }
+  function addAthlete() {
+    PYR.libPick.athleteDialog(async (a) => afterAdd(await LC.store('athlete', a.name, a.data), 'athlete', a.name, ''));
   }
 
   /* ---------- parcours en intégralité et profil, avant le départ ---------- */
@@ -2145,7 +2190,10 @@ Recalé sur ta FC depuis ${hmm(hf.n)} (filtre de Kalman) : FC de repos ${Math.ro
       if (!rs) return;
       build();
       PYR.cloud.onChange(() => { if (run.mode === 'prep') renderCloud(); });
-      pullFromCloud(false);                                       // un projet plus récent dans Dropbox est repris à l'ouverture
+      LC.load();
+      composeSelection();
+      renderPickers(); renderCloud();
+      pullFromCloud(false);                                       // la bibliothèque est relue dans Dropbox à l'ouverture
       ['profile', 'rider', 'bike', 'env', 'perf', 'weather', 'surfaces', 'winds'].forEach((e) => store.on(e, () => { if (run.mode === 'prep' && document.body.dataset.tab === 'ride') renderPrep(); }));
       // la référence de W′bal est inscrite dans le plan : un plan repris de la page Pacing optimal est repris à nouveau, les autres sont signalés périmés (empreinte)
       store.on('formref', () => {

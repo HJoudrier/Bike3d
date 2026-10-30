@@ -193,7 +193,7 @@
   // ---------- Fenêtre : sélecteur et assistant ----------
 
   /** mode : 'plan' (assistant en 5 étapes) ou 'single' (une seule rubrique) ; sel : choix par rubrique ('current' ou id de la bibliothèque). */
-  const W = { mode: 'single', steps: [], i: 0, sel: {} };
+  const W = { mode: 'single', steps: [], i: 0, sel: {}, views: [] };
   let dlg;
 
   function openWizard(mode, kind, pick) {
@@ -251,6 +251,7 @@
     if (W.sel[kind] === 'current' && !canCurrent) W.sel[kind] = items[0] ? items[0].id : 'current';
 
     body.appendChild(h('p', { class: 'wz-ask' }, k.pick + ' :'));
+    if (kind === 'route' || kind === 'athlete') return renderPick(body, kind, project, lib, cur, canCurrent, items);     // comme dans les jeux et le compteur
     const list = h('div', { class: 'wz-list', role: 'radiogroup', 'aria-label': k.label });
     const option = (id, title, detail, tag, onRemove, onRename, thumb) => {
       const input = h('input', { type: 'radio', name: 'wz-' + kind, value: id, checked: W.sel[kind] === id, disabled: id === 'current' && !canCurrent });
@@ -309,6 +310,45 @@
       }
       body.appendChild(h('a', { class: 'wz-edit', href: PAGE[k.tab] + (k.focus ? `?focus=${k.focus}` : '') }, `Modifier ${k.label.toLowerCase()} sur sa page ›`));
     }
+    return canCurrent || items.length > 0;
+  }
+
+  /**
+   * Parcours ou athlète : les mêmes cartes que dans les jeux et le compteur (lib-pick.js) : le carrousel des parcours (tracé sur la carte, distance, D+, D−)
+   * ou les cartes d'athlète, avec « Ajouter » (un fichier GPX, ou un athlète). Le projet en cours est la première carte.
+   */
+  function renderPick(body, kind, project, lib, cur, canCurrent, items) {
+    for (const v of W.views || []) if (v && v.destroy) v.destroy();
+    W.views = [];
+    const list = canCurrent ? [{ id: 'current', name: cur.title, savedAt: Number(localStorage.getItem(MTIME_KEY)) || 0, data: L.extract(kind, project), project: true }] : [];
+    list.push(...items);
+    const acts = (it) => (it.project ? [] : [
+      { label: '✎', title: `Renommer « ${it.name} »`, fn: () => {
+        const name = prompt('Nouveau nom :', it.name);
+        if (name === null || !name.trim()) return;
+        L.rename(lib, kind, it.id, name);
+        if (writeJSON(LIBRARY_KEY, lib)) renderWizard();
+      } },
+      { label: '✕', title: `Retirer « ${it.name} » de la bibliothèque`, fn: () => {
+        if (!confirm(`Retirer « ${it.name} » de la bibliothèque ?`)) return;
+        L.remove(lib, kind, it.id);
+        writeJSON(LIBRARY_KEY, lib);
+        if (W.sel[kind] === it.id) W.sel[kind] = 'current';
+        renderWizard();
+      } }]);
+    const add = kind === 'route'
+      ? h('button', { class: 'btn', type: 'button', title: 'Un fichier GPX, ou un parcours complet exporté par PaceYourRide', onclick: () => PYR.libPick.chooseGpx((r) => {
+        const it = L.add(lib, 'route', r.name, r.data);
+        if (writeJSON(LIBRARY_KEY, lib)) { D.toast(`« ${it.name} » ajouté à ta bibliothèque` + (r.hasEle === false ? " (le fichier n'a pas d'altitude : pas de dénivelé)." : '.')); W.sel.route = it.id; renderWizard(); }
+      }) }, '＋ Ajouter un parcours (GPX)')
+      : h('button', { class: 'btn', type: 'button', onclick: openAddAthlete }, '＋ Ajouter un athlète');
+    body.appendChild(h('div', { class: 'gs-add' }, add, kind === 'route' ? h('button', { class: 'btn', type: 'button', onclick: createRoute, title: 'Un parcours vide, à tracer sur la carte' }, '✎ Tracer un parcours') : null));
+    const host = h('div');
+    body.appendChild(host);
+    const view = (kind === 'route' ? PYR.libPick.routeCarousel : PYR.libPick.athleteCards)(host, { items: list, pick: W.sel[kind], view: '2d', projectLabel: 'Projet en cours', actions: acts,
+      onPick: (id) => { W.sel[kind] = id; view.setPick(id); },
+      emptyText: kind === 'route' ? 'Aucun parcours : ajoute un fichier GPX ou trace-en un.' : 'Aucun athlète : ajoute-en un.' });
+    W.views.push(view);
     return canCurrent || items.length > 0;
   }
 
@@ -489,5 +529,7 @@
     window.addEventListener('storage', (e) => { if (e.key === PROJECT_KEY) renderProject(); });
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  // chargé par Commun/js/boot.js, après le document : le départ est déjà donné
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })(globalThis.PYR = globalThis.PYR || {});

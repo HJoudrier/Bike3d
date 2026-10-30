@@ -89,3 +89,14 @@ body.gs-page .topbar { position: sticky; top: 0; z-index: 40; }
 .gs-g3-desc { color: var(--ink-2); font-size: 13px; min-height: 2.6em; }
 .gs-g3-info .hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
 @media (max-width: 640px) { .gs-g3-view { height: 320px; flex-basis: 100%; } }
+
+/* actions sur une carte (renommer, retirer), fenêtre d'ajout d'un athlète, barre d'ajout */
+.gs-card-acts { display: flex; gap: 4px; margin-top: 6px; }
+.gs-card-acts .btn { padding: 2px 8px; min-width: 0; }
+.gs-add { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
+.gs-dlg { max-width: min(520px, 94vw); width: 100%; }
+.gs-dlg-form { display: flex; flex-direction: column; gap: 4px; }
+.gs-dlg-form h3 { margin: 0 0 6px; }
+.gs-dlg-form .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.gs-dlg-form .wz-warn { color: var(--danger); margin: 4px 0; }
+.gs-dlg-form .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }

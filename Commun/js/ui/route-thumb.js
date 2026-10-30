@@ -251,7 +251,7 @@
       pts.push([profile.lat[profile.n - 1], profile.lng[profile.n - 1]]);
       const map = view.map = L.map(box, { zoomControl: false, dragging: false, touchZoom: false, doubleClickZoom: false, scrollWheelZoom: false, boxZoom: false, keyboard: false, tap: false, zoomSnap: 0.25, attributionControl: true });
       map.attributionControl.setPrefix('');
-      const spec = PYR.map && PYR.map.baseSpec ? PYR.map.baseSpec() : null;
+      const spec = PYR.map && PYR.map.baseSpec ? PYR.map.baseSpec() : { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, attribution: '&copy; OpenStreetMap' };   // sans la carte principale (accueil)
       if (spec) L.tileLayer(spec.url, { maxZoom: spec.maxZoom, subdomains: spec.subdomains || 'abc', attribution: spec.attribution, crossOrigin: true }).addTo(map);
       const line = L.polyline(pts, { color: '#fff', weight: 7, opacity: 0.9, interactive: false }).addTo(map);
       L.polyline(pts, { color: '#2a78d6', weight: 4, opacity: 1, interactive: false }).addTo(map);
