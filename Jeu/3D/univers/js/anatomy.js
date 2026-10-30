@@ -2,9 +2,10 @@
    vitrine du magasin) et B3D.Peloton (les coureurs proches de la caméra).
    Des géométries sans matériau : des pièces à fusionner ({geo, color, matrix?}, comme B3D.toon.merge) pour la tête (crâne et visage,
    nez, oreilles, lèvres, yeux, sourcils, cheveux, queue de cheval, jugulaire du casque), les bras et les jambes galbés (deltoïde,
-   biceps, quadriceps, mollet, tibia, chevilles ; manches, cuissard, chaussettes, couvre-chaussures), les mains gantées et les
-   chaussures ; le buste (épaules, omoplates, dos rond du cycliste, pectoraux ou poitrine chez une femme) et le bassin sont des
-   géométries simples : le buste garde les coordonnées de texture de la sphère du modèle simple, pour le motif du maillot.
+   biceps, quadriceps, mollet, tibia, chevilles ; manches, cuissard, chaussettes, couvre-chaussures), les mains gantées, les
+   chaussures, le bassin et les deux fessiers ; le buste (épaules arrondies d'où sortent les bras, omoplates, dos rond du cycliste,
+   pectoraux ou poitrine chez une femme) est une géométrie simple qui garde les coordonnées de texture de la sphère du modèle
+   simple, pour le motif du maillot.
    q : 1 (détaillé) ou 2 (réaliste : plus fin, avec les finitions : col et fermeture du maillot, poches, bande de cuissard, doigts,
    molettes et cales des chaussures, jugulaire, cils…). fem : morphologie féminine.
    Repères, ceux du modèle simple de B3D.Cyclist :
@@ -129,7 +130,7 @@
   // Muscles des membres (rayons en m) ; side : -1 à gauche, +1 à droite (le vaste interne est du côté du vélo)
   const THIGH = curve([[0, 0.084], [0.25, 0.079], [0.55, 0.07], [0.8, 0.058], [0.93, 0.05], [1, 0.048]]);
   const SHIN = curve([[0, 0.047], [0.12, 0.045], [0.3, 0.044], [0.55, 0.037], [0.78, 0.029], [0.9, 0.027], [1, 0.03]]);
-  const UPPER = curve([[0, 0.05], [0.18, 0.044], [0.5, 0.04], [0.85, 0.034], [1, 0.033]]);
+  const UPPER = curve([[0, 0.05], [0.12, 0.05], [0.3, 0.043], [0.5, 0.041], [0.85, 0.034], [1, 0.033]]); // deltoïde à la racine
   const FORE = curve([[0, 0.035], [0.2, 0.037], [0.5, 0.032], [0.85, 0.025], [1, 0.024]]);
   const front = (th) => Math.max(0, Math.cos(th)), back = (th) => Math.max(0, -Math.cos(th));
   const PROFILES = {
@@ -155,7 +156,8 @@
     const base = PROFILES[kind](o.side || 1, o.fem);
     const until = o.bands.length > 1 ? o.bands[0][0] : 1, loose = o.loose || 0;
     const r = loose ? (t, th) => base(t, th) + loose * ss(until + 0.04, until - 0.06, t) : base;
-    return limb(r, o.len || LENGTHS[kind], o.bands, o.q || 1, o.caps);
+    // le haut du bras s'enfonce dans l'épaule du buste : petite calotte, pas de boule
+    return limb(r, o.len || LENGTHS[kind], o.bands, o.q || 1, o.caps || (kind === 'upper' ? [0.3, 0.75] : null));
   }
 
   /* ------------------------------------------------------------------ tête */
@@ -304,8 +306,8 @@
 
   /* ------------------------------------------------------------------ buste */
   // demi-largeur et profondeurs (unités de la sphère du buste) du bassin (y = -1) au cou (y = 1)
-  const TW = { m: curve([[-1, 0.62], [-0.72, 0.72], [-0.42, 0.68], [-0.1, 0.74], [0.25, 0.84], [0.52, 0.88], [0.72, 0.86], [0.88, 0.64], [1, 0.36]]),
-    f: curve([[-1, 0.64], [-0.72, 0.76], [-0.42, 0.62], [-0.1, 0.68], [0.25, 0.78], [0.52, 0.8], [0.72, 0.78], [0.88, 0.58], [1, 0.32]]) };
+  const TW = { m: curve([[-1, 0.62], [-0.72, 0.72], [-0.42, 0.68], [-0.1, 0.74], [0.25, 0.84], [0.52, 0.88], [0.72, 0.86], [0.88, 0.68], [1, 0.36]]),
+    f: curve([[-1, 0.64], [-0.72, 0.76], [-0.42, 0.62], [-0.1, 0.68], [0.25, 0.78], [0.52, 0.8], [0.72, 0.78], [0.88, 0.62], [1, 0.32]]) };
   const TF = curve([[-1, 0.6], [-0.6, 0.62], [-0.2, 0.58], [0.25, 0.7], [0.6, 0.7], [0.9, 0.5], [1, 0.4]]);
   const TB = curve([[-1, 0.62], [-0.5, 0.66], [0, 0.7], [0.5, 0.78], [0.85, 0.62], [1, 0.45]]);
 
@@ -323,10 +325,16 @@
         z += cz * (fem ? 0.42 * Math.exp(-((dx / 0.27) ** 2) - (dy / (dy < 0 ? 0.13 : 0.24)) ** 2) : 0.07 * Math.exp(-((dx / 0.3) ** 2) - (dy / 0.16) ** 2));
       }
     }
+    // épaules : le deltoïde arrondit le haut du buste sur les côtés jusqu'à l'attache des bras (un peu en avant : bras vers le cintre),
+    // sous la pente des trapèzes ; les bras en sortent sans boule
+    const sh = bell(y, 0.66, y > 0.66 ? 0.19 : 0.15) * Math.pow(Math.abs(cx), 2.2);
+    x += Math.sign(cx) * (fem ? 0.2 : 0.26) * sh;
+    z += 0.05 * sh;
     if (inflate) { const k = 1 + inflate / Math.max(0.2, Math.hypot(x, z)); x *= k; z *= k; }
     // dos rond du cycliste : le milieu du buste remonte côté dos
     z -= 0.07 * (1 - y * y);
-    return V(x, y, z);
+    // bas du maillot aplati : il s'arrête sur le haut des fessiers au lieu de dépasser sous le cuissard
+    return V(x, y < -0.55 ? -0.55 + (y + 0.55) * 0.45 : y, z);
   }
 
   /** Buste (sphère unité déformée, avec ses coordonnées de texture). */
@@ -367,17 +375,26 @@
     return parts;
   }
 
-  /** Bassin (cuissard) en m : hanches, fessiers ; plus large chez une femme. */
-  function pelvisGeometry(o) {
-    const fem = !!o.fem, q = o.q || 1;
-    return deformed(q > 1 ? 24 : 16, q > 1 ? 18 : 12, (n) => {
-      let x = n.x * (fem ? 0.172 : 0.16), y = n.y * 0.105, z = n.z * 0.15;
-      // fessiers en arrière et en bas, ventre plat
-      for (const s of [-1, 1]) z -= 0.03 * bell(n.x, s * 0.45, 0.35) * bell(n.y, -0.3, 0.45) * Math.max(0, -n.z);
-      y -= 0.012 * Math.max(0, -n.z) * Math.max(0, -n.y);
-      x *= 1 + 0.06 * bell(n.y, -0.2, 0.4);
-      return V(x, y, z);
-    });
+  /** Bassin et fessiers (cuissard), en m, repère du corps (+z devant, centre au-dessus de la selle) : la taille qui rentre sous le
+      maillot et deux fessiers ronds, séparés par un sillon profond, basculés avec le bassin du cycliste (le haut vers l'avant),
+      posés sur la selle ; plus pleins et hanches plus larges chez une femme, plus musclés et creusés sur le côté chez un homme.
+      Chaque fessier a son contour : le sillon et l'arrondi du bas se lisent même sur un cuissard noir. */
+  function pelvisParts(o) {
+    const fem = !!o.fem, q = o.q || 1, color = o.color || '#26232f', w = q > 1 ? 36 : 24, h = q > 1 ? 26 : 16;
+    const parts = [{ geo: deformed(w, h, (n) => V(n.x * (fem ? 0.152 : 0.14) * (1 - 0.12 * ss(0.3, 0.95, n.y)), n.y * (n.y > 0 ? 0.11 : 0.05), n.z * (n.z > 0 ? 0.1 : 0.08))), color }];
+    const R = fem ? [0.081, 0.088, 0.086] : [0.072, 0.08, 0.075];
+    for (const s of [-1, 1]) {
+      const lobe = deformed(w, h, (n) => {
+        const inner = n.x * s < 0, lo = n.y < 0;
+        // côté du sillon plus plat ; bas plus plein et rond (le pli fessier) ; creux sur le côté chez un homme
+        let x = n.x * R[0] * (inner ? 0.8 : 1), y = n.y * R[1] * (lo ? 0.95 : 1.12), z = n.z * R[2];
+        if (!fem && !inner) x *= 1 - 0.1 * bell(n.y, 0.15, 0.35) * bell(n.z, 0.2, 0.45);
+        if (lo && !inner) x *= 1 + 0.06 * bell(n.y, -0.45, 0.3);
+        return V(x, y, z);
+      });
+      parts.push({ geo: lobe, color, matrix: B3D.toon.tr(s * (fem ? 0.072 : 0.065), fem ? -0.004 : 0.002, fem ? -0.078 : -0.07, 0.35, s * 0.12, 0) });
+    }
+    return parts;
   }
 
   /* ------------------------------------------------------------------ mains et pieds */
@@ -440,5 +457,5 @@
     return parts;
   }
 
-  B3D.anatomy = { curve, smoothNormals, deformed, rings, limb, limbParts, LENGTHS, headPoint, headParts, glassesParts, torsoPoint, torsoGeometry, torsoTrim, pelvisGeometry, handParts, shoeParts };
+  B3D.anatomy = { curve, smoothNormals, deformed, rings, limb, limbParts, LENGTHS, headPoint, headParts, glassesParts, torsoPoint, torsoGeometry, torsoTrim, pelvisParts, handParts, shoeParts };
 })(typeof window !== 'undefined' ? window : globalThis);

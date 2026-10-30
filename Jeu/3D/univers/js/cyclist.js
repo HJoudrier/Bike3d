@@ -816,9 +816,7 @@
       this.body.add(this.torso);
       addOutline(this.torso, { width: 0.9, minW: 0.006, maxW: 0.04 });
       if (q > 1) this._parts(A.torsoTrim({ q, fem, base: J.base, accent: J.accent }), 0, this.torso);
-      this.pelvis = new THREE.Mesh(A.pelvisGeometry({ q, fem }), mat(shorts));
-      this.body.add(this.pelvis);
-      addOutline(this.pelvis, { width: 0.8, minW: 0.005, maxW: 0.035 });
+      this.pelvis = this._parts(A.pelvisParts({ q, fem, color: shorts }), 0.8);
       // tête : crâne et visage, nez et oreilles (contour fin), yeux et lèvres, cheveux, casque et lunettes
       this.head = new THREE.Group();
       this.head.scale.setScalar(HEAD_FINE);
@@ -855,7 +853,7 @@
           fore: this._parts(A.limbParts('fore', { q, fem, side: sx, bands: [[1, long ? sleeve : SKIN]] }), 0.8),
           elbow: this._ball(0.034, mat(toElbow ? sleeve : SKIN)),
           hand: this._parts(A.handParts({ q, side: sx, glove, skin: SKIN, fem }), 0.8),
-          shoulder: this._ball(loose ? 0.068 : fem ? 0.052 : 0.058, mat(sleeve))
+          shoulder: null // l'épaule est dans le buste
         });
       }
       // jambes : cuissard (bande élastique en réaliste), chaussettes ou couvre-chaussures dans le galbe du mollet, chaussures
@@ -1116,7 +1114,7 @@
         if (stand > 0.01) hand.applyAxisAngle(ZAX, this.rock);
         let elbow = this._ik(sh, hand, 0.3, 0.3, new THREE.Vector3(arm.sx * 0.6, -0.3, -0.75).normalize(), new THREE.Vector3());
         if (A.elbows) elbow = A.elbows[i].clone().lerp(elbow, stand);
-        arm.shoulder.position.copy(sh);
+        if (arm.shoulder) arm.shoulder.position.copy(sh);
         arm.elbow.position.copy(elbow);
         if (fine) {
           // biceps à l'intérieur du coude

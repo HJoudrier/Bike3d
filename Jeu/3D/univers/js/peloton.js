@@ -170,7 +170,7 @@
     // dossard, posé sur le dos
     const backP = A.torsoPoint(V(0, -0.12, -1), fem, 0.03).applyMatrix4(torsoM), torsoQ = new THREE.Quaternion().setFromUnitVectors(UP, tn);
     parts.push({ geo: new THREE.BoxGeometry(0.18, 0.13, 0.008), color: '#fbfaf5', matrix: new THREE.Matrix4().compose(backP, torsoQ, V(1, 1, 1)) });
-    parts.push({ geo: A.pelvisGeometry({ q, fem }), color: DK, matrix: new THREE.Matrix4().makeTranslation(pelvis.x, pelvis.y, pelvis.z) });
+    parts.push(...placed(A.pelvisParts({ q, fem, color: DK }), new THREE.Matrix4().makeTranslation(pelvis.x, pelvis.y, pelvis.z)));
     // tête, comme le cycliste du joueur : dans le prolongement du dos, réduite à l'échelle réelle, casque et lunettes de sport
     const ha = Math.atan2(tn.y, tn.z) + 0.21, headPos = shoulder.clone().add(V(0, Math.sin(ha) * 0.2, Math.cos(ha) * 0.2));
     const headM = new THREE.Matrix4().compose(headPos, new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.15, 0, 0)), V(0.8, 0.8, 0.8));
@@ -186,7 +186,6 @@
       const sh = V(sx * (fem ? 0.175 : 0.19), shoulder.y - 0.02, shoulder.z - 0.02), hand = V(sx * 0.205, 0.93, 0.58);
       const elbow = ik(sh, hand, 0.3, 0.3, V(sx * 0.6, -0.3, -0.75).normalize(), new THREE.Vector3());
       const front = bendDir(sh, elbow, hand, new THREE.Vector3()).negate();
-      parts.push({ geo: sph(12, 9), color: W, tint: 1, matrix: tr(sh.x, sh.y, sh.z, 0, 0, 0, fem ? 0.052 : 0.058) });
       const upper = A.limbParts('upper', { q, fem, side: sx, bands: q > 1 ? [[0.45, W], [0.5, '#f4f1ea'], [1, SK]] : [[0.5, W], [1, SK]] });
       parts.push(...placed(upper, limbM(sh, elbow, front, new THREE.Matrix4()), { tint: 1 }).map((p, k) => Object.assign(p, { tint: k === 0 ? 1 : 0 })));
       parts.push(...placed(A.limbParts('fore', { q, fem, side: sx, bands: [[1, SK]] }), limbM(elbow, hand, front, new THREE.Matrix4())));

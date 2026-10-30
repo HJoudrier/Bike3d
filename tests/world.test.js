@@ -498,6 +498,7 @@ test('cyclistes 3D : trois niveaux de détail, la même pose, une cycliste', { s
   assert.ok(f.c.fem && f.c.tail, 'queue de cheval');
   assert.ok(!real.c.tail, 'pas de queue de cheval chez un homme');
   assert.ok(f.c.shoulderX < real.c.shoulderX);
+  assert.ok(real.c.arms.every((a) => !a.shoulder), 'modèles fins : pas de boule à l\'épaule');
   assert.ok(new C({ sex: 'f', detail: 'detailed' }).fem, 'sans équipement : le sexe du menu de Bike3D');
   assert.ok(!new C({ sex: 'f', gear: { sex: 'm' } }).fem, 'avec équipement : celui du profil');
   // finitions du réaliste : lunettes, jugulaire et col en plus ; les yeux se voient sans lunettes ou derrière la visière du chrono
@@ -513,7 +514,7 @@ test('cyclistes 3D : anatomie (géométries valides, poitrine d\'une cycliste, c
     for (const fem of [false, true]) {
       const H = A.headParts({ q, fem, eyes: true });
       for (const k of ['skull', 'features', 'marks', 'mouth', 'hair', 'tail', 'straps']) for (const p of H[k]) assert.ok(finite(p.geo), `tête (${k})`);
-      assert.ok(finite(A.torsoGeometry({ q, fem })) && finite(A.pelvisGeometry({ q, fem })));
+      assert.ok(finite(A.torsoGeometry({ q, fem })) && A.pelvisParts({ q, fem }).every((p) => finite(p.geo)));
       for (const k of ['thigh', 'shin', 'upper', 'fore', 'neck']) for (const p of A.limbParts(k, { q, fem, side: -1, bands: [[0.6, '#000000'], [1, '#ffffff']] })) assert.ok(finite(p.geo), k);
       for (const p of A.handParts({ q, side: 1, fem }).concat(A.shoeParts({ q, side: 1, kind: 'road', upper: '#fff', sole: '#000', detail: '#333' }))) assert.ok(finite(p.geo));
     }
@@ -527,6 +528,20 @@ test('cyclistes 3D : anatomie (géométries valides, poitrine d\'une cycliste, c
   };
   assert.ok(chest(true) > chest(false) + 0.2, `poitrine : ${chest(true).toFixed(2)} contre ${chest(false).toFixed(2)}`);
   assert.ok(A.headParts({ q: 1, fem: true }).tail.length > 0 && A.headParts({ q: 1, fem: false }).tail.length === 0);
+  // fessiers : deux, séparés par le sillon, bien en arrière du bassin, plus pleins chez une cycliste
+  const glutes = (fem) => {
+    const [core, ...lobes] = A.pelvisParts({ q: 2, fem });
+    core.geo.computeBoundingBox();
+    const back = lobes.map((p) => { const g = p.geo.clone().applyMatrix4(p.matrix); g.computeBoundingBox(); return g.boundingBox; });
+    return { n: lobes.length, behind: core.geo.boundingBox.min.z - Math.min(...back.map((b) => b.min.z)), cleft: Math.min(...back.map((b) => Math.min(Math.abs(b.min.x), Math.abs(b.max.x)))) };
+  };
+  const gm = glutes(false), gf = glutes(true);
+  assert.equal(gm.n, 2);
+  assert.ok(gm.behind > 0.05 && gf.behind > gm.behind, `fessiers en arrière : ${gm.behind.toFixed(3)} m, ${gf.behind.toFixed(3)} m`);
+  assert.ok(gm.cleft > 0.003 && gm.cleft < 0.02, `sillon : ${gm.cleft.toFixed(4)} m`);
+  // épaules : le buste va jusqu'à l'attache des bras (pas de boule du deltoïde à côté)
+  const shoulder = (fem) => A.torsoPoint({ x: 1, y: 0.69, z: 0 }, fem).x * 0.2; // côté du buste à hauteur des épaules (unité x : 0,2 m)
+  assert.ok(shoulder(false) >= 0.19 && shoulder(true) >= 0.175, `largeur aux épaules : ${shoulder(false).toFixed(3)} m, ${shoulder(true).toFixed(3)} m`);
   // un membre par couleur : cuissard jusqu'à 78 % de la cuisse, puis la peau, l'anneau de la limite en commun
   const [shorts, skin] = A.limbParts('thigh', { q: 1, side: 1, bands: [[0.78, '#26232f'], [1, '#f1c29b']] });
   shorts.geo.computeBoundingBox(); skin.geo.computeBoundingBox();
