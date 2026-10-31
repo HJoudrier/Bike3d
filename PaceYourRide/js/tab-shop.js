@@ -4,7 +4,7 @@
  *   Cycliste : position sur le vélo (un réglage, gratuit), casque, lunettes, maillot ou combinaison, chaussettes,
  *   chaussures, épilation.
  * À gauche, l'illustration du vélo (et du cycliste dessus) reflète l'équipement monté — et l'article
- * survolé, en aperçu : en 3D, le vélo et le cycliste du jeu 3D (la vitrine de Bike3D, Jeu3D/univers/showroom.html, dans un
+ * survolé, en aperçu : en 3D, le vélo et le cycliste du Virtual Ride 3D (la vitrine de Bike3D, VirtualRide3D/univers/showroom.html, dans un
  * cadre : le cycliste pédale sur place sur un home-trainer, on tourne la caméra autour de lui), ou en photos ;
  * à droite, la liste des composants. Chaque achat modifie les réglages du vélo et
  * du cycliste (visibles sur la page Équipements) ; la synthèse compare l'équipement monté à
@@ -24,7 +24,7 @@
 
   /* ---------- vélo en 3D : la vitrine de Bike3D, le même modèle que dans la vue 3D du mode jeu ---------- */
 
-  const SHOWROOM = (PYR.root || '') + 'Jeu3D/univers/showroom.html';   // la vitrine de Bike3D (univers 3D du jeu)
+  const SHOWROOM = (PYR.root || '') + 'VirtualRide3D/univers/showroom.html';   // la vitrine de Bike3D (univers 3D du jeu)
   const ME_COLOR = '#eb6834'; // couleur du joueur dans le mode jeu (maillot et casque)
   /** frame : le cadre (iframe) ; ready : la vitrine a répondu ; failed : elle ne répond pas (retour aux photos) ; opts : équipement à montrer. */
   const v3 = { frame: null, ready: false, failed: false, opts: null, sent: null, timer: null };

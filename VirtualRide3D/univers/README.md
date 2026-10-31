@@ -2,7 +2,7 @@
 
 Petit jeu de vélo en 3D, style cartoon avec cel shading, qui tourne entièrement dans le navigateur (HTML, CSS, JavaScript et [three.js](https://threejs.org)).
 
-C'est aussi **l'univers 3D du jeu de PaceYourRide** : ce dossier (`Jeu3D/univers/`) est rangé dans le site de PaceYourRide (voir le [README à la racine](../../../README.md)), dont l'écran de course `Jeu3D/` montre la course dans ce paysage, et dont le magasin montre le vélo dans la vitrine `showroom.html`.
+C'est aussi **l'univers 3D du jeu de PaceYourRide** : ce dossier (`VirtualRide3D/univers/`) est rangé dans le site de PaceYourRide (voir le [README à la racine](../../../README.md)), dont l'écran de course `VirtualRide3D/` montre la course dans ce paysage, et dont le magasin montre le vélo dans la vitrine `showroom.html`.
 
 On importe un tracé **GPX** : une route en 3D est construite à partir du tracé. Ensuite, chaque clic sur **« Modéliser en 3D »** génère un nouveau paysage aléatoire autour de cette route : relief, falaises dans les cols, forêts, prés, champs, vignes, garrigue, rivières avec leurs ponts, lacs et mares, villages, animaux, spectateurs… On recommence jusqu'à trouver un paysage qui plaît, on le **valide**, puis on roule dessus, seul ou au milieu d'un peloton, avec des sprints, des cols classés, un ravitaillement et toute la caravane, comme sur une vraie course.
 
@@ -14,20 +14,20 @@ Aucune installation ni compilation : three.js est fourni dans `vendor/`.
 - **Ou** servir la racine du site avec un petit serveur web, par exemple :
   ```bash
   python3 -m http.server 8000      # à la racine du dépôt
-  # puis ouvrir http://localhost:8000/Jeu3D/univers/
+  # puis ouvrir http://localhost:8000/VirtualRide3D/univers/
   ```
 
 Il faut un navigateur récent avec WebGL 2 (Chrome, Edge, Firefox ou Safari récents).
 
-Pour jouer avec un casque de réalité virtuelle, voir [Réalité virtuelle](#réalité-virtuelle-meta-quest-et-autres-casques) : il faut alors servir le site avec `python3 Jeu3D/univers/tools/serve.py` (depuis la racine du dépôt).
+Pour jouer avec un casque de réalité virtuelle, voir [Réalité virtuelle](#réalité-virtuelle-meta-quest-et-autres-casques) : il faut alors servir le site avec `python3 VirtualRide3D/univers/tools/serve.py` (depuis la racine du dépôt).
 
 ## Avec PaceYourRide : la vue 3D d'une course simulée
 
-PaceYourRide (la racine du site) est l'application de stratégie et de course (parcours, cycliste, matériel, météo réelle, modèle physiologique, jeu, courses en direct). Son écran de course **`Jeu3D/`** montre la course **dans le paysage de Bike3D** au lieu du fond de carte : c'est PaceYourRide qui simule, Bike3D qui montre.
+PaceYourRide (la racine du site) est l'application de stratégie et de course (parcours, cycliste, matériel, météo réelle, modèle physiologique, jeu, courses en direct). Son écran de course **`VirtualRide3D/`** montre la course **dans le paysage de Bike3D** au lieu du fond de carte : c'est PaceYourRide qui simule, Bike3D qui montre.
 
 1. Servir **la racine du dépôt** : `python3 -m http.server 8000`, puis ouvrir `http://localhost:8000/`.
 2. Tracer ou importer un parcours (page **Parcours**), aller sur la page **Jeu**, choisir **🚴 Univers 3D**, cliquer sur **Démarrer**.
-3. L'écran de course `Jeu3D/` s'ouvre : le paysage à la place de la carte (le HUD de PaceYourRide reste par-dessus). 🎥 (ou un toucher sur la vue, ou la touche <kbd>C</kbd>) change de caméra, 🔇 / 🔊 coupe ou remet le son, ⧉ ouvre la vue dans **une autre fenêtre** avec son propre compteur (second écran, téléviseur devant le home-trainer) ; l'écran sur la carte (`Jeu2D/`) a aussi ce bouton ⧉.
+3. L'écran de course `VirtualRide3D/` s'ouvre : le paysage à la place de la carte (le HUD de PaceYourRide reste par-dessus). 🎥 (ou un toucher sur la vue, ou la touche <kbd>C</kbd>) change de caméra, 🔇 / 🔊 coupe ou remet le son, ⧉ ouvre la vue dans **une autre fenêtre** avec son propre compteur (second écran, téléviseur devant le home-trainer) ; l'écran sur la carte (`VirtualRide2D/`) a aussi ce bouton ⧉.
 
 Ce que la vue reçoit de PaceYourRide, à chaque image : la position de chaque coureur (le joueur, les coureurs virtuels, les fantômes, les autres joueurs d'une course en direct), sa position latérale dans le peloton en 2D, sa vitesse et sa puissance, l'abri (le sillage devient vert), et la météo à la position et à l'heure du joueur (heure locale, pluie, neige, orage, vent réel). Les sprints, les côtes classées et les zones de ravitaillement de la course y ont leurs arches. Les **portions de revêtement** de PaceYourRide se voient sur la route : enrobé neuf, asphalte dégradé (rustines, fissures, lignes effacées), pavés réguliers ou difficiles « façon Roubaix » (pierres irrégulières, herbe et boue entre les pavés), chemin blanc, gravier, chemin de terre (ornières, herbe au milieu), herbe et sable, route mouillée (flaques). Chaque portion a sa largeur : la plateforme garde 6 m et une chaussée plus étroite est bordée de bas-côtés herbeux (gravillonnés dans les villages) ; plus large que 6 m, elle est dessinée à 6 m ; sur un pont, le tablier garde toute sa largeur. Les secteurs pavés et les chemins de plus de 80 m ont leur panneau à l'entrée (« SECTEUR PAVÉ N°3 · 2,1 km · ★★★★★ », numérotés à rebours jusqu'à l'arrivée), leur annonce, et sur les pavés le vélo et la caméra tremblent. Les coureurs restent sur la largeur de la chaussée ; on ne peint pas d'encouragements sur les pavés ni sur un chemin étroit. Sur les **chemins blancs**, les roues soulèvent un **nuage de poussière** (`js/dust.js`) : des bouffées naissent au contact de la roue arrière, partent en arrière, montent jusqu'à hauteur des coureurs en gonflant, dérivent avec le vent et s'effacent en quelques secondes ; plus épais à grande vitesse, très clair et dense sur un chemin blanc, un peu moins sur le gravier meuble, ocre et plus léger sur la terre, à peine sur les pavés secs. Les voitures et les motos de la caravane en soulèvent de gros nuages. Rien sur une route mouillée ou enneigée ; la nuit, la poussière s'assombrit. On en soulève aussi en roulant sur le bas-côté en terre (dans le jeu Bike3D seul aussi). La graine du paysage est tirée du parcours : **tous les joueurs d'une course en direct roulent dans le même monde**. Les touches pressées dans la vue (puissance, tactiques, changement de rang…) pilotent le jeu comme d'habitude.
 
@@ -130,11 +130,11 @@ Le jeu a un mode immersif WebXR : on roule assis sur le vélo, au milieu du pays
 
 Le navigateur n'autorise la réalité virtuelle que sur une page sécurisée (`https://` ou `localhost`) : il faut donc servir le dossier. Le script `tools/serve.py` (Python 3) s'en charge ; il sert tout le site, depuis sa racine.
 
-1. **Avec le câble USB** (casque en mode développeur) : sur le PC, lancer `python3 Jeu3D/univers/tools/serve.py` (depuis la racine du dépôt) puis `adb reverse tcp:8000 tcp:8000`, et ouvrir `http://localhost:8000/Jeu3D/univers/` dans le navigateur du Quest.
-2. **En Wi-Fi** : lancer `python3 Jeu3D/univers/tools/serve.py --https` (il faut `openssl`). Ouvrir l'adresse affichée (`https://192.168.x.x:8443`) dans le navigateur du Quest, et accepter le certificat (« Avancé » puis « Continuer »).
+1. **Avec le câble USB** (casque en mode développeur) : sur le PC, lancer `python3 VirtualRide3D/univers/tools/serve.py` (depuis la racine du dépôt) puis `adb reverse tcp:8000 tcp:8000`, et ouvrir `http://localhost:8000/VirtualRide3D/univers/` dans le navigateur du Quest.
+2. **En Wi-Fi** : lancer `python3 VirtualRide3D/univers/tools/serve.py --https` (il faut `openssl`). Ouvrir l'adresse affichée (`https://192.168.x.x:8443`) dans le navigateur du Quest, et accepter le certificat (« Avancé » puis « Continuer »).
 3. **En ligne** : publier le dossier sur un hébergement en HTTPS (GitHub Pages, par exemple) et ouvrir l'adresse dans le casque.
 
-Avec un casque relié au PC (Quest Link, Air Link…), on peut aussi utiliser Chrome ou Edge sur le PC, avec `python3 Jeu3D/univers/tools/serve.py` et `http://localhost:8000/Jeu3D/univers/`.
+Avec un casque relié au PC (Quest Link, Air Link…), on peut aussi utiliser Chrome ou Edge sur le PC, avec `python3 VirtualRide3D/univers/tools/serve.py` et `http://localhost:8000/VirtualRide3D/univers/`.
 
 Ensuite, on choisit un parcours, on modélise le paysage, puis on clique sur **« 🥽 Rouler en réalité virtuelle »**. Ce bouton n'apparaît que si un casque est disponible ; on le retrouve aussi dans le menu pause d'une course commencée à l'écran.
 
@@ -226,7 +226,7 @@ Le terrain est découpé en tuiles chargées autour du cycliste, ce qui permet d
 | `js/hud.js`, `js/audio.js`, `js/confetti.js`, `js/game.js` | HUD, sons, confettis, boucle de jeu |
 | `js/vr.js` | réalité virtuelle : nacelle de caméra, compteur sur la potence, panneaux, manettes, effet tunnel |
 | `js/bridge.js` | vue pilotée par PaceYourRide (`index.html?pyr`) : parcours et positions reçus par `postMessage`, peloton « marionnette », ciel et météo imposés, compteur de la fenêtre à part, touches renvoyées au jeu |
-| `tools/serve.py` | serveur local HTTP / HTTPS de tout le site, pour jouer depuis un casque (`python3 Jeu3D/univers/tools/serve.py --https`) |
+| `tools/serve.py` | serveur local HTTP / HTTPS de tout le site, pour jouer depuis un casque (`python3 VirtualRide3D/univers/tools/serve.py --https`) |
 | `tools/make-samples.js` | régénère les GPX d'exemple (`node tools/make-samples.js`) |
 
 ## Licences

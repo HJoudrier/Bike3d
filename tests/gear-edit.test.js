@@ -1,5 +1,5 @@
 /* author : Hugo Joudrier-Faure */
-/* Tests du matériel réglé sur la vue 3D de Jeu3D (Commun/js/jeu/gear-edit.js) : articles proposés, montage comme au magasin, reprise des modifications. */
+/* Tests du matériel réglé sur la vue 3D de VirtualRide3D (Commun/js/jeu/gear-edit.js) : articles proposés, montage comme au magasin, reprise des modifications. */
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');

@@ -3,8 +3,8 @@
  * profondeur de la page, puis le démarrage (Commun/js/app.js, le dernier de la liste).
  * Le site est fait de quatre applications indépendantes qui ne s'échangent leurs données que par Dropbox (Commun/js/core/cloud.js) :
  *   pro       PaceYourRide/   tracé des parcours, athlètes, équipements, pacing optimal (la seule qui écrit la bibliothèque)
- *   jeu2d     Jeu2D/          le jeu sur la carte : choix du parcours et de l'athlète, puis la course
- *   jeu3d     Jeu3D/          le jeu dans l'univers 3D de Bike3D
+ *   jeu2d     VirtualRide2D/          le jeu sur la carte : choix du parcours et de l'athlète, puis la course
+ *   jeu3d     VirtualRide3D/          le jeu dans l'univers 3D de Bike3D
  *   compteur  Compteur/       le compteur de la vraie sortie
  * La page dit laquelle elle est avec l'attribut data-app de la balise qui charge ce fichier, en fin de corps :
  *   <script src="../Commun/js/boot.js" data-app="jeu2d"></script>
@@ -48,9 +48,9 @@
         'PaceYourRide/js/route3d.js', 'PaceYourRide/js/tab-route.js', 'PaceYourRide/js/rider-physio.js', 'PaceYourRide/js/tab-rider.js', 'PaceYourRide/js/rider-import.js', 'PaceYourRide/js/tab-bike.js',
         'PaceYourRide/js/calibration.js', 'PaceYourRide/js/tab-shop.js', 'PaceYourRide/js/tab-perf.js']),
     },
-    jeu2d: { dir: 'Jeu2D', ns: 'paceyourride.jeu2d', scripts: ENGINE.concat(SHARED_UI, GAME_UI) },
-    jeu3d: { dir: 'Jeu3D', ns: 'paceyourride.jeu3d', scripts: ENGINE.concat(SHARED_UI, GAME_UI) },
-    compteur: { dir: 'Compteur', ns: 'paceyourride.compteur', scripts: ENGINE.concat(SHARED_UI, ['Commun/js/jeu/challenges.js', 'Compteur/js/tab-ride.js']) },
+    jeu2d: { dir: 'VirtualRide2D', ns: 'paceyourride.jeu2d', scripts: ENGINE.concat(SHARED_UI, GAME_UI) },
+    jeu3d: { dir: 'VirtualRide3D', ns: 'paceyourride.jeu3d', scripts: ENGINE.concat(SHARED_UI, GAME_UI) },
+    compteur: { dir: 'Compteur', ns: 'paceyourride.compteur', scripts: ENGINE.concat(SHARED_UI, ['Commun/vendor/qrcode-generator/qrcode.js', 'Commun/js/jeu/challenges.js', 'Commun/js/jeu/qr.js', 'Commun/js/jeu/relay.js', 'Commun/js/jeu/live.js', 'Compteur/js/tab-ride.js']) },
     // accueil de PaceYourRide : le projet en cours et la bibliothèque (pas de Commun/js/app.js)
     'pro-home': {
       dir: 'PaceYourRide', ns: 'paceyourride', light: true,

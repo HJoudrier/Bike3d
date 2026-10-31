@@ -8,7 +8,7 @@ const path = require('path');
 // navigateur minimal : stockage local, adresse, requêtes
 const store = new Map();
 globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
-globalThis.location = { origin: 'https://exemple.test', pathname: '/site/Jeu2D/index.html', href: 'https://exemple.test/site/Jeu2D/index.html', search: '', hash: '' };
+globalThis.location = { origin: 'https://exemple.test', pathname: '/site/VirtualRide2D/index.html', href: 'https://exemple.test/site/VirtualRide2D/index.html', search: '', hash: '' };
 globalThis.history = { replaceState() {} };
 const { PYR, makeProfile } = require('./helpers.js');
 PYR.root = 'https://exemple.test/site/';
@@ -63,7 +63,7 @@ test('cloud : la connexion revient par le portail de la racine du site et se sou
   assert.equal(u.origin + u.pathname, 'https://www.dropbox.com/oauth2/authorize');
   assert.equal(u.searchParams.get('redirect_uri'), 'https://exemple.test/site/index.html');
   const pk = JSON.parse(localStorage.getItem('paceyourride.cloud.pkce'));
-  assert.equal(pk.returnTo, 'https://exemple.test/site/Jeu2D/index.html');
+  assert.equal(pk.returnTo, 'https://exemple.test/site/VirtualRide2D/index.html');
   assert.equal(pk.redirect, 'https://exemple.test/site/index.html');
 });
 

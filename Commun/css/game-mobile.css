@@ -565,7 +565,7 @@ body[data-race="phone"] .toasts { top: calc(150px + env(safe-area-inset-top)); b
 .chart-box.zoom-locked .chart-zoom { display: none !important; }
 .rm-prof-slot .chart-box canvas { touch-action: none; }
 
-/* ---------- vue 3D (Bike3D, view3d.js ; écran Jeu3D) : par-dessus le fond de carte, sous les alertes, les demandes et l'écran de course ---------- */
+/* ---------- vue 3D (Bike3D, view3d.js ; écran VirtualRide3D) : par-dessus le fond de carte, sous les alertes, les demandes et l'écran de course ---------- */
 .v3d-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; z-index: 690; background: #cfe9fb; }
 .map-wrap.v3d-on .leaflet-control-container { display: none; }
 /* puissance mesurée (home-trainer, vraie route) : la barre l'affiche sans se régler */

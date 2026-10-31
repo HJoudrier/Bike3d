@@ -358,7 +358,7 @@ test('crevaisons : en course, bien plus sur le gravier et les pavés, et bien mo
 
 require(path.join(__dirname, '..', 'Commun', 'js', 'ui', 'gear-art.js'));
 const fs = require('fs');
-const BIKE3D = path.join(__dirname, '..', 'Jeu3D', 'univers');   // l'univers 3D du jeu (Bike3D)
+const BIKE3D = path.join(__dirname, '..', 'VirtualRide3D', 'univers');   // l'univers 3D du jeu (Bike3D)
 const hasBike3d = fs.existsSync(path.join(BIKE3D, 'js', 'cyclist.js'));
 
 /** Bike3D chargé à part (three.js, utilitaires, rendu cartoon, anatomie, cycliste ; peloton en plus si demandé), avec un faux

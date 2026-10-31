@@ -502,8 +502,8 @@
 
   function init() {
     // un ancien lien de partage pointait sur la page d'ouverture : un défi s'ouvre sur la page Jeu, une invitation sur l'écran de course
-    if (/^#defi=/.test(location.hash)) { location.replace('../Jeu2D/index.html' + location.hash); return; }
-    if (/^#live=/.test(location.hash)) { location.replace('../Jeu2D/course.html' + location.hash); return; }
+    if (/^#defi=/.test(location.hash)) { location.replace('../VirtualRide2D/index.html' + location.hash); return; }
+    if (/^#live=/.test(location.hash)) { location.replace('../VirtualRide2D/course.html' + location.hash); return; }
     dlg = $('#wiz');
     preview = PYR.routePreview.create($('#hm-route'));
     renderProject();

@@ -32,6 +32,8 @@
   const MAX_REQUESTS = 12;    // demandes en salle d'attente
   const NETWORK_FAIL = 'Connexion impossible : vos réseaux bloquent la liaison directe (pare-feu, NAT). Essayez un autre réseau (partage de connexion 4G…) ou un défi en différé.';
 
+  /** Ce qui fait courir la partie : l'écran de course d'un jeu (PYR.tabGame) ou le Compteur (PYR.liveHost : il rejoint une partie avec son GPS, sans l'organiser). */
+  const HOST = () => PYR.liveHost || PYR.tabGame;
   let S = null;        // session en cours
   let clock = null;    // minuterie d'affichage
 
@@ -185,8 +187,8 @@
     ensureCourse();
     const local = S.race.startAt - (S.role === 'guest' ? S.offset : 0);
     S.armedAt = local;
-    if (store.state.ui.tab !== 'game') PYR.app.showTab('game');
-    PYR.tabGame.armLive(local);
+    if (!PYR.liveHost && store.state.ui.tab !== 'game') PYR.app.showTab('game');
+    HOST().armLive(local);
     render();
   }
 
@@ -689,7 +691,7 @@
     } finally {
       S = null;
       stopClock();
-      PYR.tabGame.leaveLive();
+      HOST().leaveLive();
       render();
       if (!silent) D.toast('Tu as quitté la course en direct.');
     }
@@ -1113,10 +1115,13 @@
     refs = {};
     if (!S || S.role !== 'host') renderRoom(); // masque la carte de la salle d'attente
     if (!S) {
-      box.appendChild(h('p', { class: 'hint' }, 'Roulez en même temps, chacun chez soi : l\'organisateur partage un QR code (ou un lien), chaque joueur le scanne et attend que l\'organisateur valide son inscription. Départ à l\'heure fixée par l\'organisateur.'));
+      box.appendChild(h('p', { class: 'hint' }, PYR.liveHost && PYR.liveHost.joinOnly
+        ? 'Rejoins une partie Virtual Ride : scanne le QR code (ou colle le lien) de l\'organisateur et attends sa validation. Ton GPS te place sur le parcours de la partie, ta puissance vient du capteur, et les autres joueurs te voient rouler.'
+        : 'Roulez en même temps, chacun chez soi : l\'organisateur partage un QR code (ou un lien), chaque joueur le scanne et attend que l\'organisateur valide son inscription. Départ à l\'heure fixée par l\'organisateur.'));
+      // le Compteur rejoint seulement : l'organisateur est une partie Virtual Ride
       box.appendChild(h('div', { class: 'toolbar' },
-        h('button', { class: 'btn', onclick: openCreate }, 'Organiser une course'),
-        h('button', { class: 'btn', onclick: () => openJoin() }, 'Rejoindre une course')));
+        PYR.liveHost && PYR.liveHost.joinOnly ? null : h('button', { class: 'btn', onclick: openCreate }, 'Organiser une course'),
+        h('button', { class: 'btn primary', onclick: () => openJoin() }, PYR.liveHost && PYR.liveHost.joinOnly ? 'Rejoindre une partie' : 'Rejoindre une course')));
       return;
     }
     const wrap = h('div', { class: 'challenge live' });
@@ -1347,7 +1352,7 @@
       const m = location.hash.match(/^#live=([A-Za-z0-9._-]+)/);
       if (!m) return false;
       history.replaceState(null, '', location.pathname + location.search);
-      PYR.app.showTab('game');
+      if (!PYR.liveHost) PYR.app.showTab('game');
       openJoin(decodeURIComponent(m[1]));
       return true;
     },

@@ -1,6 +1,6 @@
 /* author : Hugo Joudrier-Faure */
 /* PaceYourRide — choisir un parcours ou un athlète dans la bibliothèque, de la même façon dans toutes les applications (accueil de PaceYourRide,
- * Jeu 2D, Jeu 3D, compteur) : un carrousel de parcours (le tracé sur la carte en 2D, une vue 3D dans Jeu 3D, avec distance, D+, D−) et des
+ * Virtual Ride 2D, Virtual Ride 3D, compteur) : un carrousel de parcours (le tracé sur la carte en 2D, une vue 3D dans Virtual Ride 3D, avec distance, D+, D−) et des
  * cartes d'athlète. Les mêmes fenêtres permettent d'ajouter un parcours (fichier GPX) ou un athlète (formulaire).
  * Les fonctions dessinent à partir d'une liste d'éléments {id, name, savedAt, data, project?} (library.js) et rendent la main par des rappels ;
  * elles ne touchent ni au stockage ni à Dropbox (voir lib-cache.js pour les jeux et le compteur, home.js pour PaceYourRide). */
@@ -149,7 +149,7 @@
     n.focus(); n.select();
   }
 
-  /* ---------- les sélecteurs complets : les mêmes dans PaceYourRide, Jeu 2D, Jeu 3D et le compteur ---------- */
+  /* ---------- les sélecteurs complets : les mêmes dans PaceYourRide, Virtual Ride 2D, Virtual Ride 3D et le compteur ---------- */
 
   const VIEW_KEY = (PYR.storageNs || 'paceyourride') + '.pickview';
   /** Vue des parcours choisie ('2d' : le tracé sur la carte ; '3d' : une vue 3D), gardée pour l'application ; `dflt` tant qu'on n'a pas choisi. */

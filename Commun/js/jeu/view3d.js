@@ -1,6 +1,6 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — vue 3D du jeu : le paysage cartoon de Bike3D (Jeu3D/univers/) à la place du fond de carte, sur l'écran de course
- * Jeu3D/course.html (body[data-display="3d"]) ; l'écran Jeu2D/course.html garde la carte, et peut ouvrir la vue dans une autre fenêtre.
+/* PaceYourRide — vue 3D du jeu : le paysage cartoon de Bike3D (VirtualRide3D/univers/) à la place du fond de carte, sur l'écran de course
+ * VirtualRide3D/course.html (body[data-display="3d"]) ; l'écran VirtualRide2D/course.html garde la carte, et peut ouvrir la vue dans une autre fenêtre.
  *
  * La simulation reste ici (physiologie, météo, aspiration, coureurs virtuels, joueurs en direct) ; Bike3D ne fait que montrer la
  * course. Il est ouvert dans un cadre par-dessus la carte de l'écran de course en 3D, ou dans une fenêtre à part
@@ -12,7 +12,7 @@
  *     position, les mêmes que dans la vitrine 3D du magasin (gear-art.js, gear3d) ;
  *   - Bike3D renvoie les touches pressées quand il a le focus (key), elles pilotent le jeu comme d'habitude.
  * La graine du paysage vient de l'empreinte du parcours : tous les joueurs d'une course en direct ont le même monde.
- * Le détail du protocole est en tête de js/bridge.js côté Bike3D. Adresse de la vue : Jeu3D/univers/index.html, ou celle enregistrée par
+ * Le détail du protocole est en tête de js/bridge.js côté Bike3D. Adresse de la vue : VirtualRide3D/univers/index.html, ou celle enregistrée par
  * localStorage.setItem('pyr.view3d', 'https://…/index.html'). */
 (function (PYR) {
   'use strict';
@@ -22,7 +22,7 @@
   const h = (...a) => D.h(...a), $ = (q) => D.$(q);
   const st = () => PYR.store.state;
   const V = 1;
-  const UNIVERSE = 'Jeu3D/univers/index.html';   // depuis la racine du site (PYR.root, posé par js/boot.js)
+  const UNIVERSE = 'VirtualRide3D/univers/index.html';   // depuis la racine du site (PYR.root, posé par js/boot.js)
   const ME_COLOR = '#eb6834';
 
   let frameEl = null;      // cadre par-dessus la carte
@@ -35,7 +35,7 @@
   const btn = {};
   const status = new Map(); // fenêtre → dernier état annoncé ('building', 'ready', 'error')
 
-  /** L'écran de course montre-t-il la 3D ? C'est la page qui le dit (Jeu3D : oui, Jeu2D : la carte). */
+  /** L'écran de course montre-t-il la 3D ? C'est la page qui le dit (VirtualRide3D : oui, VirtualRide2D : la carte). */
   const on = () => typeof document !== 'undefined' && !!document.body && document.body.dataset.display === '3d';
 
   function baseUrl() {
@@ -251,7 +251,7 @@
   function command(cmd, extra) { broadcast(Object.assign({ type: 'cmd', cmd }, extra || {})); }
 
   /** Boutons de la colonne de l'écran de course (game-mobile.js les place) : caméra, son, fenêtre à part. Carte ou 3D : c'est l'écran
-   * choisi sur la page Jeu (Jeu2D ou Jeu3D) qui le fixe. */
+   * choisi sur la page Jeu (VirtualRide2D ou VirtualRide3D) qui le fixe. */
   function buttons() {
     if (btn.cam) return [btn.cam, btn.sound, btn.win];
     // sur téléphone, toucher la vue change de caméra : le bouton n'est que sur grand écran

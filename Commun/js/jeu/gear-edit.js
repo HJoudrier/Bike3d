@@ -1,6 +1,6 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — matériel du cycliste réglé sur la vue 3D (page de choix de Jeu3D) : le vélo et le cycliste de la vitrine de Bike3D
- * (Jeu3D/univers/showroom.html, celle du magasin de PaceYourRide), équipés comme ils rouleront dans la course. On choisit la partie à
+/* PaceYourRide — matériel du cycliste réglé sur la vue 3D (page de choix de VirtualRide3D) : le vélo et le cycliste de la vitrine de Bike3D
+ * (VirtualRide3D/univers/showroom.html, celle du magasin de PaceYourRide), équipés comme ils rouleront dans la course. On choisit la partie à
  * modifier (cadre, roues, pneus, position, casque, lunettes, tenue, chaussettes, chaussures), puis les flèches gauche et droite
  * font défiler les articles ; la vitrine montre chaque choix aussitôt. Les articles sont ceux du catalogue du magasin (catalog.js) :
  * ils règlent les mêmes réglages du vélo et du cycliste que le magasin de PaceYourRide, donc la masse, l'aérodynamisme et le roulement
@@ -12,7 +12,7 @@
   const store = PYR.store, Cat = PYR.catalog, Ph = PYR.physics, D = PYR.dom;
   const { h, $, $$ } = D;
 
-  const SHOWROOM = (PYR.root || '') + 'Jeu3D/univers/showroom.html';
+  const SHOWROOM = (PYR.root || '') + 'VirtualRide3D/univers/showroom.html';
   const ME_COLOR = '#eb6834';   // couleur du joueur (maillot et casque), comme dans la course
   const BIKE_CATS = ['frame', 'wheels', 'tires', 'drivetrain'];
 

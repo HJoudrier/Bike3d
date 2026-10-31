@@ -4,11 +4,11 @@ create-pages:
   stage: deploy
   script:
     - mkdir -p public
-    # Le site tel quel, depuis sa racine : le portail (index.html) et les quatre applications indépendantes, PaceYourRide, Jeu2D, Jeu3D (avec
+    # Le site tel quel, depuis sa racine : le portail (index.html) et les quatre applications indépendantes, PaceYourRide, VirtualRide2D, VirtualRide3D (avec
     # l'univers 3D de Bike3D) et Compteur, qui partagent le dossier Commun (moteur, interface, styles, bibliothèques)
-    - cp -r index.html Commun PaceYourRide Jeu2D Jeu3D Compteur public/
+    - cp -r index.html Commun PaceYourRide VirtualRide2D VirtualRide3D Compteur public/
     # sources de développement, inutiles en ligne
-    - rm -rf public/Jeu3D/univers/tools public/PaceYourRide/tools public/PaceYourRide/img_bike
+    - rm -rf public/VirtualRide3D/univers/tools public/PaceYourRide/tools public/PaceYourRide/img_bike
   pages:
     # The folder that contains the files to be exposed at the Page URL
     publish: public

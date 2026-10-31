@@ -3,7 +3,7 @@
 (function (PYR) {
   'use strict';
 
-  // chaque application (PaceYourRide, Jeu2D, Jeu3D, Compteur) a son propre projet dans le stockage local : PYR.storageNs, posé par Commun/js/boot.js
+  // chaque application (PaceYourRide, VirtualRide2D, VirtualRide3D, Compteur) a son propre projet dans le stockage local : PYR.storageNs, posé par Commun/js/boot.js
   // (PaceYourRide garde les clés historiques 'paceyourride.v1…'). Les applications ne s'échangent leurs données que par Dropbox (cloud.js).
   const NS = PYR.storageNs || 'paceyourride';
   const KEY = NS + '.v1';
@@ -51,7 +51,7 @@
       timeScale: 5, ghost: true, follow: true,
       countdown: 5,            // décompte avant le départ (s, temps réel ; 0 : aucun), affiché sur l'écran de course
       bots: 3, botLevel: 'equal', events: true, form: true, fuel: true, pullSec: 30,
-      source: 'avatar',        // présence dans la course (presence.js) : avatar, home-trainer (watts mesurés) ou vraie route (GPS)
+      source: 'avatar',        // présence dans la course (presence.js) : avatar ou home-trainer (watts mesurés)
       trainerSim: true,        // home-trainer FTMS : il reçoit la pente, le vent et l'abri du peloton
       northUp: false,          // carte : nord en haut (boussole) ; sinon elle suit l'orientation du cycliste, comme le compteur
       showTte: true,           // HUD : afficher la durée tenable (« Tenable », TTE) ; décoché, elle est masquée
@@ -59,10 +59,10 @@
       physio: true,            // modèle physiologique (avec l'alimentation) : glycogène par fibres, glycémie, chaleur, eau, fatigue, caféine
       fx: true,                // animations météo sur la carte (pluie, battement des manches à air)
       pick: { route: '', athlete: '', bike: '', outfit: '' },   // jeux : éléments de la bibliothèque choisis (identifiants ; '' : réglages par défaut, ou le premier proposé)
-      gearEdit: {},            // Jeu3D : matériel modifié sur la vue 3D (catégorie du catalogue, ou 'position' → article), repris après chaque choix (gear-edit.js)
+      gearEdit: {},            // VirtualRide3D : matériel modifié sur la vue 3D (catégorie du catalogue, ou 'position' → article), repris après chaque choix (gear-edit.js)
       weatherMode: 'random',   // jeux : météo 'random' (aléatoire évolutive) ou 'date' (celle d'un jour et d'une heure)
       weatherSeed: 0,          // jeux : graine du temps aléatoire
-      display: '2d',           // écran de course : '2d' la carte (Jeu2D), '3d' l'univers de Bike3D (Jeu3D)
+      display: '2d',           // écran de course : '2d' la carte (VirtualRide2D), '3d' l'univers de Bike3D (VirtualRide3D)
       // limites en « Dans les roues » / « Suivre les attaques » (en %) : on se laisse décrocher plutôt que de passer sous ce W′ (0 : aucune limite)
       // ou de dépasser cette part de la courbe de puissance record (100 : aucune limite)
       followW: 0, followPpr: 100,
@@ -292,6 +292,7 @@
     state.ui.chartH = cleanChartH(state.ui.chartH);
     // le mode jeu roule toujours en peloton 2D : deux coureurs ne s'y chevauchent jamais (l'ancienne option « en file » les superposait)
     state.game.peloton = true;
+    if (state.game.source === 'road') state.game.source = 'avatar';      // le GPS n'est plus proposé dans les jeux : le Compteur rejoint la partie
     if (state.perf.formRef !== 'form') state.perf.formRef = 'athlete';
     syncAge(state.rider);
     state.checkpoints = cleanCheckpoints(state.checkpoints);

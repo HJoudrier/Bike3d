@@ -19,7 +19,7 @@
   let pwr = 'off';
   let lastRender = 0;
 
-  const kind = () => Pr.normKind(store.state.game.source);
+  const kind = () => { const k = Pr.normKind(store.state.game.source); return k === 'road' ? 'avatar' : k; };   // le GPS n'est plus proposé dans les jeux (c'est le Compteur)
   const trainerSim = () => store.state.game.trainerSim !== false;
   const secure = () => typeof window === 'undefined' || window.isSecureContext !== false;
 

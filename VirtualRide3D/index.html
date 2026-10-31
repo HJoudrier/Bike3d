@@ -7,8 +7,8 @@
   <meta name="referrer" content="strict-origin-when-cross-origin"> <!-- requis par la politique d'usage des tuiles OSM -->
   <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
-  <title>Jeu 2D — PaceYourRide</title>
-  <meta name="description" content="Choisis ton parcours (en 3D), ton athlète et la météo, règle ta partie, puis cours-la sur la carte.">
+  <title>Virtual Ride 3D — PaceYourRide</title>
+  <meta name="description" content="Choisis ton parcours (en 3D), ton athlète et la météo, règle ta partie, puis cours-la dans le paysage de Bike3D.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a78d6'/%3E%3Cpath d='M10 44 L24 26 L32 36 L42 20 L54 44 Z' fill='white'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="../Commun/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="../Commun/css/style.css">
@@ -20,7 +20,7 @@
   <header class="topbar">
     <a class="brand" href="index.html" title="Choix de la partie">
       <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor"/><path d="M10 44 L24 26 L32 36 L42 20 L54 44 Z" fill="#fff"/></svg>
-      <span>PaceYourRide</span><small class="gs-app">Jeu 2D</small>
+      <span>PaceYourRide</span><small class="gs-app">Virtual Ride 3D</small>
     </a>
         <div class="top-actions" id="top-actions">
       <a class="btn ghost" href="../PaceYourRide/documentation.html" target="_blank" rel="noopener" title="Documentation" aria-label="Documentation"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></a>
@@ -30,7 +30,7 @@
       <nav class="site-menu" id="site-menu" aria-label="Sections" hidden>
         <a href="index.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg><span>Choix de la partie</span></a>
         <a href="../PaceYourRide/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20 9 9l4 6 3-4 5 9z"/></svg><span>PaceYourRide</span></a>
-        <a href="../Jeu3D/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h4M8 10v4"/><path d="M15 11.5h.01M18 13.5h.01"/><path d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5z"/></svg><span>Jeu 3D</span></a>
+        <a href="../VirtualRide2D/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h4M8 10v4"/><path d="M15 11.5h.01M18 13.5h.01"/><path d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5z"/></svg><span>Virtual Ride 2D</span></a>
         <a href="../Compteur/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg><span>Compteur</span></a>
         <a href="../index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Applications</span></a>
       </nav>
@@ -55,6 +55,9 @@
         <div class="field"><label for="gs-bike">Vélo</label><select id="gs-bike"></select></div>
         <div class="field"><label for="gs-outfit">Tenue et position</label><select id="gs-outfit"></select></div>
       </div>
+      <!-- matériel modifiable sur la vue 3D : on choisit la partie, les flèches font défiler les articles (js/jeu/gear-edit.js) -->
+      <h3>Ton matériel en 3D</h3>
+      <div class="gs-gear3d" id="gs-gear3d"></div>
     </section>
 
     <!-- ============ 3. MÉTÉO : une date, ou un temps aléatoire qui évolue ============ -->
@@ -122,11 +125,10 @@
           <select id="g-source" data-bind="game.source">
             <option value="avatar">🎮 Avatar : tu règles la puissance de ton cycliste numérique</option>
             <option value="trainer">🏠 Home-trainer ou capteur de puissance : tes watts réels</option>
-            <option value="road">🚴 Sur la vraie route : ta position GPS</option>
           </select>
         </div>
-        <p class="hint">Avec un home-trainer ou sur la route, tu connectes ton capteur ou ton GPS sur l'écran de course, juste avant le départ.
-          Avatars, home-trainers et cyclistes sur la route se retrouvent dans la même course en direct, sur la carte comme dans l'univers 3D.</p>
+        <p class="hint">Avec un home-trainer, tu connectes ton capteur de puissance sur l'écran de course, juste avant le départ.
+          Avatars et home-trainers se retrouvent dans la même course en direct ; les cyclistes qui roulent pour de vrai y participent avec le GPS de leur Compteur (« Rejoindre une partie »).</p>
         <h3>Course</h3>
         <div class="grid2">
           <div class="field"><label for="g-bots">Coureurs virtuels (0 à 89 : un peloton de 90 avec toi)</label>
@@ -202,6 +204,6 @@
   <script src="../Commun/js/menu.js"></script>
 
   <!-- scripts de l'application (Commun/js/boot.js, selon data-app) puis démarrage de la page (Commun/js/app.js) -->
-  <script src="../Commun/js/boot.js" data-app="jeu2d"></script>
+  <script src="../Commun/js/boot.js" data-app="jeu3d"></script>
 </body>
 </html>

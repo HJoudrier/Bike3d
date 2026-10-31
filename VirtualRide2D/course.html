@@ -7,15 +7,15 @@
   <meta name="referrer" content="strict-origin-when-cross-origin"> <!-- requis par la politique d'usage des tuiles OSM -->
   <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
-  <title>Course en 3D — PaceYourRide</title>
-  <meta name="description" content="La course dans l'univers 3D de Bike3D : le paysage cartoon autour du parcours, avec le HUD, les tactiques et les classements.">
+  <title>Course sur la carte — PaceYourRide</title>
+  <meta name="description" content="La course sur la carte : coureurs virtuels, fantômes et joueurs en direct, HUD, tactiques et classements.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a78d6'/%3E%3Cpath d='M10 44 L24 26 L32 36 L42 20 L54 44 Z' fill='white'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="../Commun/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="../Commun/css/style.css">
   <link rel="stylesheet" href="../Commun/css/game-mobile.css">
   <link rel="stylesheet" href="../Commun/css/ride.css">
 </head>
-<body data-page="race" data-tab="game" data-display="3d">
+<body data-page="race" data-tab="game" data-display="2d">
   <header class="topbar">
     <a class="brand" href="index.html" title="Choix de la partie">
       <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor"/><path d="M10 44 L24 26 L32 36 L42 20 L54 44 Z" fill="#fff"/></svg>
@@ -29,7 +29,7 @@
       <nav class="site-menu" id="site-menu" aria-label="Sections" hidden>
         <a href="index.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg><span>Choix de la partie</span></a>
         <a href="../PaceYourRide/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20 9 9l4 6 3-4 5 9z"/></svg><span>PaceYourRide</span></a>
-        <a href="../Jeu2D/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h4M8 10v4"/><path d="M15 11.5h.01M18 13.5h.01"/><path d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5z"/></svg><span>Jeu 2D</span></a>
+        <a href="../VirtualRide3D/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h4M8 10v4"/><path d="M15 11.5h.01M18 13.5h.01"/><path d="M7 6h10a5 5 0 0 1 5 5v2a4 4 0 0 1-7 2.6L14 14h-4l-1 1.6A4 4 0 0 1 2 13v-2a5 5 0 0 1 5-5z"/></svg><span>Virtual Ride 3D</span></a>
         <a href="../Compteur/index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg><span>Compteur</span></a>
         <a href="../index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Applications</span></a>
       </nav>
@@ -131,9 +131,9 @@
     <div class="side-grip" id="side-grip" role="separator" aria-orientation="vertical" tabindex="0" title="Glisse vers la gauche pour agrandir la bande latérale, vers la droite pour la réduire (double clic : largeur par défaut, ← → au clavier)"></div>
 
     <aside class="side" id="side">
-      <!-- ============ JEU : écran de course (univers 3D) ============ -->
+      <!-- ============ JEU : écran de course (carte 2D) ============ -->
       <section class="panel" data-panel="game">
-        <h2>Course <small class="game-display-name">· univers 3D</small></h2>
+        <h2>Course <small class="game-display-name">· carte 2D</small></h2>
         <!-- sections du panneau : classements, puis (grand écran, selon leur réglage) statistiques, profil d'élévation et puissance selon la durée ;
              l'ordre se règle dans la fenêtre de configuration de chaque bloc (propriété order de chaque section) -->
         <div class="game-side-charts" id="game-side-charts">
@@ -198,7 +198,6 @@
           <select id="g-source" data-bind="game.source">
             <option value="avatar">🎮 Avatar : tu règles la puissance de ton cycliste numérique</option>
             <option value="trainer">🏠 Home-trainer ou capteur de puissance : tes watts réels</option>
-            <option value="road">🚴 Sur la vraie route : ta position GPS</option>
           </select>
         </div>
         <div id="g-source-box"></div>
@@ -231,6 +230,6 @@
   <script src="../Commun/js/menu.js"></script>
 
   <!-- scripts de l'application (une seule liste pour toutes les pages) puis démarrage de cette page : Commun/js/boot.js, Commun/js/app.js -->
-  <script src="../Commun/js/boot.js" data-app="jeu3d"></script>
+  <script src="../Commun/js/boot.js" data-app="jeu2d"></script>
 </body>
 </html>

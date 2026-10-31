@@ -298,7 +298,9 @@
 
     V.startBtn = h('button', { class: 'btn primary big', type: 'button', onclick: () => startLive() }, 'Démarrer la sortie');
     V.startHint = h('p', { class: 'rd-note center' });
-    V.prep.append(V.resume, V.cloudCard, V.routeCard, V.planCard, V.mixCard, V.sensCard, V.nutCard, V.setCard, V.startBtn, V.startHint);
+    V.liveBox = h('div', { id: 'live-box' });
+    V.liveCard = card('Partie Virtual Ride', V.liveBox);
+    V.prep.append(V.resume, V.liveCard, V.cloudCard, V.routeCard, V.planCard, V.mixCard, V.sensCard, V.nutCard, V.setCard, V.startBtn, V.startHint);
     buildKit();
   }
 
@@ -351,6 +353,7 @@
       D.clear(V.segTable);
     }
     renderCloud();
+    V.cloudCard.hidden = inGame();
     renderPrepMap();
     renderPrepProfile();
     // défi contre des coureurs virtuels
@@ -398,7 +401,7 @@
 
   /** Recopie le choix dans l'état du compteur (les réglages propres au téléphone, alertes et mode démo, sont gardés), puis recharge le plan enregistré. */
   function composeSelection() {
-    if (run.mode !== 'prep') return;
+    if (run.mode !== 'prep' || inGame()) return;      // dans une partie, le parcours est celui de la partie
     const keep = { cfg: store.state.ride.cfg, demo: store.state.ride.demo, plan: store.state.ride.plan, info: store.state.ride.planInfo };
     const pick = pickOf();
     if (!LC.compose(store.state, pick)) return;
@@ -446,6 +449,74 @@
   }
   function addAthlete() {
     PYR.libPick.athleteDialog(async (a) => afterAdd(await LC.store('athlete', a.name, a.data), 'athlete', a.name, ''));
+  }
+
+  /* ---------- partie Virtual Ride rejointe avec le GPS (live.js) ---------- */
+
+  const inGame = () => !!(PYR.live && PYR.live.session && PYR.live.session.race);
+
+  /**
+   * Le Compteur rejoint une partie d'un jeu Virtual Ride (il ne l'organise pas) : le parcours de la partie remplace celui du compteur, on fait la sortie
+   * pour de vrai, et la position donnée par le GPS (le cycliste « sur la vraie route »), la puissance du capteur et la vitesse sont envoyées aux autres joueurs.
+   * live.js appelle armLive à chaque heure de départ donnée, leaveLive quand on quitte la partie.
+   */
+  PYR.liveHost = {
+    joinOnly: true,
+    armLive(local) {
+      const first = !run.live;
+      run.live = Object.assign(run.live || { trace: { s: [], P: [] }, last: 0, done: false }, { startAt: local });
+      if (run.mode !== 'prep') return;
+      if (first) {
+        run.plan = null; run.base = null; run.segPlan = null;
+        loadStoredPlan();
+        D.toast('Partie rejointe : le parcours de la partie est chargé. Calcule ton plan puis démarre ta sortie à l\'heure du départ.', undefined, 7000);
+      }
+      renderPrep();
+      if ((!run.plan || PYR.planLink.isStale()) && !run.busy && store.profile) computePlan();
+    },
+    leaveLive() {
+      run.live = null;
+      if (V.liveBar) V.liveBar.hidden = true;
+      if (run.mode === 'prep') renderPrep();
+    },
+  };
+
+  /** Chaque demi-seconde de la sortie : la position, la vitesse et la puissance partent vers les autres joueurs ; chaque seconde de course est gardée pour l'arrivée. */
+  function liveTick(sess, g) {
+    const L = run.live;
+    if (!L || !g || !PYR.live.inRace()) return;
+    const now = Date.now(), raceT = (now - L.startAt) / 1000, tr = L.trace;
+    const k = Math.floor(raceT);
+    if (k >= 0) {
+      if (!tr.s.length) for (let i = 0; i < k; i++) { tr.s.push(0); tr.P.push(0); }     // avant le départ de la sortie : au départ, sans puissance
+      while (tr.s.length <= k) { tr.s.push(g.s); tr.P.push(Math.round(g.p3)); }
+    }
+    if (now - L.last >= 500) {
+      L.last = now;
+      PYR.live.sendState({ t: raceT, s: g.s, v: Math.max(0, g.v), P: Math.round(g.p3), w: U.clamp(g.wbalFrac, 0, 1), tac: 'manual', k: PYR.presence.CODE.road });
+    }
+    renderLiveBar(g);
+  }
+
+  /** Où je suis dans la partie : mon rang, et le joueur juste devant et juste derrière avec l'écart en mètres. */
+  function renderLiveBar(g) {
+    const opp = PYR.live.opponents().filter((o) => !o.finished || o.s > 0);
+    if (!opp.length) { V.liveBar.hidden = true; return; }
+    const ahead = opp.filter((o) => o.s > g.s).sort((a, b) => a.s - b.s)[0], behind = opp.filter((o) => o.s <= g.s).sort((a, b) => b.s - a.s)[0];
+    const rank = 1 + opp.filter((o) => o.s > g.s).length;
+    const txt = `Virtual Ride · ${PYR.classifView.ordinal(rank)} sur ${opp.length + 1}` + (ahead ? ` · devant : ${ahead.name} +${distTxt(ahead.s - g.s)}` : '') + (behind ? ` · derrière : ${behind.name} −${distTxt(g.s - behind.s)}` : '');
+    V.liveBar.hidden = false;
+    setTxt(V.liveBar, txt);
+  }
+
+  /** Arrivée de la sortie sur le parcours de la partie : le temps et la trace sont envoyés (classement final de tous les joueurs). */
+  function liveFinish(sess) {
+    const L = run.live;
+    if (!L || L.done || !PYR.live.inRace() || sess.s < sess.course.length - 25) return;
+    L.done = true;
+    const t = Math.max(1, Math.round((Date.now() - L.startAt) / 1000)), tr = L.trace;
+    while (tr.s.length <= t) { tr.s.push(sess.course.length); tr.P.push(0); }
+    PYR.live.finish({ time: t, s: tr.s.slice(0, t + 1), P: tr.P.slice(0, t + 1) });
   }
 
   /* ---------- parcours en intégralité et profil, avant le départ ---------- */
@@ -1021,7 +1092,7 @@
     coachTick();
     mixTick(sess);
     const g = sess.guidance();
-    if (g) { alertsTick(g); render(g); }
+    if (g) { alertsTick(g); render(g); liveTick(sess, g); }
     if (sess.t - run.lastSave >= SAVE_EVERY) saveSession();
     if (sess.finished) finish();
   }
@@ -1179,7 +1250,8 @@
     V.hSpeed = tile('speed', 'Vitesse'); V.hGrade = tile('grade', 'Pente'); V.hPow = tile('pow', 'Puissance'); V.hHr = tile('hr', 'Cardio');
     V.hDist = tile('dist', 'Distance'); V.hTime = tile('time', 'Temps');
     V.hud = h('div', { class: 'rd-hud' }, V.hSpeed.el, V.hGrade.el, V.hPow.el, V.hHr.el, V.hDist.el, V.hTime.el);
-    V.head = h('div', { class: 'rd-head' }, V.status, V.hud);
+    V.liveBar = h('div', { class: 'rd-livebar', hidden: true });
+    V.head = h('div', { class: 'rd-head' }, V.status, V.liveBar, V.hud);
 
     // carte : l'élément #map de la page y est déplacé le temps de la sortie (attachMap)
     V.mTurnArrow = h('span', { class: 'a' }); V.mTurnTxt = h('span', { class: 't' });
@@ -2058,6 +2130,7 @@ Recalé sur ta FC depuis ${hmm(hf.n)} (filtre de Kalman) : FC de repos ${Math.ro
     const sess = run.sess;
     if (!sess || run.mode !== 'live') return;
     clearInterval(run.timer); run.timer = null;
+    liveFinish(sess);
     detachMap();
     Sx.wake.release();
     if (run.gpsOn) { Sx.gps.stop(); run.gpsOn = false; run.lastFix = null; }

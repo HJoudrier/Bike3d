@@ -1,5 +1,5 @@
 /* author : Hugo Joudrier-Faure */
-/* PaceYourRide — page de choix des jeux (Jeu2D/index.html et Jeu3D/index.html) : le parcours (carrousel de vues 3D avec distance, D+ et D−),
+/* PaceYourRide — page de choix des jeux (VirtualRide2D/index.html et VirtualRide3D/index.html) : le parcours (carrousel de vues 3D avec distance, D+ et D−),
  * l'athlète (avec son vélo et sa tenue), la météo (celle d'une date, ou un temps aléatoire qui évolue), puis les réglages de la partie
  * (liés à l'état par data-bind, comme avant). « Démarrer » ouvre l'écran de course de l'application (course.html).
  *
@@ -126,7 +126,7 @@
     // la météo suit le parcours : changer de parcours abandonne celle qui avait été récupérée
     st.weather = keyBefore && store.profile && We.routeKey(store.profile) === keyBefore && wxBefore ? wxBefore : freshWeather(wxBefore && wxBefore.startAt);
     if (!st.weather.startAt) st.weather.startAt = tomorrow();
-    if (PYR.gearEdit) PYR.gearEdit.reapply();         // matériel modifié sur la vue 3D (Jeu3D)
+    if (PYR.gearEdit) PYR.gearEdit.reapply();         // matériel modifié sur la vue 3D (VirtualRide3D)
     applyWeather();
     store.save();
     PYR.app.refreshBindings();
@@ -236,7 +236,7 @@
       $('#g-live-create').addEventListener('click', () => start({ do: 'live-create' }));
       $('#g-live-join').addEventListener('click', () => start({ do: 'live-join' }));
       renderAll();
-      // Jeu3D : matériel modifié sur la vue 3D (gear-edit.js) ; les changements sont enregistrés tout de suite
+      // VirtualRide3D : matériel modifié sur la vue 3D (gear-edit.js) ; les changements sont enregistrés tout de suite
       if ($('#gs-gear3d')) PYR.gearEdit.init($('#gs-gear3d'), () => { PYR.app.refreshBindings(); });
       setMode(S.mode, true);
       store.on('weather', () => { randomSummary(); renderSummary(); });      // météo récupérée, ou tirée à nouveau

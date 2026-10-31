@@ -404,3 +404,5 @@ body[data-ride="live"] .rd-scroll { padding-top: 0; }
   .rd-chip.plan, .rd-nut-item[data-state="due"], .rd-nut-item[data-state="urgent"] { animation: none; }
   .rd-res-row .fill { transition: none; }
 }
+/* partie Virtual Ride rejointe : mon rang, le joueur devant et derrière */
+.rd-livebar { margin: 6px 0 0; padding: 4px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: 13px; font-weight: 600; text-align: center; }

@@ -8,7 +8,7 @@
  * « 2D / 2D + 3D / 3D » de l'en-tête : « 2D » est la carte, « 2D + 3D » le fond à plat, « 3D » le terrain) ; la carte et ses outils
  * de tracé reviennent avec « 2D ».
  *
- * three.js n'est chargé qu'à la première ouverture (le fichier de Bike3D, Jeu3D/univers/vendor/three.min.js). Le fond est une image
+ * three.js n'est chargé qu'à la première ouverture (le fichier de Bike3D, VirtualRide3D/univers/vendor/three.min.js). Le fond est une image
  * assemblée à partir des tuiles qui couvrent le parcours (au plus 8 × 8, au zoom le plus fin qui le permette) ; l'altitude vient de
  * tuiles Terrarium (altitude codée dans la couleur, au plus 8 × 8 aussi) échantillonnées sur un maillage d'au plus 256 × 256 mailles.
  * La projection est celle de Mercator, à l'échelle du centre du parcours (1 unité = 1 m). Une exagération verticale (réglable) rend
@@ -36,7 +36,7 @@
   const MESH_MAX = 256;             // mailles du terrain, par côté
   const DEM_ATTR = 'Relief : <a href="https://registry.opendata.aws/terrain-tiles/">Terrain Tiles</a> (AWS)';
   const ROUTE_COLOR = 0x2a78d6, HOVER_COLOR = 0xf2b327;
-  const THREE_FILE = 'Jeu3D/univers/vendor/three.min.js';  // depuis la racine du site
+  const THREE_FILE = 'VirtualRide3D/univers/vendor/three.min.js';  // depuis la racine du site
 
   /* ---------- Géométrie (testée dans Node) ---------- */
 

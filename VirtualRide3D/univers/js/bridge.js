@@ -1,7 +1,7 @@
 /* Bike3D — vue 3D pilotée par PaceYourRide (index.html?pyr).
    PaceYourRide simule la course (physiologie, météo réelle, aspiration, coureurs virtuels, joueurs en direct) ;
    Bike3D ne fait plus que la montrer : il construit le paysage autour du parcours reçu et place chaque coureur là où
-   la simulation le met. La page est ouverte dans un cadre (iframe) par-dessus la carte de l'écran de course Jeu3D/, ou dans une
+   la simulation le met. La page est ouverte dans un cadre (iframe) par-dessus la carte de l'écran de course VirtualRide3D/, ou dans une
    fenêtre à part (second écran, devant le home-trainer) ; les deux échangent des messages (postMessage) :
 
    PaceYourRide → Bike3D (tous les messages portent pyr3d: 1)

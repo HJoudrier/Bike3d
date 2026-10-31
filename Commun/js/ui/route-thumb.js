@@ -11,7 +11,7 @@
 (function (PYR) {
   'use strict';
 
-  const THREE_SRC = 'Jeu3D/univers/vendor/three.min.js';
+  const THREE_SRC = 'VirtualRide3D/univers/vendor/three.min.js';
   const MAX_PTS = 500;          // points du ruban
   const SPAN = 10;              // étendue horizontale du tracé dans la scène (unités)
   const RIBBON_W = 0.1;         // demi-largeur du ruban

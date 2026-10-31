@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Sert le site (PaceYourRide et son univers 3D, Bike3D) sur le réseau local, pour jouer depuis un casque de réalité virtuelle
-(Meta Quest…) : tout le site, depuis sa racine, pour que l'écran de course en 3D (Jeu3D/) trouve aussi les scripts de PaceYourRide.
+(Meta Quest…) : tout le site, depuis sa racine, pour que l'écran de course en 3D (VirtualRide3D/) trouve aussi les scripts de PaceYourRide.
 
 La réalité virtuelle dans le navigateur (WebXR) n'est permise que sur une page sécurisée :
 « localhost » ou une adresse en https://. Avec --https, un certificat auto-signé est créé
 (il faut openssl) et le navigateur du casque demandera de l'accepter une fois.
 
-    python3 Jeu3D/univers/tools/serve.py              # http://localhost:8000
-    python3 Jeu3D/univers/tools/serve.py --https      # https://<adresse du PC>:8443
+    python3 VirtualRide3D/univers/tools/serve.py              # http://localhost:8000
+    python3 VirtualRide3D/univers/tools/serve.py --https      # https://<adresse du PC>:8443
 """
 import argparse
 import functools
@@ -19,9 +19,9 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-UNIVERSE = os.path.dirname(HERE)                                       # Jeu3D/univers : Bike3D
+UNIVERSE = os.path.dirname(HERE)                                       # VirtualRide3D/univers : Bike3D
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(UNIVERSE)))     # racine du site (PaceYourRide)
-GAME = 'Jeu3D/univers/index.html'                                     # Bike3D seul (menu, GPX, réalité virtuelle)
+GAME = 'VirtualRide3D/univers/index.html'                                     # Bike3D seul (menu, GPX, réalité virtuelle)
 
 
 def lan_ip():

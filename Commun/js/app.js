@@ -2,8 +2,8 @@
 /* PaceYourRide — démarrage d'une page des applications (le chargeur Commun/js/boot.js dit laquelle : PYR.appId). Le site a quatre
  * applications, chacune dans son dossier, qui ne se parlent que par Dropbox (Commun/js/core/cloud.js) :
  *   PaceYourRide/       accueil (index.html), parcours, athlète, équipements, pacing optimal
- *   Jeu2D/              index.html : choix du parcours, de l'athlète et de la météo, réglages ; course.html : la course sur la carte
- *   Jeu3D/              idem, la course dans l'univers 3D (Bike3D, Jeu3D/univers/)
+ *   VirtualRide2D/              index.html : choix du parcours, de l'athlète et de la météo, réglages ; course.html : la course sur la carte
+ *   VirtualRide3D/              idem, la course dans l'univers 3D (Bike3D, VirtualRide3D/univers/)
  *   Compteur/           compteur de la vraie sortie
  * Chaque page charge les scripts de son application (boot.js) mais n'initialise que les parties qu'elle contient. L'état (le projet) est
  * propre à l'application et gardé par le stockage local (Commun/js/core/store.js) : on le relit à l'ouverture de chaque page, on
@@ -26,8 +26,8 @@
     ride: { mapMode: 'grade', module: () => PYR.tabRide },
   };
 
-  /** Pages du site, depuis la racine : une par section de PaceYourRide, la page de choix et l'écran de course du jeu en cours (Jeu2D ou Jeu3D). */
-  const gameDir = () => (PYR.appDir === 'Jeu3D' ? 'Jeu3D' : 'Jeu2D');
+  /** Pages du site, depuis la racine : une par section de PaceYourRide, la page de choix et l'écran de course du jeu en cours (VirtualRide2D ou VirtualRide3D). */
+  const gameDir = () => (PYR.appDir === 'VirtualRide3D' ? 'VirtualRide3D' : 'VirtualRide2D');
   const PAGES = {
     home: 'index.html',
     route: 'PaceYourRide/parcours.html',
@@ -66,7 +66,7 @@
   const has = (tab) => (tab === 'ride' ? !!$('#ride') : !!$(`.panel[data-panel="${tab}"]`));
   const hasMap = () => !!(PYR.map && PYR.map.map);
 
-  /** Écran de course (Jeu2D, Jeu3D) : la partie configurée dans Jeu2D/index.html s'y joue. */
+  /** Écran de course (VirtualRide2D, VirtualRide3D) : la partie configurée dans VirtualRide2D/index.html s'y joue. */
   const racePage = () => !!document.body.dataset.display;
 
   let current = null;
